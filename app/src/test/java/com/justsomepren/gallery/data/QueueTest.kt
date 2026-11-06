@@ -112,6 +112,26 @@ class QueueTest {
     }
 
     @Test
+    fun refusedPhotosStayRefusedWhenEventIsSwitchedOffAndOn() {
+        prefs.saveEvent(trip)
+        val media = listOf(photoOn(LocalDate.of(2026, 11, 10), 1), photoOn(LocalDate.of(2026, 11, 11), 2))
+        prefs.collectAuto(media)
+        prefs.markFailed(prefs.queue.value.take(1))
+
+        prefs.saveEvent(trip.copy(autoSend = false))
+        prefs.pruneAuto()
+        prefs.saveEvent(trip)
+        prefs.pruneAuto()
+        prefs.collectAuto(media)
+        assertEquals(listOf("IMG_2.jpg"), prefs.queue.value.map { it.name })
+
+        // Still refused after a restart; only picking it by hand sends it again.
+        val restarted = Prefs(context)
+        assertEquals(0, restarted.collectAuto(media))
+        assertEquals(1, restarted.enqueue(listOf(QueueItem.of(media[0], "shared@gmail.com", null))))
+    }
+
+    @Test
     fun eventsAndQueueSurviveRestart() {
         prefs.saveEvent(trip)
         prefs.saveEvent(trip.copy(name = "Přejmenováno"))

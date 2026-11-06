@@ -74,6 +74,9 @@ class Prefs(context: Context) {
     /** Photos the user removed from the queue; events do not add them again. */
     private val dismissed = sp.getStringSet("dismissed", null).orEmpty().toMutableSet()
 
+    /** Photos Google refused; events never send them again on their own, only "Zkusit znovu" or a new pick does. */
+    private val refused = sp.getStringSet("refused", null).orEmpty().toMutableSet()
+
     /** Done / total while the upload is running, otherwise null. */
     val uploading = MutableStateFlow<Pair<Int, Int>?>(null)
 
@@ -175,17 +178,21 @@ class Prefs(context: Context) {
     @Synchronized
     fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
         val queued = queue.value.map { it.sentKey }.toSet()
-        val failedKeys = failed.value.map { it.sentKey }.toSet()
         val connected = accounts.value.toSet()
         val new = items.distinctBy { it.sentKey }.filter {
             it.account in connected && it.sentKey !in queued && !isSent(it) &&
-                (byHand || (it.sentKey !in failedKeys && it.sentKey !in dismissed))
+                (byHand || (it.key !in refused && it.sentKey !in dismissed))
         }
         if (new.isEmpty()) return 0
         if (byHand) {
             val keys = new.map { it.sentKey }.toSet()
             failedList.update { list -> list.filterNot { it.sentKey in keys } }
-            if (dismissed.removeAll(keys)) sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+            dismissed.removeAll(keys)
+            refused.removeAll(new.map { it.key }.toSet())
+            sp.edit {
+                putStringSet("dismissed", dismissed.toSet())
+                putStringSet("refused", refused.toSet())
+            }
         }
         queueList.update { it + new }
         return new.size
@@ -205,19 +212,17 @@ class Prefs(context: Context) {
 
     /** Takes back photos an event added that it no longer sends (turned off, deleted, shortened, other account). */
     fun pruneAuto() {
-        val byId = events.value.associateBy { it.id }
-        val stillWanted = { item: QueueItem ->
-            val event = item.eventId?.let(byId::get)
-            if (item.eventId == null) {
-                true
-            } else {
-                event != null && event.autoSend && event.account == item.account &&
-                    event.album == item.album && event.covers(item.day)
-            }
-        }
-        // Failed photos too, so "Zkusit znovu" never sends them where the event no longer wants them.
-        queueList.update { it.filter(stillWanted) }
-        failedList.update { it.filter(stillWanted) }
+        queueList.update { list -> list.filter { followEvent(it) == it } }
+        // Failed photos follow the event's current account and album, or go when it no longer wants them.
+        failedList.update { list -> list.mapNotNull(::followEvent).distinctBy { it.sentKey } }
+    }
+
+    /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */
+    private fun followEvent(item: QueueItem): QueueItem? {
+        val id = item.eventId ?: return item
+        val event = events.value.firstOrNull { it.id == id } ?: return null
+        if (!event.autoSend || event.account == null || !event.covers(item.day)) return null
+        return item.copy(account = event.account, album = event.album)
     }
 
     fun markSent(items: List<QueueItem>) {
@@ -228,12 +233,14 @@ class Prefs(context: Context) {
     }
 
     fun markFailed(items: List<QueueItem>) {
+        refused += items.map { it.key }
+        sp.edit { putStringSet("refused", refused.toSet()) }
         failedList.update { (it + items).distinctBy { item -> item.sentKey } }
         removeFromQueue(items)
     }
 
     fun retryFailed() {
-        val items = failed.value
+        val items = failed.value.mapNotNull(::followEvent)
         failedList.update { emptyList() }
         enqueue(items)
     }
