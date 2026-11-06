@@ -69,6 +69,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -333,6 +334,7 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
     var height by remember { mutableIntStateOf(1) }
     val thumbHeight = 48.dp
     val thumbPx = with(LocalDensity.current) { thumbHeight.roundToPx() }
+    val exclusionPad = with(LocalDensity.current) { 70.dp.toPx() }
     val progress by remember(entries) {
         derivedStateOf {
             val range = entries.size - state.layoutInfo.visibleItemsInfo.size
@@ -379,7 +381,10 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
                 .align(Alignment.TopEnd)
                 .fillMaxHeight()
                 .width(32.dp)
-                .systemGestureExclusion()
+                .systemGestureExclusion { coordinates ->
+                    val top = progress * (height - thumbPx)
+                    Rect(0f, top - exclusionPad, coordinates.size.width.toFloat(), top + thumbPx + exclusionPad)
+                }
                 .pointerInput(entries) {
                     detectVerticalDragGestures(
                         onDragStart = { dragging = true; jump(it.y) },

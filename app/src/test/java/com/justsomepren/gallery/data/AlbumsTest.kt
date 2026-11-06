@@ -79,6 +79,19 @@ class AlbumsTest {
     }
 
     @Test
+    fun oldAlbumKeysAreMigrated() {
+        val screenshot = item(1).copy(dateTaken = 0, size = 4242, date = 777)
+        // Stored by the first version of the app, which used the date added.
+        context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit()
+            .putString("albums", """[{"id":"a","name":"A","items":[{"id":1,"key":"IMG_1.jpg|777"}]}]""")
+            .commit()
+        prefs = Prefs(context)
+
+        prefs.migrateKeys(listOf(screenshot))
+        assertEquals(listOf(1L), listOf(screenshot).filterBy(source(), prefs.albums.value).map { it.id })
+    }
+
+    @Test
     fun exportAndImportOnNewPhone() {
         prefs.createAlbum("A", listOf(item(1), item(2)))
         val json = prefs.exportAlbums()

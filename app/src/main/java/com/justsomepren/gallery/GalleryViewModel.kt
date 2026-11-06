@@ -76,6 +76,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             delay(delayMs)
             val items = withContext(Dispatchers.IO) { repo.loadAll() }
             _media.value = items
+            prefs.migrateKeys(items)
             refreshing.value = false
         }
     }

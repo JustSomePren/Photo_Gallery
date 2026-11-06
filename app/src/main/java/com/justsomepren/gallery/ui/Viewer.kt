@@ -1,5 +1,6 @@
 package com.justsomepren.gallery.ui
 
+import android.app.Activity
 import android.widget.VideoView
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -86,9 +87,9 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
         ) { page ->
             val item = items[page]
             if (item.isVideo) {
-                VideoPage(item, isCurrent = page == pager.currentPage) { chrome = !chrome }
+                VideoPage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
             } else {
-                ZoomableImage(item, isCurrent = page == pager.currentPage) { chrome = !chrome }
+                ZoomableImage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
             }
         }
 
@@ -154,9 +155,16 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var box by remember { mutableStateOf(IntSize.Zero) }
+    var wantSharp by remember { mutableStateOf(false) }
+
+    fun zoomTo(value: Float) {
+        scale = value
+        if (value > 1.5f) wantSharp = true else if (value < 1.1f) wantSharp = false
+    }
+
     LaunchedEffect(isCurrent) {
         if (!isCurrent) {
-            scale = 1f
+            zoomTo(1f)
             offset = Offset.Zero
         }
     }
@@ -164,7 +172,7 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
     // Screen size is enough until the user really zooms in; then a sharper copy (not on low battery).
     val normal = rememberLoaded(item.uri, screen) { ImageCache.fullImage(context.contentResolver, item.uri, screen) }
     val sharpSize = minOf(screen * 2, 4096)
-    val sharp = if (scale > 1.5f && !saver) {
+    val sharp = if (wantSharp && !saver) {
         rememberLoaded(item.uri, sharpSize) { ImageCache.fullImage(context.contentResolver, item.uri, sharpSize) }
     } else {
         null
@@ -177,7 +185,7 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
     }
 
     val transform = rememberTransformableState { zoom, pan, _ ->
-        scale = (scale * zoom).coerceIn(1f, 6f)
+        zoomTo((scale * zoom).coerceIn(1f, 6f))
         offset = clamp(offset + pan)
     }
 
@@ -189,7 +197,7 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = {
-                        scale = if (scale > 1f) 1f else 2.5f
+                        zoomTo(if (scale > 1f) 1f else 2.5f)
                         offset = Offset.Zero
                     },
                 )
@@ -218,6 +226,7 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
 /** Plays with the built-in hardware decoder; no extra player library. */
 @Composable
 private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
+    val activity = LocalContext.current as? Activity
     var playing by rememberSaveable(item.id) { mutableStateOf(false) }
     var positionMs by rememberSaveable(item.id) { mutableIntStateOf(0) }
     var durationMs by remember { mutableIntStateOf(0) }
@@ -228,7 +237,7 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
     // Leaving the app stops the video; it continues from the same spot on the next play.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         video?.let { positionMs = it.currentPosition }
-        playing = false
+        if (activity?.isChangingConfigurations != true) playing = false
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -52,6 +52,18 @@ class Prefs(context: Context) {
         refs.filterNot { it.key in keys }
     }
 
+    /** Albums from the first version used "name|date added" for photos without a capture date. */
+    fun migrateKeys(media: List<MediaItem>) {
+        val byId = media.associateBy { it.id }
+        val migrated = albums.value.map { album ->
+            album.copy(refs = album.refs.map { ref ->
+                val item = byId[ref.id]
+                if (item != null && ref.key != item.key && ref.key == "${item.name}|${item.date}") item.ref() else ref
+            })
+        }
+        if (migrated != albums.value) updateAlbums { migrated }
+    }
+
     fun exportAlbums(): String = JSONArray(albums.value.map(::albumToJson)).toString(2)
 
     /** Returns how many albums were imported. Albums with the same id are replaced. */
