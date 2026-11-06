@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -96,6 +97,10 @@ fun GalleryApp(vm: GalleryViewModel = viewModel()) {
         CompositionLocalProvider(LocalSaver provides saver) {
             Surface(Modifier.fillMaxSize()) {
                 var granted by remember { mutableStateOf(hasMediaAccess(context)) }
+                LifecycleResumeEffect(Unit) {
+                    granted = hasMediaAccess(context)
+                    onPauseOrDispose {}
+                }
                 if (granted) Main(vm) else PermissionScreen { granted = hasMediaAccess(context) }
             }
         }
@@ -260,8 +265,14 @@ private fun CalendarScreen(
 
 @Composable
 private fun PermissionScreen(onResult: () -> Unit) {
+    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         onResult()
+        // After two refusals Android stops asking; only the app settings can allow it then.
+        val activity = context as? Activity
+        if (!hasMediaAccess(context) && activity?.shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_IMAGES) == false) {
+            GooglePhotos.appSettings(context, context.packageName)
+        }
     }
     Column(
         Modifier.fillMaxSize().padding(32.dp),
@@ -269,7 +280,7 @@ private fun PermissionScreen(onResult: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Galerie potřebuje přístup k fotkám a videím.", style = MaterialTheme.typography.titleMedium)
-        Text("Vše zůstává v telefonu, aplikace nemá přístup k internetu.")
+        Text("Fotky zůstávají v telefonu. Ven jde jen to, co sám pošleš do cloudu.")
         Button(onClick = { launcher.launch(MEDIA_PERMISSIONS) }) { Text("Povolit přístup") }
     }
 }

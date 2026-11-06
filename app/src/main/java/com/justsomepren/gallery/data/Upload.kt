@@ -216,7 +216,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (e.isRefusal) prefs.markFailed(listOf(item)) else throw e
             }
         }
-        for ((album, group) in uploads.groupBy { it.second.album }) {
+        // Uploading can take minutes; add only what is still wanted, with its current album.
+        val wanted = uploads.mapNotNull { (token, item) -> current(item)?.let { token to it } }
+        for ((album, group) in wanted.groupBy { it.second.album }) {
             val accepted = createInAlbum(api, account, album, group)
             val (ok, failed) = group.partition { it.first in accepted }
             prefs.markSent(ok.map { it.second })

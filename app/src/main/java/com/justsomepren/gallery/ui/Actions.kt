@@ -144,19 +144,17 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
             items(accounts) { account ->
                 PickerRow(account, Icons.Default.CloudQueue) {
                     val added = vm.enqueue(items, account, album)
-                    val skipped = items.count { !it.isCameraShot }
-                    toast(context, buildString {
-                        append(if (added > 0) "Ve frontě: $added" else "Nic nového k odeslání")
-                        if (skipped > 0) append(" · vynecháno $skipped (ne z fotoaparátu)")
-                    })
+                    toast(context, (if (added > 0) "Ve frontě: $added" else "Nic nového k odeslání") + skippedNote(items))
                     onDismiss()
                 }
             }
         }
-        item { DialogLabel("Hned přes aplikaci") }
+        item { DialogLabel("Hned přes aplikaci – jen fotky z fotoaparátu") }
         items(targets) { target ->
             PickerRow(target.name, Icons.Default.CloudUpload) {
-                GooglePhotos.send(context, target, items)
+                val camera = items.filter { it.isCameraShot }
+                if (camera.isNotEmpty()) GooglePhotos.send(context, target, camera)
+                if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
                 onDismiss()
             }
         }
@@ -167,6 +165,12 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
             }
         }
     }
+}
+
+/** Screenshots, downloads and chat pictures never go to the cloud. */
+private fun skippedNote(items: List<MediaItem>): String {
+    val skipped = items.count { !it.isCameraShot }
+    return if (skipped > 0) " · vynecháno $skipped (ne z fotoaparátu)" else ""
 }
 
 @Composable

@@ -97,6 +97,9 @@ v Odesílání se u účtu objeví „Přihlásit“.
 - Pod hranicí baterie (výchozí 70 %) **jen při nabíjení**.
 - Tlačítko **Odeslat hned** pošle frontu okamžitě i přes data a bez ohledu na baterii.
 - Každá fotka se do stejného účtu pošle jen jednou.
+- Do cloudu jdou **jen fotky a videa z fotoaparátu** (složka `DCIM/Camera`). Snímky obrazovky,
+  stažené obrázky ani fotky z chatů se nepošlou nikdy, ani když je vybereš ručně.
+  Obecné „Sdílet“ (např. do WhatsAppu) toto omezení nemá.
 - Album se v Google Fotkách vytvoří samo. Aplikace smí přidávat jen do alb, která sama vytvořila.
 
 ## Ruční odesílání přes aplikace

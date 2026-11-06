@@ -204,12 +204,20 @@ class Prefs(context: Context) {
     }
 
     /** Takes back photos an event added that it no longer sends (turned off, deleted, shortened, other account). */
-    fun pruneAuto() = queueList.update { list ->
+    fun pruneAuto() {
         val byId = events.value.associateBy { it.id }
-        list.filter { item ->
-            val event = item.eventId?.let(byId::get) ?: return@filter item.eventId == null
-            event.autoSend && event.account == item.account && event.album == item.album && event.covers(item.day)
+        val stillWanted = { item: QueueItem ->
+            val event = item.eventId?.let(byId::get)
+            if (item.eventId == null) {
+                true
+            } else {
+                event != null && event.autoSend && event.account == item.account &&
+                    event.album == item.album && event.covers(item.day)
+            }
         }
+        // Failed photos too, so "Zkusit znovu" never sends them where the event no longer wants them.
+        queueList.update { it.filter(stillWanted) }
+        failedList.update { it.filter(stillWanted) }
     }
 
     fun markSent(items: List<QueueItem>) {
