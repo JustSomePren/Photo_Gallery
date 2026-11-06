@@ -157,11 +157,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteEvent(event: Event) {
         prefs.deleteEvent(event)
         prefs.pruneAuto()
+        // Another event over the same days may want these photos.
+        media.value?.let { prefs.collectAuto(it) }
         UploadWorker.schedule(getApplication())
     }
 
     fun setMobileData(enabled: Boolean) {
         prefs.setMobileData(enabled)
+        UploadWorker.schedule(getApplication(), restart = true)
+    }
+
+    /** A lower threshold may free a queue that waits for the charger. */
+    fun setThreshold(value: Int) {
+        prefs.setThreshold(value)
         UploadWorker.schedule(getApplication(), restart = true)
     }
 

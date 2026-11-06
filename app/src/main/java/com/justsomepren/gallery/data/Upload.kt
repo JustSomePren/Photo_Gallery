@@ -74,7 +74,10 @@ object GoogleAuth {
     }
 }
 
-class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message")
+class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message") {
+    /** Google said no for good; unlike login, timeouts or rate limits, retrying will not help. */
+    val isRefusal get() = code in 400..499 && code !in setOf(401, 408, 429)
+}
 
 /** The few calls of the Google Photos Library API the app needs. */
 class PhotosApi(private val context: Context, private val token: String) {
@@ -202,7 +205,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.markFailed(listOf(item))
             } catch (e: HttpException) {
                 // Google refused this one file; network and login problems still retry the whole run.
-                if (e.code in 400..499 && e.code !in setOf(401, 408, 429)) prefs.markFailed(listOf(item)) else throw e
+                if (e.isRefusal) prefs.markFailed(listOf(item)) else throw e
             }
         }
         for ((album, group) in uploads.groupBy { it.second.album }) {
@@ -213,15 +216,20 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
     }
 
+    /** Returns the accepted upload tokens; a lasting refusal accepts none, so the group is marked failed. */
     private fun createInAlbum(api: PhotosApi, account: String, album: String?, group: List<Pair<String, QueueItem>>): Set<String> {
-        if (album == null) return api.create(group, null)
-        val albumId = prefs.albumId(account, album) ?: api.createAlbum(album).also { prefs.setAlbumId(account, album, it) }
+        val stored = album?.let { prefs.albumId(account, it) }
         return try {
+            val albumId = stored ?: album?.let { api.createAlbum(it).also { id -> prefs.setAlbumId(account, album, id) } }
             api.create(group, albumId)
         } catch (e: HttpException) {
-            // The album was deleted in Google Photos; make a new one next time.
-            if (e.code == 400) prefs.setAlbumId(account, album, null)
-            throw e
+            if (!e.isRefusal) throw e
+            if (stored != null) {
+                // The album was probably deleted in Google Photos; try again with a new one.
+                prefs.setAlbumId(account, album, null)
+                throw e
+            }
+            emptySet()
         }
     }
 

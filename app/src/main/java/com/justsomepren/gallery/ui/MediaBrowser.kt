@@ -80,6 +80,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -115,7 +116,7 @@ fun MediaBrowser(
 ) {
     var selected by rememberSaveable(source.toString(), stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
     var menu by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
     val album = source as? Source.Album
     val picked = items.filter { it.id in selected }
@@ -375,12 +376,19 @@ private fun EventRow(event: Event, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(Modifier.size(12.dp).background(Color(event.color), CircleShape))
-        Text(event.name, style = MaterialTheme.typography.titleSmall, color = Color(event.color))
+        Text(
+            event.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color(event.color),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Text(
             formatRange(event.startDay, event.endDay),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
+            maxLines = 1,
         )
         if (event.autoSend) {
             Icon(Icons.Default.CloudSync, "Posílá automaticky", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
@@ -401,7 +409,7 @@ private fun ContextPill(photo: GridEntry.Photo, modifier: Modifier = Modifier) {
         Text(formatWeekday(photo.item.day), color = MaterialTheme.colorScheme.inverseOnSurface)
         photo.event?.let {
             Box(Modifier.size(10.dp).background(Color(it.color), CircleShape))
-            Text(it.name, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1)
+            Text(it.name, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -444,7 +452,8 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, current
         scope.launch { state.scrollToItem(index) }
     }
 
-    if (!dragging && !rememberRecentlyScrolled(state)) return
+    val recentlyScrolled = rememberRecentlyScrolled(state)
+    if (!dragging && !recentlyScrolled) return
     Box(modifier.fillMaxSize().onSizeChanged { height = it.height }) {
         if (dragging && current != null) {
             ContextPill(current, Modifier.align(Alignment.TopEnd).offset(thumbOffset).padding(end = 40.dp))

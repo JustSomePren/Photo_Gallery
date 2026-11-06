@@ -206,7 +206,7 @@ class Prefs(context: Context) {
         val byId = events.value.associateBy { it.id }
         list.filter { item ->
             val event = item.eventId?.let(byId::get) ?: return@filter item.eventId == null
-            event.autoSend && event.account == item.account && event.covers(item.day)
+            event.autoSend && event.account == item.account && event.album == item.album && event.covers(item.day)
         }
     }
 

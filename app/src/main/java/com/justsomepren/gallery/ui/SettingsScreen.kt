@@ -101,7 +101,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             Slider(
                 value = slider,
                 onValueChange = { slider = it },
-                onValueChangeFinished = { vm.prefs.setThreshold(slider.roundToInt()) },
+                onValueChangeFinished = { vm.setThreshold(slider.roundToInt()) },
                 valueRange = 30f..100f,
                 steps = 13,
             )

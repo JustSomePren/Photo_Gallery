@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,7 +78,7 @@ fun SendingScreen(vm: GalleryViewModel) {
     val mobileData by prefs.mobileData.collectAsStateWithLifecycle()
     val targets by prefs.targets.collectAsStateWithLifecycle()
     val threshold by prefs.threshold.collectAsStateWithLifecycle()
-    var addingTarget by remember { mutableStateOf(false) }
+    var addingTarget by rememberSaveable { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 

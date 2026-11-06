@@ -114,7 +114,7 @@ private fun Main(vm: GalleryViewModel) {
     val context = LocalContext.current
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
-    var searching by remember { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
 
     val all = media ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
