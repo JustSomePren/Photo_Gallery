@@ -87,7 +87,7 @@ class PhotosApi(private val context: Context, private val token: String) {
         connection.setRequestProperty("Content-Type", "application/octet-stream")
         connection.setRequestProperty("X-Goog-Upload-Content-Type", item.mime)
         connection.setRequestProperty("X-Goog-Upload-Protocol", "raw")
-        val uri = Uri.parse(item.uri)
+        val uri = originalUri(context, Uri.parse(item.uri))
         val length = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1
         if (length > 0) connection.setFixedLengthStreamingMode(length) else connection.setChunkedStreamingMode(256 * 1024)
         context.contentResolver.openInputStream(uri)!!.use { input ->

@@ -74,8 +74,11 @@ class Prefs(context: Context) {
     /** Photos the user removed from the queue; events do not add them again. */
     private val dismissed = sp.getStringSet("dismissed", null).orEmpty().toMutableSet()
 
-    /** Photos Google refused; events never send them again on their own, only "Zkusit znovu" or a new pick does. */
-    private val refused = sp.getStringSet("refused", null).orEmpty().toMutableSet()
+    /**
+     * Photos Google refused, per account (account|key); events never send them there again on their own,
+     * only "Zkusit znovu" or picking them by hand does. Older entries without an account are dropped.
+     */
+    private val refused = sp.getStringSet("refused", null).orEmpty().filter { '@' in it }.toMutableSet()
 
     /** Done / total while the upload is running, otherwise null. */
     val uploading = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -181,14 +184,14 @@ class Prefs(context: Context) {
         val connected = accounts.value.toSet()
         val new = items.distinctBy { it.sentKey }.filter {
             it.account in connected && it.sentKey !in queued && !isSent(it) &&
-                (byHand || (it.key !in refused && it.sentKey !in dismissed))
+                (byHand || (it.sentKey !in refused && it.sentKey !in dismissed))
         }
         if (new.isEmpty()) return 0
         if (byHand) {
             val keys = new.map { it.sentKey }.toSet()
             failedList.update { list -> list.filterNot { it.sentKey in keys } }
             dismissed.removeAll(keys)
-            refused.removeAll(new.map { it.key }.toSet())
+            refused.removeAll(keys)
             sp.edit {
                 putStringSet("dismissed", dismissed.toSet())
                 putStringSet("refused", refused.toSet())
@@ -215,6 +218,9 @@ class Prefs(context: Context) {
         queueList.update { list -> list.filter { followEvent(it) == it } }
         // Failed photos follow the event's current account and album, or go when it no longer wants them.
         failedList.update { list -> list.mapNotNull(::followEvent).distinctBy { it.sentKey } }
+        // A failed photo moved to another account stays refused there too.
+        refused += failed.value.map { it.sentKey }
+        sp.edit { putStringSet("refused", refused.toSet()) }
     }
 
     /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */
@@ -233,7 +239,7 @@ class Prefs(context: Context) {
     }
 
     fun markFailed(items: List<QueueItem>) {
-        refused += items.map { it.key }
+        refused += items.map { it.sentKey }
         sp.edit { putStringSet("refused", refused.toSet()) }
         failedList.update { (it + items).distinctBy { item -> item.sentKey } }
         removeFromQueue(items)

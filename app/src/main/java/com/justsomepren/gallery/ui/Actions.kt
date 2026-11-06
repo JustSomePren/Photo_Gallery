@@ -160,7 +160,9 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
         }
         item {
             PickerRow("Jiná aplikace…", Icons.Default.Share) {
-                GooglePhotos.share(context, items)
+                val camera = items.filter { it.isCameraShot }
+                if (camera.isNotEmpty()) GooglePhotos.share(context, camera)
+                if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
                 onDismiss()
             }
         }

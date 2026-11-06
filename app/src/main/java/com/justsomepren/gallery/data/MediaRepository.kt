@@ -119,13 +119,15 @@ class MediaRepository(private val context: Context) {
         return MediaDetails(rows, location)
     }
 
-    /** Without the original file Android hides the GPS position. */
-    private fun readExif(uri: Uri): ExifInterface {
-        val canSeeLocation = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val source = if (canSeeLocation) MediaStore.setRequireOriginal(uri) else uri
-        return context.contentResolver.openInputStream(source)!!.use { ExifInterface(it) }
-    }
+    private fun readExif(uri: Uri): ExifInterface =
+        context.contentResolver.openInputStream(originalUri(context, uri))!!.use { ExifInterface(it) }
+}
+
+/** Without the original file Android hides the GPS position, in the info and in uploaded photos. */
+fun originalUri(context: Context, uri: Uri): Uri {
+    val canSeeLocation = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
+    return if (canSeeLocation) MediaStore.setRequireOriginal(uri) else uri
 }
 
 sealed interface Source {
