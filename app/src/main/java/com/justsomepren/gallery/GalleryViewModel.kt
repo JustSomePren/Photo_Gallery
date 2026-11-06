@@ -7,19 +7,27 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.justsomepren.gallery.data.EVENT_COLORS
+import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.MediaRepository
 import com.justsomepren.gallery.data.Prefs
+import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
+import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.WarmupWorker
+import com.justsomepren.gallery.data.today
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,7 +43,7 @@ sealed interface Screen {
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = MediaRepository(app)
-    val prefs = Prefs(app)
+    val prefs = Prefs.get(app)
 
     private val _media = MutableStateFlow<List<MediaItem>?>(null)
     val media: StateFlow<List<MediaItem>?> = _media
@@ -56,15 +64,27 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var saver = false
     private var refreshJob: Job? = null
 
+    @VisibleForTesting
+    var loadMedia: () -> List<MediaItem> = repo::loadAll
+
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             if (!saver) refresh(delayMs = 1000)
         }
     }
 
+    val calendarState = LazyListState()
+
+    /** The event open in the editor, from whichever screen it was opened. */
+    var editingEvent by mutableStateOf<Event?>(null)
+
+    /** The account being connected while Google shows its consent dialog. */
+    var pendingAccount: String? = null
+
     init {
         if (!prefs.hasTargets) prefs.addTargets(GooglePhotos.defaultTargets(app))
         WarmupWorker.schedule(app, prefs.warmup.value)
+        UploadWorker.schedule(app)
     }
 
     fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
@@ -74,9 +94,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
-            val items = withContext(Dispatchers.IO) { repo.loadAll() }
+            val items = withContext(Dispatchers.IO) { loadMedia() }
             _media.value = items
             prefs.migrateKeys(items)
+            if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false
         }
     }
@@ -107,6 +128,40 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             resolver.unregisterContentObserver(observer)
         }
     }
+
+    fun enqueue(items: List<MediaItem>, account: String, album: String?): Int {
+        val added = prefs.enqueue(items.map { QueueItem.of(it, account, album) })
+        UploadWorker.schedule(getApplication())
+        return added
+    }
+
+    fun saveEvent(event: Event) {
+        prefs.saveEvent(event)
+        media.value?.let { prefs.collectAuto(it) }
+        UploadWorker.schedule(getApplication())
+    }
+
+    fun newEvent(day: Long = today()) {
+        val color = EVENT_COLORS[prefs.events.value.size % EVENT_COLORS.size]
+        editingEvent = Event(name = "", color = color, startDay = day, endDay = day)
+    }
+
+    fun deleteEvent(event: Event) {
+        prefs.deleteEvent(event)
+        UploadWorker.schedule(getApplication())
+    }
+
+    fun setMobileData(enabled: Boolean) {
+        prefs.setMobileData(enabled)
+        UploadWorker.schedule(getApplication())
+    }
+
+    fun retryFailed() {
+        prefs.retryFailed()
+        UploadWorker.schedule(getApplication())
+    }
+
+    fun sendNow() = UploadWorker.sendNow(getApplication())
 
     fun setWarmup(enabled: Boolean) {
         prefs.setWarmup(enabled)

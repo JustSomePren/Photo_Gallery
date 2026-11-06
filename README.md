@@ -1,10 +1,19 @@
 # Galerie (offline)
 
-Jednoduchá galerie pro Pixel 9 Pro (Android 13+). Běží úplně offline – aplikace nemá
-oprávnění k internetu. Co neumí sama (úpravy, hledání, přehrávání videí), předá Google Fotkám.
+Jednoduchá galerie pro Pixel 9 Pro (Android 13+). Prohlížení běží úplně offline.
+Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledání předává Google Fotkám.
 
 ## Co umí
 
+- **Kalendář** (výchozí) – celý měsíc na obrazovce, víkendy vpravo, v každém dni první fotka
+  a počet. Klepnutí na den otevře jeho fotky, **dlouhý stisk na den založí událost**.
+  Ikonou nahoře přepneš na klasickou mřížku.
+- **Události** – barevná období v kalendáři (třeba „Dovča Praha“). Klepnutím na událost
+  uvidíš všechny její fotky.
+- **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
+  (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
+- **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
+- **Záložka Odesílání** – fronta, události, Google účty a ruční cíle na jednom místě.
 - **Fotky** – všechny fotky a videa po měsících.
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
 - **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
@@ -37,6 +46,9 @@ Nová verze se nainstaluje přes starou, alba a nastavení zůstanou (APK je vž
 
 Sestavení na počítači: `./gradlew assembleRelease` (potřebuje Android SDK).
 
+Testy: `./gradlew testDebugUnitTest`. Kromě logiky vykreslí i obrazovky aplikace s ukázkovými
+fotkami do `app/build/outputs/roborazzi/` (na GitHubu jako artefakt **obrazovky**).
+
 ## Baterie
 
 Úsporný režim se zapne sám, když baterie klesne pod nastavenou hranici (výchozí **70 %**)
@@ -61,7 +73,33 @@ Galerie nemůže Google Fotky ovládat. Ručně ale jde:
 Volbu „zálohovat jen při nabíjení“ Google Fotky odstranily v roce 2017. Podle rozboru
 aplikace (Android Authority) se možná vrátí, ale nepodařilo se mi ověřit, že už ji nabízí.
 
-## Výběr účtu při odesílání
+## Automatické odesílání – nastavení (jednou, asi 10 minut)
+
+Google vyžaduje, aby si aplikaci, která nahrává do Google Fotek, zaregistroval její majitel.
+
+1. Otevři [console.cloud.google.com](https://console.cloud.google.com) a vytvoř nový projekt (např. „Galerie“).
+2. *APIs & Services → Library* → vyhledej **Photos Library API** → **Enable**.
+3. *APIs & Services → OAuth consent screen* (Google Auth Platform):
+   typ **External**, vyplň název a svůj e-mail, ulož.
+4. V části **Audience / Test users** přidej **všechny účty**, do kterých chceš posílat
+   (osobní i společný, např. SharedXXO).
+5. *Credentials → Create credentials → OAuth client ID* → typ **Android**:
+   - Package name: `com.justsomepren.gallery`
+   - SHA-1: `9A:F4:44:88:64:64:4E:C4:E8:AA:65:24:A9:59:BA:22:38:CC:E4:B7`
+6. V aplikaci: *Odesílání → Google účty → +* → vyber účet → potvrď.
+
+Pokud Google po týdnu chce přihlášení znovu (u projektů v testovacím režimu se to může stát),
+v Odesílání se u účtu objeví „Přihlásit“.
+
+### Jak se odesílá
+
+- Jen na **Wi-Fi** (mobilní data jde zapnout v Odesílání).
+- Pod hranicí baterie (výchozí 70 %) **jen při nabíjení**.
+- Tlačítko **Odeslat hned** pošle frontu okamžitě i přes data a bez ohledu na baterii.
+- Každá fotka se do stejného účtu pošle jen jednou.
+- Album se v Google Fotkách vytvoří samo. Aplikace smí přidávat jen do alb, která sama vytvořila.
+
+## Ruční odesílání přes aplikace
 
 - **Google Disk** se při nahrávání vždy zeptá, na který účet.
 - **Google Fotky** nahrají do účtu, který je v nich právě aktivní.

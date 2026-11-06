@@ -37,6 +37,7 @@ class AlbumsTest {
     @Before
     fun setUp() {
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
+        java.io.File(context.filesDir, "sent.txt").delete()
         prefs = Prefs(context)
     }
 

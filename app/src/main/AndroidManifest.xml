@@ -11,10 +11,10 @@
         android:name="android.permission.MANAGE_MEDIA"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- The app never talks to the internet. Uploads are handed over to Google Photos / Drive. -->
-    <uses-permission
-        android:name="android.permission.INTERNET"
-        tools:node="remove" />
+    <!-- Used only to send the upload queue to Google Photos. Browsing works fully offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <intent>
@@ -42,5 +42,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>

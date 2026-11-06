@@ -47,6 +47,7 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.systemProperty("roborazzi.test.record", "true") }
     }
 }
 
@@ -62,8 +63,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.2")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

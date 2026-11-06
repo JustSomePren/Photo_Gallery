@@ -19,12 +19,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +65,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.Screen
+import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
+import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.formatDay
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.batteryFlow
 import com.justsomepren.gallery.data.filterBy
@@ -116,8 +125,17 @@ private fun Main(vm: GalleryViewModel) {
     val back: () -> Unit = { stack.removeAt(stack.lastIndex) }
     BackHandler(stack.isNotEmpty(), back)
 
+    val events by vm.prefs.events.collectAsStateWithLifecycle()
+    val calendar by vm.prefs.calendarView.collectAsStateWithLifecycle()
+    val openSending = { vm.tab = SENDING_TAB }
+
     @Composable
-    fun browser(source: Source, onBack: (() -> Unit)?, extraActions: @Composable RowScope.() -> Unit = {}) {
+    fun browser(
+        source: Source,
+        onBack: (() -> Unit)?,
+        header: @Composable () -> Unit = {},
+        extraActions: @Composable RowScope.() -> Unit = {},
+    ) {
         MediaBrowser(
             source = source,
             items = remember(all, albums, source) { all.filterBy(source, albums) },
@@ -125,8 +143,20 @@ private fun Main(vm: GalleryViewModel) {
             gridState = vm.gridState(source),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
             onBack = onBack,
+            header = header,
             extraActions = extraActions,
         )
+    }
+
+    @Composable
+    fun RowScope.photoActions() {
+        if (LocalSaver.current) {
+            Icon(Icons.Default.BatterySaver, "Úsporný režim", tint = MaterialTheme.colorScheme.primary)
+        }
+        IconButton(onClick = { vm.prefs.setCalendarView(!calendar) }) {
+            if (calendar) Icon(Icons.Default.GridView, "Mřížka") else Icon(Icons.Default.CalendarMonth, "Kalendář")
+        }
+        IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "Hledat v Google Fotkách") }
     }
 
     when (val top = stack.lastOrNull()) {
@@ -136,7 +166,14 @@ private fun Main(vm: GalleryViewModel) {
             vm = vm,
             onBack = back,
         )
-        is Screen.Grid -> browser(top.source, back)
+        is Screen.Grid -> {
+            val event = events.firstOrNull { it.source == top.source }
+            browser(top.source, back) {
+                if (event != null) {
+                    IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
+                }
+            }
+        }
         null -> Scaffold(
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
@@ -154,20 +191,21 @@ private fun Main(vm: GalleryViewModel) {
         ) { padding ->
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
                 when (vm.tab) {
-                    0, 1 -> browser(if (vm.tab == 0) Source.All else Source.Favorites, onBack = null) {
-                        if (LocalSaver.current) {
-                            Icon(Icons.Default.BatterySaver, "Úsporný režim", tint = MaterialTheme.colorScheme.primary)
-                        }
-                        IconButton(onClick = { searching = true }) {
-                            Icon(Icons.Default.Search, "Hledat v Google Fotkách")
-                        }
+                    0 -> if (calendar) {
+                        CalendarScreen(all, events, vm, openSending, actions = { photoActions() }) { stack.add(Screen.Grid(it)) }
+                    } else {
+                        browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }
+                    1 -> browser(Source.Favorites, onBack = null)
                     2 -> AlbumsScreen(all, albums, vm, onOpen = { stack.add(Screen.Grid(it)) })
+                    SENDING_TAB -> SendingScreen(vm)
                     else -> SettingsScreen(vm)
                 }
             }
         }
     }
+
+    vm.editingEvent?.let { EventEditor(it, vm) { vm.editingEvent = null } }
 
     if (searching) {
         TextInputDialog(
@@ -182,12 +220,39 @@ private fun Main(vm: GalleryViewModel) {
     }
 }
 
+private const val SENDING_TAB = 3
+
 private val TABS = listOf(
     "Fotky" to Icons.Default.Photo,
     "Oblíbené" to Icons.Default.Favorite,
     "Alba" to Icons.Default.PhotoAlbum,
+    "Odesílání" to Icons.Default.CloudUpload,
     "Nastavení" to Icons.Default.Settings,
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CalendarScreen(
+    media: List<MediaItem>,
+    events: List<Event>,
+    vm: GalleryViewModel,
+    openSending: () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+    onOpen: (Source) -> Unit,
+) {
+    Scaffold(topBar = { TopAppBar(title = { Text("Fotky") }, actions = actions) }) { padding ->
+        CalendarView(
+            media = media,
+            events = events,
+            state = vm.calendarState,
+            contentPadding = padding,
+            header = { StatusStrip(vm, openSending) },
+            onDay = { onOpen(Source.Period(formatDay(it), it, it)) },
+            onNewEvent = vm::newEvent,
+            onEvent = { onOpen(it.source) },
+        )
+    }
+}
 
 @Composable
 private fun PermissionScreen(onResult: () -> Unit) {

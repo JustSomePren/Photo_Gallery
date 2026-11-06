@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.util.LruCache
 import android.util.Size
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -20,7 +21,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.max
@@ -38,13 +42,18 @@ object ImageCache {
     }
     private val full = LruCache<String, Bitmap>(3)
 
+    /** Lets screenshot tests show pictures without real files. */
+    @VisibleForTesting
+    var fake: ((Uri) -> Bitmap)? = null
+
     fun cachedThumbnail(uri: Uri, size: Int): Bitmap? = thumbs.get("$uri@$size")
 
     suspend fun thumbnail(resolver: ContentResolver, uri: Uri, size: Int) =
-        load(thumbs, "$uri@$size") { resolver.loadThumbnail(uri, Size(size, size), null) }
+        load(thumbs, "$uri@$size") { fake?.invoke(uri) ?: resolver.loadThumbnail(uri, Size(size, size), null) }
 
     suspend fun fullImage(resolver: ContentResolver, uri: Uri, maxSide: Int) =
         load(full, "$uri#$maxSide") {
+            fake?.let { return@load it(uri) }
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
                 val scale = min(1f, maxSide.toFloat() / max(info.size.width, info.size.height))
                 if (scale < 1f) {
@@ -85,3 +94,7 @@ fun <T : Any> rememberLoaded(vararg keys: Any, initial: T? = null, load: suspend
     }
     return value
 }
+
+/** One thumbnail size for the grid and the calendar, so they share the cache. */
+@Composable
+fun gridThumbPx(): Int = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / 4).roundToPx() }

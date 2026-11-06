@@ -13,10 +13,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
@@ -116,10 +118,28 @@ fun rememberMediaActions(vm: GalleryViewModel): MediaActions {
 private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val targets by vm.prefs.targets.collectAsStateWithLifecycle()
+    val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
+    // A running event with an album is the most likely place for these photos.
+    var album by remember {
+        mutableStateOf(vm.prefs.events.value.firstOrNull { it.isActive && it.album != null }?.album.orEmpty())
+    }
     PickerDialog(title = "Poslat ${items.size} do cloudu", onDismiss = onDismiss) {
-        if (targets.isEmpty()) {
-            item { Text("Zatím nemáš žádný cíl. Přidej ho v Nastavení.") }
+        item { DialogLabel("Do fronty – odešle se samo na Wi-Fi") }
+        if (accounts.isEmpty()) {
+            item { Hint("Google účet přidáš v záložce Odesílání.") }
+        } else {
+            item {
+                OutlinedTextField(album, { album = it }, label = { Text("Do alba (nepovinné)") }, singleLine = true)
+            }
+            items(accounts) { account ->
+                PickerRow(account, Icons.Default.CloudQueue) {
+                    val added = vm.enqueue(items, account, album)
+                    toast(context, if (added > 0) "Ve frontě: $added" else "Už je odesláno nebo ve frontě")
+                    onDismiss()
+                }
+            }
         }
+        item { DialogLabel("Hned přes aplikaci") }
         items(targets) { target ->
             PickerRow(target.name, Icons.Default.CloudUpload) {
                 GooglePhotos.send(context, target, items)
@@ -134,6 +154,14 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
         }
     }
 }
+
+@Composable
+private fun DialogLabel(text: String) = Text(
+    text,
+    style = MaterialTheme.typography.labelMedium,
+    color = MaterialTheme.colorScheme.primary,
+    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+)
 
 @Composable
 private fun AlbumPickerDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: () -> Unit) {

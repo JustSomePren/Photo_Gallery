@@ -8,6 +8,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -71,7 +76,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
@@ -86,12 +90,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.day
+import com.justsomepren.gallery.data.formatRange
+import com.justsomepren.gallery.data.formatWeekday
 import com.justsomepren.gallery.data.Source
+import com.justsomepren.gallery.data.month
+import com.justsomepren.gallery.data.monthTitle
 import com.justsomepren.gallery.data.title
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** One screen for all photos, favorites and every album. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,6 +110,7 @@ fun MediaBrowser(
     gridState: LazyGridState,
     onOpen: (MediaItem) -> Unit,
     onBack: (() -> Unit)? = null,
+    header: @Composable () -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {},
 ) {
     var selected by rememberSaveable(source.toString(), stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
@@ -206,6 +214,7 @@ fun MediaBrowser(
                     state = gridState,
                     bottomPadding = padding.calculateBottomPadding(),
                     vm = vm,
+                    header = header,
                     onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
                     onLongClick = { toggle(listOf(it.id)) },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
@@ -248,15 +257,27 @@ private sealed interface GridEntry {
     val month: String
 
     data class Header(override val month: String, val items: List<MediaItem>) : GridEntry
-    data class Photo(override val month: String, val item: MediaItem) : GridEntry
+    data class EventStart(override val month: String, val event: Event, val firstId: Long) : GridEntry
+    data class Photo(override val month: String, val item: MediaItem, val event: Event?) : GridEntry
 }
 
-private fun buildEntries(items: List<MediaItem>): List<GridEntry> {
-    val format = SimpleDateFormat("LLLL yyyy", Locale("cs"))
-    return items
-        .groupBy { format.format(Date(it.date)).replaceFirstChar { c -> c.uppercase() } }
-        .flatMap { (month, group) -> listOf(GridEntry.Header(month, group)) + group.map { GridEntry.Photo(month, it) } }
-}
+/** Months, and inside them a colored row where the photos of an event begin. */
+private fun buildEntries(items: List<MediaItem>, events: List<Event>): List<GridEntry> =
+    items.groupBy { monthTitle(it.month) }.flatMap { (month, group) ->
+        val entries = mutableListOf<GridEntry>(GridEntry.Header(month, group))
+        var current: Event? = null
+        for (item in group) {
+            val event = events.firstOrNull { it.covers(item.day) }
+            if (event != null && event != current) entries += GridEntry.EventStart(month, event, item.id)
+            current = event
+            entries += GridEntry.Photo(month, item, event)
+        }
+        entries
+    }
+
+/** The first photo on screen: its date and event, shown while scrolling. */
+private fun List<GridEntry>.photoAt(index: Int): GridEntry.Photo? =
+    asSequence().drop(index.coerceAtLeast(0)).take(12).filterIsInstance<GridEntry.Photo>().firstOrNull()
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -266,13 +287,18 @@ private fun MediaGrid(
     state: LazyGridState,
     bottomPadding: Dp,
     vm: GalleryViewModel,
+    header: @Composable () -> Unit,
     onClick: (MediaItem) -> Unit,
     onLongClick: (MediaItem) -> Unit,
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val columns = if (LocalSaver.current) 5 else 4
-    val thumbPx = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / 4).roundToPx() }
-    val entries = remember(items) { buildEntries(items) }
+    val thumbPx = gridThumbPx()
+    val events by vm.prefs.events.collectAsStateWithLifecycle()
+    val entries = remember(items, events) { buildEntries(items, events) }
+    // Grid position 0 is the header, so entry i sits at position i + 1.
+    val current by remember(entries) { derivedStateOf { entries.photoAt(state.firstVisibleItemIndex - 1) } }
+    val scrolling = rememberRecentlyScrolled(state)
 
     // Coming back from the viewer: make sure the last viewed photo is on screen.
     LaunchedEffect(Unit) {
@@ -280,7 +306,7 @@ private fun MediaGrid(
         vm.returnTo = null
         val index = entries.indexOfFirst { it is GridEntry.Photo && it.item.id == id }
         snapshotFlow { state.layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
-        if (index >= 0 && state.layoutInfo.visibleItemsInfo.none { it.key == id }) state.scrollToItem(index)
+        if (index >= 0 && state.layoutInfo.visibleItemsInfo.none { it.key == id }) state.scrollToItem(index + 1)
     }
 
     Box {
@@ -291,10 +317,17 @@ private fun MediaGrid(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }, contentType = "header") { header() }
             items(
                 entries,
-                key = { if (it is GridEntry.Photo) it.item.id else "month ${it.month}" },
-                span = { GridItemSpan(if (it is GridEntry.Header) maxLineSpan else 1) },
+                key = {
+                    when (it) {
+                        is GridEntry.Photo -> it.item.id
+                        is GridEntry.EventStart -> "event ${it.event.id} ${it.firstId}"
+                        is GridEntry.Header -> "month ${it.month}"
+                    }
+                },
+                span = { GridItemSpan(if (it is GridEntry.Photo) 1 else maxLineSpan) },
                 contentType = { it::class },
             ) { entry ->
                 when (entry) {
@@ -303,6 +336,7 @@ private fun MediaGrid(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 16.dp, 12.dp, 8.dp),
                     )
+                    is GridEntry.EventStart -> EventRow(entry.event) { vm.editingEvent = entry.event }
                     is GridEntry.Photo -> {
                         val item = entry.item
                         Box(
@@ -311,6 +345,9 @@ private fun MediaGrid(
                                 .combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }),
                         ) {
                             Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
+                            entry.event?.let {
+                                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color(it.color)))
+                            }
                             if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
                             if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
                             if (item.id in selected) {
@@ -322,13 +359,71 @@ private fun MediaGrid(
                 }
             }
         }
-        if (entries.size > 60) FastScroller(state, entries, Modifier.padding(bottom = bottomPadding))
+        current?.takeIf { scrolling && state.firstVisibleItemIndex > 0 }?.let {
+            ContextPill(it, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+        }
+        if (entries.size > 60) FastScroller(state, entries, current, Modifier.padding(bottom = bottomPadding))
     }
+}
+
+/** Where the event's photos begin: its color, name and dates. */
+@Composable
+private fun EventRow(event: Event, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(12.dp).background(Color(event.color), CircleShape))
+        Text(event.name, style = MaterialTheme.typography.titleSmall, color = Color(event.color))
+        Text(
+            formatRange(event.startDay, event.endDay),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        if (event.autoSend) {
+            Icon(Icons.Default.CloudSync, "Posílá automaticky", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+/** "čt 12. 11. 2026 · ● Dovča Praha" floating over the grid. */
+@Composable
+private fun ContextPill(photo: GridEntry.Photo, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .background(MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(formatWeekday(photo.item.day), color = MaterialTheme.colorScheme.inverseOnSurface)
+        photo.event?.let {
+            Box(Modifier.size(10.dp).background(Color(it.color), CircleShape))
+            Text(it.name, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1)
+        }
+    }
+}
+
+/** True while the list scrolls and a moment after, so labels do not flicker away. */
+@Composable
+private fun rememberRecentlyScrolled(state: LazyGridState): Boolean {
+    var recentlyScrolled by remember { mutableStateOf(false) }
+    LaunchedEffect(state.isScrollInProgress) {
+        if (state.isScrollInProgress) {
+            recentlyScrolled = true
+        } else {
+            delay(1500)
+            recentlyScrolled = false
+        }
+    }
+    return recentlyScrolled
 }
 
 /** Drag along the right edge to jump through months quickly. */
 @Composable
-private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifier: Modifier) {
+private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, current: GridEntry.Photo?, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     var dragging by remember { mutableStateOf(false) }
     var height by remember { mutableIntStateOf(1) }
@@ -341,9 +436,6 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
             (state.firstVisibleItemIndex.toFloat() / range.coerceAtLeast(1)).coerceIn(0f, 1f)
         }
     }
-    val label by remember(entries) {
-        derivedStateOf { entries.getOrNull(state.firstVisibleItemIndex)?.month.orEmpty() }
-    }
     val thumbOffset: Density.() -> IntOffset = { IntOffset(0, (progress * (height - thumbPx)).roundToInt()) }
 
     fun jump(y: Float) {
@@ -352,29 +444,10 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
         scope.launch { state.scrollToItem(index) }
     }
 
-    var recentlyScrolled by remember { mutableStateOf(false) }
-    LaunchedEffect(state.isScrollInProgress) {
-        if (state.isScrollInProgress) {
-            recentlyScrolled = true
-        } else {
-            delay(1500)
-            recentlyScrolled = false
-        }
-    }
-
-    if (!dragging && !recentlyScrolled) return
+    if (!dragging && !rememberRecentlyScrolled(state)) return
     Box(modifier.fillMaxSize().onSizeChanged { height = it.height }) {
-        if (dragging) {
-            Text(
-                label,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(thumbOffset)
-                    .padding(end = 40.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            )
+        if (dragging && current != null) {
+            ContextPill(current, Modifier.align(Alignment.TopEnd).offset(thumbOffset).padding(end = 40.dp))
         }
         Box(
             Modifier

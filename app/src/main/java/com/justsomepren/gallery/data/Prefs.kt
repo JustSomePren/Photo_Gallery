@@ -1,10 +1,12 @@
 package com.justsomepren.gallery.data
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 /** A photo in an album, found by [key]; the id is kept only for reference. */
@@ -17,31 +19,69 @@ private fun MediaItem.ref() = AlbumRef(id, key)
 /** A named shortcut to an app that uploads photos, e.g. "Shared cloud – Drive". */
 data class UploadTarget(val name: String, val packageName: String, val activityName: String)
 
+/** A photo waiting to be uploaded to a Google account, optionally into an album. */
+data class QueueItem(
+    val key: String,
+    val uri: String,
+    val name: String,
+    val mime: String,
+    val account: String,
+    val album: String?,
+) {
+    val sentKey get() = "$account|$key"
+
+    companion object {
+        fun of(item: MediaItem, account: String, album: String?) =
+            QueueItem(item.key, item.uri.toString(), item.name, item.mime, account, album?.ifBlank { null })
+    }
+}
+
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("gallery", Context.MODE_PRIVATE)
 
-    val albums = MutableStateFlow(readList("albums", ::albumFromJson))
-    val targets = MutableStateFlow(readList("targets", ::targetFromJson))
+    /** An append-only file, so marking photos as sent stays cheap. */
+    private val sentFile = File(context.filesDir, "sent.txt")
+    private val sent = sentFile.takeIf { it.exists() }?.readLines()?.toMutableSet() ?: mutableSetOf()
+
+    private val albumList = Stored("albums", ::albumToJson, ::albumFromJson)
+    private val targetList = Stored("targets", ::targetToJson, ::targetFromJson)
+    private val eventList = Stored("events", ::eventToJson, ::eventFromJson)
+    private val accountList = Stored("accounts", { JSONObject().put("email", it) }, { it.getString("email") })
+    private val queueList = Stored("queue", ::queueToJson, ::queueFromJson)
+    private val failedList = Stored("failed", ::queueToJson, ::queueFromJson)
+
+    val albums = albumList.flow
+    val targets = targetList.flow
+    val events = eventList.flow
+    val accounts = accountList.flow
+    val queue = queueList.flow
+    val failed = failedList.flow
+
     val threshold = MutableStateFlow(sp.getInt("threshold", 70))
     val warmup = MutableStateFlow(sp.getBoolean("warmup", true))
+    val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
+    val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
+
+    /** Accounts whose Google login has to be confirmed again. */
+    val accountProblems = MutableStateFlow(emptySet<String>())
+
+    /** Done / total while the upload is running, otherwise null. */
+    val uploading = MutableStateFlow<Pair<Int, Int>?>(null)
 
     val hasTargets get() = sp.contains("targets")
 
-    fun setThreshold(value: Int) {
-        threshold.value = value
-        sp.edit { putInt("threshold", value) }
-    }
+    fun setThreshold(value: Int) = setInt(threshold, "threshold", value)
+    fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
+    fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
+    fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
 
-    fun setWarmup(value: Boolean) {
-        warmup.value = value
-        sp.edit { putBoolean("warmup", value) }
-    }
+    // ---- Albums ----
 
-    fun createAlbum(name: String, items: List<MediaItem> = emptyList()) = updateAlbums {
+    fun createAlbum(name: String, items: List<MediaItem> = emptyList()) = albumList.update {
         it + CustomAlbum(UUID.randomUUID().toString(), name, items.map { item -> item.ref() })
     }
 
-    fun deleteAlbum(id: String) = updateAlbums { list -> list.filterNot { it.id == id } }
+    fun deleteAlbum(id: String) = albumList.update { list -> list.filterNot { it.id == id } }
 
     fun addToAlbum(id: String, items: List<MediaItem>) = changeRefs(id) { refs ->
         (refs + items.map { it.ref() }).distinctBy { it.key }
@@ -61,7 +101,7 @@ class Prefs(context: Context) {
                 if (item != null && ref.key != item.key && ref.key == "${item.name}|${item.date}") item.ref() else ref
             })
         }
-        if (migrated != albums.value) updateAlbums { migrated }
+        if (migrated != albums.value) albumList.update { migrated }
     }
 
     fun exportAlbums(): String = JSONArray(albums.value.map(::albumToJson)).toString(2)
@@ -70,34 +110,122 @@ class Prefs(context: Context) {
     fun importAlbums(json: String): Int {
         val array = JSONArray(json)
         val imported = List(array.length()) { albumFromJson(array.getJSONObject(it)) }
-        updateAlbums { current -> current.filterNot { old -> imported.any { it.id == old.id } } + imported }
+        albumList.update { current -> current.filterNot { old -> imported.any { it.id == old.id } } + imported }
         return imported.size
     }
 
-    private fun changeRefs(id: String, change: (List<AlbumRef>) -> List<AlbumRef>) = updateAlbums { list ->
+    private fun changeRefs(id: String, change: (List<AlbumRef>) -> List<AlbumRef>) = albumList.update { list ->
         list.map { if (it.id == id) it.copy(refs = change(it.refs)) else it }
     }
 
-    fun addTargets(new: List<UploadTarget>) = updateTargets { it + new }
+    // ---- Share targets ----
 
-    fun deleteTarget(target: UploadTarget) = updateTargets { it - target }
+    fun addTargets(new: List<UploadTarget>) = targetList.update { it + new }
 
-    private fun updateAlbums(change: (List<CustomAlbum>) -> List<CustomAlbum>) {
-        albums.value = change(albums.value)
-        write("albums", albums.value.map(::albumToJson))
+    fun deleteTarget(target: UploadTarget) = targetList.update { it - target }
+
+    // ---- Events ----
+
+    fun saveEvent(event: Event) = eventList.update { list ->
+        if (list.any { it.id == event.id }) list.map { if (it.id == event.id) event else it } else list + event
     }
 
-    private fun updateTargets(change: (List<UploadTarget>) -> List<UploadTarget>) {
-        targets.value = change(targets.value)
-        write("targets", targets.value.map(::targetToJson))
+    fun deleteEvent(event: Event) = eventList.update { list -> list.filterNot { it.id == event.id } }
+
+    // ---- Accounts ----
+
+    fun addAccount(email: String) {
+        accountList.update { (it + email).distinct() }
+        accountProblems.value -= email
     }
 
-    private fun write(key: String, items: List<JSONObject>) =
-        sp.edit { putString(key, JSONArray(items).toString()) }
+    fun removeAccount(email: String) {
+        accountList.update { it - email }
+        queueList.update { list -> list.filterNot { it.account == email } }
+    }
 
-    private fun <T> readList(key: String, parse: (JSONObject) -> T): List<T> {
-        val array = JSONArray(sp.getString(key, null) ?: return emptyList())
-        return List(array.length()) { parse(array.getJSONObject(it)) }
+    // ---- Upload queue ----
+
+    fun isSent(item: QueueItem) = item.sentKey in sent
+
+    /** Adds what is not queued or sent yet; returns how many were added. */
+    fun enqueue(items: List<QueueItem>): Int {
+        val queued = queue.value.map { it.sentKey }.toSet()
+        val new = items.distinctBy { it.sentKey }.filter { it.sentKey !in queued && !isSent(it) }
+        if (new.isNotEmpty()) queueList.update { it + new }
+        return new.size
+    }
+
+    /** Queues photos of active auto-send events, from their first to their last day. */
+    fun collectAuto(media: List<MediaItem>): Int {
+        val rules = events.value.filter { it.autoSend && it.account != null }
+        if (rules.isEmpty()) return 0
+        return enqueue(media.flatMap { item ->
+            rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album) }
+        })
+    }
+
+    fun markSent(items: List<QueueItem>) {
+        val keys = items.map { it.sentKey }
+        sent += keys
+        sentFile.appendText(keys.joinToString("") { "$it\n" })
+        removeFromQueue(items)
+    }
+
+    fun markFailed(items: List<QueueItem>) {
+        failedList.update { (it + items).distinctBy { item -> item.sentKey } }
+        removeFromQueue(items)
+    }
+
+    fun retryFailed() {
+        val items = failed.value
+        failedList.update { emptyList() }
+        enqueue(items)
+    }
+
+    fun clearQueue() = queueList.update { emptyList() }
+
+    fun removeFromQueue(items: List<QueueItem>) {
+        val keys = items.map { it.sentKey }.toSet()
+        queueList.update { list -> list.filterNot { it.sentKey in keys } }
+    }
+
+    /** Google Photos album ids the app created, per account and title. */
+    fun albumId(account: String, title: String): String? = sp.getString("albumId|$account|$title", null)
+
+    fun setAlbumId(account: String, title: String, id: String?) =
+        sp.edit { if (id == null) remove("albumId|$account|$title") else putString("albumId|$account|$title", id) }
+
+    // ---- Storage helpers ----
+
+    private fun setInt(flow: MutableStateFlow<Int>, key: String, value: Int) {
+        flow.value = value
+        sp.edit { putInt(key, value) }
+    }
+
+    private fun setBoolean(flow: MutableStateFlow<Boolean>, key: String, value: Boolean) {
+        flow.value = value
+        sp.edit { putBoolean(key, value) }
+    }
+
+    /** A list kept in memory as a flow and saved as JSON. */
+    private inner class Stored<T>(
+        private val key: String,
+        private val toJson: (T) -> JSONObject,
+        fromJson: (JSONObject) -> T,
+    ) {
+        val flow = MutableStateFlow(read(fromJson))
+
+        @Synchronized
+        fun update(change: (List<T>) -> List<T>) {
+            flow.value = change(flow.value)
+            sp.edit { putString(key, JSONArray(flow.value.map(toJson)).toString()) }
+        }
+
+        private fun read(fromJson: (JSONObject) -> T): List<T> {
+            val array = JSONArray(sp.getString(key, null) ?: return emptyList())
+            return List(array.length()) { fromJson(array.getJSONObject(it)) }
+        }
     }
 
     private fun albumToJson(a: CustomAlbum) = JSONObject()
@@ -119,4 +247,48 @@ class Prefs(context: Context) {
 
     private fun targetFromJson(o: JSONObject) =
         UploadTarget(o.getString("name"), o.getString("pkg"), o.getString("activity"))
+
+    private fun eventToJson(e: Event) = JSONObject()
+        .put("id", e.id).put("name", e.name).put("color", e.color)
+        .put("start", e.startDay).put("end", e.endDay)
+        .put("auto", e.autoSend).put("account", e.account ?: "").put("album", e.album ?: "")
+
+    private fun eventFromJson(o: JSONObject) = Event(
+        id = o.getString("id"),
+        name = o.getString("name"),
+        color = o.getInt("color"),
+        startDay = o.getLong("start"),
+        endDay = o.getLong("end"),
+        autoSend = o.getBoolean("auto"),
+        account = o.getString("account").ifBlank { null },
+        album = o.getString("album").ifBlank { null },
+    )
+
+    private fun queueToJson(q: QueueItem) = JSONObject()
+        .put("key", q.key).put("uri", q.uri).put("name", q.name).put("mime", q.mime)
+        .put("account", q.account).put("album", q.album ?: "")
+
+    private fun queueFromJson(o: JSONObject) = QueueItem(
+        key = o.getString("key"),
+        uri = o.getString("uri"),
+        name = o.getString("name"),
+        mime = o.getString("mime"),
+        account = o.getString("account"),
+        album = o.getString("album").ifBlank { null },
+    )
+
+    companion object {
+        @Volatile
+        private var instance: Prefs? = null
+
+        @VisibleForTesting
+        fun reset() {
+            instance = null
+        }
+
+        /** One shared instance, so the screens and the upload worker see the same data. */
+        fun get(context: Context): Prefs = instance ?: synchronized(this) {
+            instance ?: Prefs(context.applicationContext).also { instance = it }
+        }
+    }
 }

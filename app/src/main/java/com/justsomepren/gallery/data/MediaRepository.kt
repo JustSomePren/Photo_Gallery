@@ -130,6 +130,9 @@ sealed interface Source {
     data object Favorites : Source
     data class Folder(val bucketId: Long, val name: String) : Source
     data class Album(val id: String, val name: String) : Source
+
+    /** A day or a range of days, e.g. a day tapped in the calendar or an event. */
+    data class Period(val name: String, val start: Long, val end: Long) : Source
 }
 
 val Source.title: String
@@ -138,6 +141,7 @@ val Source.title: String
         Source.Favorites -> "Oblíbené"
         is Source.Folder -> name
         is Source.Album -> name
+        is Source.Period -> name
     }
 
 fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<MediaItem> =
@@ -149,4 +153,5 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
             val keys = albums.find { it.id == source.id }?.refs.orEmpty().map { it.key }.toSet()
             filter { it.key in keys }
         }
+        is Source.Period -> filter { it.day in source.start..source.end }
     }

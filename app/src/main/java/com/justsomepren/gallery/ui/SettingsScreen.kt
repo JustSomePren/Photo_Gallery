@@ -16,13 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -56,9 +51,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
-    val targets by vm.prefs.targets.collectAsStateWithLifecycle()
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
-    var addingTarget by remember { mutableStateOf(false) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
     var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
     LifecycleResumeEffect(Unit) {
@@ -139,30 +132,13 @@ fun SettingsScreen(vm: GalleryViewModel) {
             SettingsButton("Uložit alba do souboru") { exportLauncher.launch("galerie-alba.json") }
             SettingsButton("Načíst alba ze souboru") { importLauncher.launch(arrayOf("application/json")) }
 
-            HorizontalDivider()
-            Section("Kam posílat fotky")
-            Hint(
-                "Každý cíl otevře danou aplikaci s vybranými fotkami. Google Disk se při nahrávání " +
-                    "zeptá na účet. Google Fotky nahrávají do účtu, který je v nich právě aktivní."
-            )
-            targets.forEach { target ->
-                ListItem(
-                    headlineContent = { Text(target.name) },
-                    supportingContent = { Text(target.packageName) },
-                    trailingContent = {
-                        IconButton(onClick = { vm.prefs.deleteTarget(target) }) { Icon(Icons.Default.Delete, "Smazat") }
-                    },
-                )
-            }
-            SettingsButton("Přidat cíl") { addingTarget = true }
         }
     }
 
-    if (addingTarget) AddTargetDialog(vm) { addingTarget = false }
 }
 
 @Composable
-private fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
+fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val apps = remember { GooglePhotos.uploadApps(context) }
     var chosen by remember { mutableStateOf<UploadTarget?>(apps.firstOrNull()?.second) }
@@ -190,16 +166,16 @@ private fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     }
 }
 
-private fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
 @Composable
-private fun Section(text: String) =
+fun Section(text: String) =
     Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 
 @Composable
-private fun Hint(text: String) =
+fun Hint(text: String) =
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
 @Composable
-private fun SettingsButton(text: String, onClick: () -> Unit) =
+fun SettingsButton(text: String, onClick: () -> Unit) =
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(text) }
