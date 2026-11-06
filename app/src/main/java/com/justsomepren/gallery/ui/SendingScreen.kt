@@ -216,7 +216,8 @@ private fun EventRow(event: Event, onClick: () -> Unit) {
         headlineContent = { Text(event.name + if (event.isActive) " · probíhá" else "") },
         supportingContent = {
             val sending = event.account?.takeIf { event.autoSend }?.let { " → $it" + (event.album?.let { a -> " · $a" } ?: "") }
-            Text(formatRange(event.startDay, event.endDay) + (sending ?: ""))
+            val from = if (event.isLinked) " · z Kalendáře" else ""
+            Text(formatRange(event.startDay, event.endDay) + from + (sending ?: ""))
         },
         trailingContent = {
             if (event.autoSend) Icon(Icons.Default.CloudSync, "Posílá automaticky", tint = MaterialTheme.colorScheme.primary)

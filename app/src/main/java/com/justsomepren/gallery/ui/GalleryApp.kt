@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Photo
@@ -65,6 +66,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.Screen
+import com.justsomepren.gallery.data.CalendarItem
+import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
@@ -126,6 +129,7 @@ private fun Main(vm: GalleryViewModel) {
     BackHandler(stack.isNotEmpty(), back)
 
     val events by vm.prefs.events.collectAsStateWithLifecycle()
+    val calendarItems by vm.calendarItems.collectAsStateWithLifecycle()
     val calendar by vm.prefs.calendarView.collectAsStateWithLifecycle()
     val openSending = { vm.tab = SENDING_TAB }
 
@@ -168,9 +172,18 @@ private fun Main(vm: GalleryViewModel) {
         )
         is Screen.Grid -> {
             val event = events.firstOrNull { it.source == top.source }
-            browser(top.source, back) {
+            val linked = calendarItems.firstOrNull { it.source == top.source }
+            val day = (top.source as? Source.Period)?.takeIf { it.start == it.end && !it.skipScreenshots }?.start
+            val header: @Composable () -> Unit = {
+                if (day != null) DayEvents(day, calendarItems, all) { stack.add(Screen.Grid(it)) }
+            }
+            browser(top.source, back, header) {
                 if (event != null) {
                     IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
+                } else if (linked != null) {
+                    IconButton(onClick = { CalendarLink.openEvent(context, linked.id, linked.begin) }) {
+                        Icon(Icons.Default.Event, "Otevřít v Kalendáři")
+                    }
                 }
             }
         }
@@ -192,12 +205,12 @@ private fun Main(vm: GalleryViewModel) {
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
                 when (vm.tab) {
                     0 -> if (calendar) {
-                        CalendarScreen(all, events, vm, openSending, actions = { photoActions() }) { stack.add(Screen.Grid(it)) }
+                        CalendarScreen(all, events, calendarItems, vm, openSending, actions = { photoActions() }) { stack.add(Screen.Grid(it)) }
                     } else {
                         browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }
                     1 -> browser(Source.Favorites, onBack = null)
-                    2 -> AlbumsScreen(all, albums, vm, onOpen = { stack.add(Screen.Grid(it)) })
+                    2 -> AlbumsScreen(all, albums, events, vm, onOpen = { stack.add(Screen.Grid(it)) })
                     SENDING_TAB -> SendingScreen(vm)
                     else -> SettingsScreen(vm)
                 }
@@ -235,6 +248,7 @@ private val TABS = listOf(
 private fun CalendarScreen(
     media: List<MediaItem>,
     events: List<Event>,
+    calendarItems: List<CalendarItem>,
     vm: GalleryViewModel,
     openSending: () -> Unit,
     actions: @Composable RowScope.() -> Unit,
@@ -244,6 +258,7 @@ private fun CalendarScreen(
         CalendarView(
             media = media,
             events = events,
+            calendarItems = calendarItems,
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },

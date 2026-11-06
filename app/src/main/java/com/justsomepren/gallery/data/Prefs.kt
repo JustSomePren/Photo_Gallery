@@ -132,6 +132,13 @@ class Prefs(context: Context) {
 
     fun deleteEvent(event: Event) = eventList.update { list -> list.filterNot { it.id == event.id } }
 
+    /** Replaces the vacations from the Kalendář app between [from] and [to] (epoch days). */
+    fun syncLinked(from: Long, to: Long, linked: List<Event>) {
+        val kept = events.value.filterNot { it.isLinked && it.overlaps(from, to) }
+        val updated = (kept + linked).distinctBy { it.id }
+        if (updated != events.value) eventList.update { updated }
+    }
+
     // ---- Accounts ----
 
     fun addAccount(email: String) {
@@ -161,7 +168,7 @@ class Prefs(context: Context) {
         val rules = events.value.filter { it.autoSend && it.account != null }
         if (rules.isEmpty()) return 0
         return enqueue(media.flatMap { item ->
-            rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album) }
+            rules.filter { it.covers(item.day) && !(it.isLinked && item.isScreenshot) }.map { QueueItem.of(item, it.account!!, it.album) }
         })
     }
 
@@ -252,6 +259,7 @@ class Prefs(context: Context) {
         .put("id", e.id).put("name", e.name).put("color", e.color)
         .put("start", e.startDay).put("end", e.endDay)
         .put("auto", e.autoSend).put("account", e.account ?: "").put("album", e.album ?: "")
+        .apply { if (e.linkedId != null) put("linkedId", e.linkedId).put("linkedBegin", e.linkedBegin) }
 
     private fun eventFromJson(o: JSONObject) = Event(
         id = o.getString("id"),
@@ -262,6 +270,8 @@ class Prefs(context: Context) {
         autoSend = o.getBoolean("auto"),
         account = o.getString("account").ifBlank { null },
         album = o.getString("album").ifBlank { null },
+        linkedId = if (o.has("linkedId")) o.getLong("linkedId") else null,
+        linkedBegin = if (o.has("linkedBegin")) o.getLong("linkedBegin") else null,
     )
 
     private fun queueToJson(q: QueueItem) = JSONObject()

@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.CustomAlbum
+import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.filterBy
@@ -46,6 +47,7 @@ private data class AlbumEntry(val source: Source, val cover: MediaItem?, val cou
 fun AlbumsScreen(
     media: List<MediaItem>,
     albums: List<CustomAlbum>,
+    events: List<Event>,
     vm: GalleryViewModel,
     onOpen: (Source) -> Unit,
 ) {
@@ -55,6 +57,13 @@ fun AlbumsScreen(
             val source = Source.Album(album.id, album.name)
             val list = media.filterBy(source, albums)
             AlbumEntry(source, list.firstOrNull(), list.size)
+        }
+    }
+    // Trips and vacations, including those from the Kalendář app
+    val periods = remember(media, events) {
+        events.sortedByDescending { it.startDay }.map { event ->
+            val list = media.filterBy(event.source, albums)
+            AlbumEntry(event.source, list.firstOrNull(), list.size)
         }
     }
     val folders = remember(media) {
@@ -84,6 +93,7 @@ fun AlbumsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (own.isNotEmpty()) section("Moje alba", own, onOpen)
+            if (periods.isNotEmpty()) section("Události", periods, onOpen)
             section("Složky v telefonu", folders, onOpen)
         }
     }

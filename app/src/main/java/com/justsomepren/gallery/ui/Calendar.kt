@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,10 +38,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.monthTitle
+import com.justsomepren.gallery.data.pairedDays
 import com.justsomepren.gallery.data.toDate
 import com.justsomepren.gallery.data.today
 import java.time.YearMonth
@@ -53,6 +57,7 @@ private val WEEKDAYS = listOf("Po", "Út", "St", "Čt", "Pá", "So", "Ne")
 fun CalendarView(
     media: List<MediaItem>,
     events: List<Event>,
+    calendarItems: List<CalendarItem> = emptyList(),
     state: LazyListState,
     contentPadding: PaddingValues,
     header: @Composable () -> Unit,
@@ -62,6 +67,7 @@ fun CalendarView(
 ) {
     val byDay = remember(media) { media.groupBy { it.day } }
     val months = remember(byDay, events) { calendarMonths(byDay.keys, events) }
+    val paired = remember(byDay, calendarItems) { pairedDays(calendarItems, byDay) }
     val thumbPx = gridThumbPx()
 
     LazyColumn(state = state, contentPadding = contentPadding) {
@@ -72,6 +78,7 @@ fun CalendarView(
             MonthCalendar(
                 month = month,
                 byDay = byDay,
+                paired = paired,
                 events = events.filter { it.overlaps(first, last) },
                 thumbPx = thumbPx,
                 onDay = onDay,
@@ -102,6 +109,7 @@ private fun calendarMonths(days: Set<Long>, events: List<Event>): List<YearMonth
 private fun MonthCalendar(
     month: YearMonth,
     byDay: Map<Long, List<MediaItem>>,
+    paired: Set<Long>,
     events: List<Event>,
     thumbPx: Int,
     onDay: (Long) -> Unit,
@@ -145,7 +153,7 @@ private fun MonthCalendar(
                     for (column in 0..6) {
                         val day = weekStart + column
                         if (day in first..last) {
-                            DayCell(day, byDay[day].orEmpty(), column >= 5, day == today, thumbPx, Modifier.weight(1f), onDay, onNewEvent)
+                            DayCell(day, byDay[day].orEmpty(), day in paired, column >= 5, day == today, thumbPx, Modifier.weight(1f), onDay, onNewEvent)
                         } else {
                             Spacer(Modifier.weight(1f))
                         }
@@ -162,6 +170,7 @@ private fun MonthCalendar(
 private fun DayCell(
     day: Long,
     items: List<MediaItem>,
+    paired: Boolean,
     weekend: Boolean,
     isToday: Boolean,
     thumbPx: Int,
@@ -184,6 +193,13 @@ private fun DayCell(
         val onPhoto = items.isNotEmpty()
         CellLabel("${day.toDate().dayOfMonth}", Alignment.TopStart, onPhoto, bold = isToday)
         if (items.size > 1) CellLabel("${items.size}", Alignment.TopEnd, onPhoto)
+        // Some photos belong to an event from the Kalendář app
+        if (paired) {
+            Box(
+                Modifier.align(Alignment.TopCenter).padding(top = 5.dp).size(7.dp)
+                    .background(colors.primary, CircleShape).border(1.dp, Color.White, CircleShape),
+            )
+        }
     }
 }
 

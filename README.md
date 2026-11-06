@@ -29,6 +29,21 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Obnovení** – stáhni seznam dolů.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
 
+### Propojení s Kalendářem
+
+Když je nainstalovaný i **Kalendář** (repozitář Calendar), propojí se samy:
+
+- **Dovolená z Kalendáře** se ukáže jako událost (barevný pruh), v Albech v sekci *Události*
+  a sama se posílá do účtu a alba, které jsi vybral v Kalendáři. Měnit se dá jen tam
+  (*Otevřít v Kalendáři*), aby obě aplikace ukazovaly totéž.
+- **Fotky k ostatním osobním událostem**: den, kde nějaká fotka patří k události z kalendáře,
+  má nahoře tečku. Po otevření dne jsou nahoře štítky událostí (např. „Oslava · 12“),
+  klepnutím uvidíš jen fotky z té doby (15 min před až 30 min po konci).
+- Kalendář si od Galerie bere náhledy fotek, seznam Google účtů a polohu fotek (pokud ji mají).
+- K události se nepočítají snímky obrazovky.
+
+Změnu v Kalendáři Galerie zachytí hned, jinak při otevření a při odesílání na pozadí.
+
 ### Moje alba
 
 Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky.

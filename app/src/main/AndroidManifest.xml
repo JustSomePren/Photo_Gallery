@@ -26,6 +26,8 @@
             <data android:mimeType="image/*" />
         </intent>
         <package android:name="com.google.android.apps.photos" />
+        <!-- The Kalendář app: its events are paired with photos -->
+        <package android:name="cz.calendar" />
     </queries>
 
     <application
@@ -41,7 +43,26 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Photos of an event, opened from the Kalendář app -->
+            <intent-filter>
+                <action android:name="com.justsomepren.gallery.action.SHOW_PHOTOS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- Checks that the caller is the Kalendář app signed with its key -->
+        <provider
+            android:name=".data.LinkProvider"
+            android:authorities="com.justsomepren.gallery.link"
+            android:exported="true" />
+
+        <receiver
+            android:name=".data.CalendarChangedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.justsomepren.gallery.action.CALENDAR_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

@@ -31,6 +31,10 @@ data class MediaItem(
 ) {
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
+
+    /** Screenshots and screen recordings do not belong to an event's photos. */
+    val isScreenshot get() = relativePath.contains("Screenshot", ignoreCase = true) ||
+        relativePath.contains("Screen record", ignoreCase = true)
 }
 
 data class MediaDetails(val rows: List<Pair<String, String>>, val location: DoubleArray?)
@@ -111,10 +115,13 @@ class MediaRepository(private val context: Context) {
         )
         if (exposure.isNotEmpty()) rows += "Expozice" to exposure.joinToString(" · ")
 
-        val location = exif.latLong
+        val location = exif.latLong?.takeIf { it[0] != 0.0 || it[1] != 0.0 }
         if (location != null) rows += "Poloha" to "%.5f, %.5f".format(location[0], location[1])
         return MediaDetails(rows, location)
     }
+
+    fun location(item: MediaItem): DoubleArray? =
+        if (item.isVideo) null else runCatching { readExif(item.uri).latLong }.getOrNull()?.takeIf { it[0] != 0.0 || it[1] != 0.0 }
 
     /** Without the original file Android hides the GPS position. */
     private fun readExif(uri: Uri): ExifInterface {
@@ -132,7 +139,10 @@ sealed interface Source {
     data class Album(val id: String, val name: String) : Source
 
     /** A day or a range of days, e.g. a day tapped in the calendar or an event. */
-    data class Period(val name: String, val start: Long, val end: Long) : Source
+    data class Period(val name: String, val start: Long, val end: Long, val skipScreenshots: Boolean = false) : Source
+
+    /** A time range in millis, end exclusive, e.g. a birthday party from the Kalendář app. */
+    data class Span(val name: String, val from: Long, val to: Long) : Source
 }
 
 val Source.title: String
@@ -142,6 +152,7 @@ val Source.title: String
         is Source.Folder -> name
         is Source.Album -> name
         is Source.Period -> name
+        is Source.Span -> name
     }
 
 fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<MediaItem> =
@@ -153,5 +164,6 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
             val keys = albums.find { it.id == source.id }?.refs.orEmpty().map { it.key }.toSet()
             filter { it.key in keys }
         }
-        is Source.Period -> filter { it.day in source.start..source.end }
+        is Source.Period -> filter { it.day in source.start..source.end && !(source.skipScreenshots && it.isScreenshot) }
+        is Source.Span -> filter { it.date >= source.from && it.date < source.to && !it.isScreenshot }
     }

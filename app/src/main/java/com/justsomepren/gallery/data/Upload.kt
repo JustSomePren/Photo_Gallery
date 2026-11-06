@@ -124,6 +124,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val now = inputData.getBoolean(NOW, false)
         if (!now && lowBattery()) return@withContext Result.retry()
 
+        CalendarLink.sync(applicationContext)
         prefs.collectAuto(MediaRepository(applicationContext).loadAll())
         val total = prefs.queue.value.size
         if (total == 0) return@withContext Result.success()

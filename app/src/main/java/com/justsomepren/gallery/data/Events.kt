@@ -11,6 +11,7 @@ import java.util.UUID
 /**
  * A colored period in the calendar, e.g. a trip. With [autoSend] every photo
  * from these days goes to [account], into the album [album] if it has one.
+ * [linkedId] is set for vacations that come from the Kalendář app.
  */
 data class Event(
     val id: String = UUID.randomUUID().toString(),
@@ -21,14 +22,18 @@ data class Event(
     val autoSend: Boolean = false,
     val account: String? = null,
     val album: String? = null,
+    val linkedId: Long? = null,
+    val linkedBegin: Long? = null,
 ) {
+    val isLinked get() = linkedId != null
+
     fun covers(day: Long) = day in startDay..endDay
 
     fun overlaps(from: Long, to: Long) = startDay <= to && endDay >= from
 
     val isActive get() = covers(today())
 
-    val source get() = Source.Period(name, startDay, endDay)
+    val source get() = Source.Period(name, startDay, endDay, skipScreenshots = isLinked)
 }
 
 val EVENT_COLORS = listOf(

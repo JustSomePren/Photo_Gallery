@@ -56,6 +56,10 @@ private const val DAY_MS = 86_400_000L
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EventEditor(initial: Event, vm: GalleryViewModel, onDismiss: () -> Unit) {
+    if (initial.isLinked) {
+        LinkedEventDialog(initial, onDismiss)
+        return
+    }
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
     val exists = remember { vm.prefs.events.value.any { it.id == initial.id } }
 

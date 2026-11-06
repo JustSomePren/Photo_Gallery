@@ -2,6 +2,7 @@ package com.justsomepren.gallery
 
 import android.app.Application
 import android.content.ContentValues
+import android.content.Intent
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
@@ -17,6 +18,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.justsomepren.gallery.data.CalendarItem
+import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
@@ -27,6 +30,7 @@ import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.WarmupWorker
+import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.today
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,6 +52,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val _media = MutableStateFlow<List<MediaItem>?>(null)
     val media: StateFlow<List<MediaItem>?> = _media
     val refreshing = MutableStateFlow(false)
+
+    /** Personal events from the Kalendář app, to pair photos with. */
+    val calendarItems = MutableStateFlow<List<CalendarItem>>(emptyList())
 
     // Navigation lives here, so turning the phone keeps the open screen and scroll position.
     val stack = mutableStateListOf<Screen>()
@@ -97,9 +104,21 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val items = withContext(Dispatchers.IO) { loadMedia() }
             _media.value = items
             prefs.migrateKeys(items)
+            val oldest = minOf(items.minOfOrNull { it.day } ?: today(), today() - 400)
+            withContext(Dispatchers.IO) { CalendarLink.sync(getApplication(), oldest) }?.let { calendarItems.value = it }
             if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false
         }
+    }
+
+    /** The Kalendář app asked to show the photos of an event. */
+    fun openFrom(intent: Intent) {
+        if (intent.action != CalendarLink.ACTION_SHOW) return
+        val from = intent.getLongExtra("from", -1)
+        val to = intent.getLongExtra("to", -1)
+        if (from < 0 || to <= from) return
+        stack.clear()
+        stack.add(Screen.Grid(Source.Span(intent.getStringExtra("title") ?: "Událost", from, to)))
     }
 
     suspend fun details(item: MediaItem) = withContext(Dispatchers.IO) { repo.details(item) }
