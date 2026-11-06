@@ -17,7 +17,9 @@ data class CustomAlbum(val id: String, val name: String, val refs: List<AlbumRef
 private fun MediaItem.ref() = AlbumRef(id, key)
 
 /** A named shortcut to an app that uploads photos, e.g. "Shared cloud – Drive". */
-data class UploadTarget(val name: String, val packageName: String, val activityName: String)
+data class UploadTarget(val name: String, val packageName: String, val activityName: String) {
+    val appId get() = "$packageName/$activityName"
+}
 
 /** A photo waiting to be uploaded to a Google account, optionally into an album. */
 data class QueueItem(

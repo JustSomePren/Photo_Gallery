@@ -175,9 +175,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 val api = PhotosApi(applicationContext, token)
                 for (chunk in items.chunked(BATCH)) {
                     if (isStopped) return Result.retry()
-                    // The user may clear the queue or remove the account while this runs.
-                    val queued = prefs.queue.value.map { it.sentKey }.toSet()
-                    val batch = chunk.filter { it.sentKey in queued && it.account in prefs.accounts.value }
+                    val batch = chunk.mapNotNull(::current)
                     if (batch.isNotEmpty()) send(api, account, batch)
                     done += chunk.size
                     prefs.uploading.value = done to total
@@ -189,12 +187,22 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         } finally {
             prefs.uploading.value = null
         }
-        return if (prefs.queue.value.isEmpty()) Result.success() else Result.retry()
+        // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
+        val waiting = prefs.queue.value.filter { it.account !in prefs.accountProblems.value }
+        return if (waiting.isEmpty()) Result.success() else Result.retry()
     }
+
+    /**
+     * The item as it is in the queue right now: the user may have cleared the queue, removed the
+     * account or changed the event's album while this run was going.
+     */
+    private fun current(item: QueueItem): QueueItem? =
+        prefs.queue.value.firstOrNull { it.sentKey == item.sentKey }?.takeIf { it.account in prefs.accounts.value }
 
     private fun send(api: PhotosApi, account: String, batch: List<QueueItem>) {
         val uploads = mutableListOf<Pair<String, QueueItem>>()
-        for (item in batch) {
+        for (queued in batch) {
+            val item = current(queued) ?: continue
             try {
                 uploads += api.upload(item) to item
             } catch (e: FileNotFoundException) {

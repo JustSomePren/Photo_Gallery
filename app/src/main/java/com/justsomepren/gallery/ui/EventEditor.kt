@@ -66,9 +66,13 @@ fun EventEditor(initial: Event, vm: GalleryViewModel, onDismiss: () -> Unit) {
     var end by rememberSaveable { mutableLongStateOf(initial.endDay) }
     var autoSend by rememberSaveable { mutableStateOf(initial.autoSend) }
     var account by rememberSaveable { mutableStateOf(initial.account ?: accounts.firstOrNull()) }
-    var album by rememberSaveable { mutableStateOf(initial.album ?: initial.name) }
+    // An auto-send event saved without an album must stay without one.
+    val keptWithoutAlbum = exists && initial.autoSend && initial.album == null
+    var album by rememberSaveable { mutableStateOf(initial.album ?: if (keptWithoutAlbum) "" else initial.name) }
     // The album is named like the event until the user types their own name.
-    var albumFollowsName by rememberSaveable { mutableStateOf(initial.album == null || initial.album == initial.name) }
+    var albumFollowsName by rememberSaveable {
+        mutableStateOf(!keptWithoutAlbum && (initial.album == null || initial.album == initial.name))
+    }
     var pickingDates by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(

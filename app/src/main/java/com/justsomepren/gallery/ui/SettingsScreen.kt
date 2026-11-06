@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,7 +142,8 @@ fun SettingsScreen(vm: GalleryViewModel) {
 fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val apps = remember { GooglePhotos.uploadApps(context) }
-    var chosen by remember { mutableStateOf<UploadTarget?>(apps.firstOrNull()?.second) }
+    var chosenId by rememberSaveable { mutableStateOf(apps.firstOrNull()?.second?.appId) }
+    val chosen = apps.map { it.second }.firstOrNull { it.appId == chosenId }
 
     TextInputDialog(
         title = "Nový cíl (např. Společný cloud)",
@@ -151,10 +153,10 @@ fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
             LazyColumn(Modifier.heightIn(max = 300.dp).padding(top = 8.dp)) {
                 items(apps) { (label, target) ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { chosen = target },
+                        Modifier.fillMaxWidth().clickable { chosenId = target.appId },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(chosen == target, onClick = { chosen = target })
+                        RadioButton(chosen == target, onClick = { chosenId = target.appId })
                         Text(label)
                     }
                 }

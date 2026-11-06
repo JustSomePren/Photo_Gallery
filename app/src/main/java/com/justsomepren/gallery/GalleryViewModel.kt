@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
@@ -45,7 +46,7 @@ sealed interface Screen {
     data class EventPhotos(val eventId: String) : Screen
 }
 
-class GalleryViewModel(app: Application) : AndroidViewModel(app) {
+class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
     private val repo = MediaRepository(app)
     val prefs = Prefs.get(app)
 
@@ -85,7 +86,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var editingEvent by mutableStateOf<Event?>(null)
 
     /** The account being connected while Google shows its consent dialog. */
-    var pendingAccount: String? = null
+    var pendingAccount: String?
+        get() = saved["pendingAccount"]
+        set(value) {
+            saved["pendingAccount"] = value
+        }
 
     init {
         if (!prefs.hasTargets) prefs.addTargets(GooglePhotos.defaultTargets(app))
