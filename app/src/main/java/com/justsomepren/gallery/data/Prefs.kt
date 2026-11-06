@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** A photo in an album: found by id, or by name and date when the id changed. */
+/** A photo in an album, found by [key]; the id is kept only for reference. */
 data class AlbumRef(val id: Long, val key: String)
 
 data class CustomAlbum(val id: String, val name: String, val refs: List<AlbumRef>)
@@ -48,18 +48,8 @@ class Prefs(context: Context) {
     }
 
     fun removeFromAlbum(id: String, items: List<MediaItem>) = changeRefs(id) { refs ->
-        val ids = items.map { it.id }.toSet()
         val keys = items.map { it.key }.toSet()
-        refs.filterNot { it.id in ids || it.key in keys }
-    }
-
-    /** Updates ids of photos that were reindexed, so albums keep working. */
-    fun repairAlbums(media: List<MediaItem>) {
-        val byKey = media.associateBy { it.key }
-        val repaired = albums.value.map { album ->
-            album.copy(refs = album.refs.map { ref -> byKey[ref.key]?.ref() ?: ref })
-        }
-        if (repaired != albums.value) updateAlbums { repaired }
+        refs.filterNot { it.key in keys }
     }
 
     fun exportAlbums(): String = JSONArray(albums.value.map(::albumToJson)).toString(2)

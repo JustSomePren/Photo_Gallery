@@ -24,12 +24,17 @@ fun Context.batteryFlow(): Flow<BatteryState> = callbackFlow {
         powerSave = power.isPowerSaveMode,
     )
 
+    val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
     val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            trySend(read(intent))
+            // The power saver broadcast has no battery level, so read the last known one.
+            val battery = if (intent.action == Intent.ACTION_BATTERY_CHANGED) intent else registerReceiver(null, batteryFilter)
+            battery?.let { trySend(read(it)) }
         }
     }
-    registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED)
-        ?.let { trySend(read(it)) }
+    val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED).apply {
+        addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+    }
+    registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)?.let { trySend(read(it)) }
     awaitClose { unregisterReceiver(receiver) }
 }

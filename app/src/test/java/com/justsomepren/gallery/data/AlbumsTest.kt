@@ -23,6 +23,7 @@ class AlbumsTest {
             mime = "image/jpeg",
             isVideo = false,
             date = 1_000L * id,
+            dateTaken = 1_000L * id,
             bucketId = bucket,
             bucketName = "Camera",
             isFavorite = favorite,
@@ -62,13 +63,19 @@ class AlbumsTest {
     @Test
     fun albumFindsPhotoAfterIdChanged() {
         prefs.createAlbum("A", listOf(item(1)))
-        // Same file, new MediaStore id (e.g. new phone or reindex).
-        val media = listOf(item(50, name = "IMG_1.jpg").copy(date = 1_000L), item(2))
+        // Same file with a new MediaStore id (new phone or reindex), and an unrelated photo that got the old id.
+        val media = listOf(item(50, name = "IMG_1.jpg").copy(dateTaken = 1_000L), item(1, name = "OTHER.jpg"))
 
         assertEquals(listOf(50L), media.filterBy(source(), prefs.albums.value).map { it.id })
+    }
 
-        prefs.repairAlbums(media)
-        assertEquals(50L, album().refs.single().id)
+    @Test
+    fun photoWithoutCaptureDateMatchesBySize() {
+        val screenshot = item(1).copy(dateTaken = 0, size = 4242)
+        prefs.createAlbum("A", listOf(screenshot))
+        val moved = screenshot.copy(id = 9, date = 999_999)
+
+        assertEquals(listOf(9L), listOf(moved).filterBy(source(), prefs.albums.value).map { it.id })
     }
 
     @Test

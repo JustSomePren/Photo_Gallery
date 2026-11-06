@@ -25,7 +25,7 @@ object GooglePhotos {
     fun edit(context: Context, item: MediaItem) = start(
         context,
         Intent(Intent.ACTION_EDIT).setDataAndType(item.uri, item.mime).setPackage(PACKAGE)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION),
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
         fallback = viewIntent(item).setPackage(PACKAGE),
     )
 
@@ -111,10 +111,14 @@ object GooglePhotos {
             }
         }.distinctBy { it.packageName }
 
+    /** Most photos one request can carry; more would exceed Android's message size limit. */
+    const val MAX_ITEMS = 1000
+
     private fun start(context: Context, intent: Intent?, fallback: Intent? = null) {
         try {
             context.startActivity(intent ?: throw ActivityNotFoundException())
-        } catch (e: ActivityNotFoundException) {
+        } catch (e: RuntimeException) {
+            // Not installed, no longer exported (SecurityException) or too many photos.
             if (fallback != null) start(context, fallback)
             else Toast.makeText(context, "Aplikace není k dispozici", Toast.LENGTH_SHORT).show()
         }

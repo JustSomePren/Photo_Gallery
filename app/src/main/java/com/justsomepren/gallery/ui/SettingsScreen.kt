@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
@@ -59,6 +60,12 @@ fun SettingsScreen(vm: GalleryViewModel) {
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var addingTarget by remember { mutableStateOf(false) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
+    var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
+    LifecycleResumeEffect(Unit) {
+        canManageMedia = GooglePhotos.canManageMedia(context)
+        fullAccess = hasFullAccess(context)
+        onPauseOrDispose {}
+    }
 
     val accessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         fullAccess = hasFullAccess(context)
@@ -122,7 +129,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             )
             SettingsButton("Omezit Google Fotky na pozadí") { GooglePhotos.appSettings(context) }
             SettingsButton("Systémový spořič baterie") { GooglePhotos.batterySaverSettings(context) }
-            if (!GooglePhotos.canManageMedia(context)) {
+            if (!canManageMedia) {
                 SettingsButton("Oblíbené bez potvrzování") { GooglePhotos.manageMediaSettings(context) }
             }
 

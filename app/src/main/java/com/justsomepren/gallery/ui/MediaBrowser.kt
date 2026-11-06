@@ -8,6 +8,12 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
@@ -17,6 +23,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -64,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Density
@@ -111,6 +120,10 @@ fun MediaBrowser(
     }
 
     BackHandler(selected.isNotEmpty()) { done() }
+    LaunchedEffect(items) {
+        val present = items.map { it.id }.toSet()
+        if (!present.containsAll(selected)) selected = selected intersect present
+    }
 
     Scaffold(
         topBar = {
@@ -172,7 +185,14 @@ fun MediaBrowser(
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = { vm.refresh(manual = true) },
-            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    top = padding.calculateTopPadding(),
+                    start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                    end = padding.calculateEndPadding(LocalLayoutDirection.current),
+                )
+                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)),
         ) {
             if (items.isEmpty()) {
                 Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
@@ -187,7 +207,7 @@ fun MediaBrowser(
                     vm = vm,
                     onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
                     onLongClick = { toggle(listOf(it.id)) },
-                    onHeaderClick = { group -> if (selected.isNotEmpty()) toggle(group.map { it.id }) },
+                    onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
             }
         }
@@ -250,7 +270,7 @@ private fun MediaGrid(
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val columns = if (LocalSaver.current) 5 else 4
-    val thumbPx = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / columns).roundToPx() }
+    val thumbPx = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / 4).roundToPx() }
     val entries = remember(items) { buildEntries(items) }
 
     // Coming back from the viewer: make sure the last viewed photo is on screen.
@@ -314,7 +334,10 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
     val thumbHeight = 48.dp
     val thumbPx = with(LocalDensity.current) { thumbHeight.roundToPx() }
     val progress by remember(entries) {
-        derivedStateOf { state.firstVisibleItemIndex.toFloat() / (entries.size - 1).coerceAtLeast(1) }
+        derivedStateOf {
+            val range = entries.size - state.layoutInfo.visibleItemsInfo.size
+            (state.firstVisibleItemIndex.toFloat() / range.coerceAtLeast(1)).coerceIn(0f, 1f)
+        }
     }
     val label by remember(entries) {
         derivedStateOf { entries.getOrNull(state.firstVisibleItemIndex)?.month.orEmpty() }
@@ -322,7 +345,8 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
     val thumbOffset: Density.() -> IntOffset = { IntOffset(0, (progress * (height - thumbPx)).roundToInt()) }
 
     fun jump(y: Float) {
-        val index = ((y / height).coerceIn(0f, 1f) * (entries.size - 1)).roundToInt()
+        val range = entries.size - state.layoutInfo.visibleItemsInfo.size
+        val index = ((y / height).coerceIn(0f, 1f) * range.coerceAtLeast(0)).roundToInt()
         scope.launch { state.scrollToItem(index) }
     }
 
@@ -355,6 +379,7 @@ private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifie
                 .align(Alignment.TopEnd)
                 .fillMaxHeight()
                 .width(32.dp)
+                .systemGestureExclusion()
                 .pointerInput(entries) {
                     detectVerticalDragGestures(
                         onDragStart = { dragging = true; jump(it.y) },

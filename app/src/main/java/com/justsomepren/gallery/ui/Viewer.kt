@@ -33,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,7 +50,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import androidx.compose.ui.unit.dp
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
@@ -83,7 +88,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
             if (item.isVideo) {
                 VideoPage(item, isCurrent = page == pager.currentPage) { chrome = !chrome }
             } else {
-                ZoomableImage(item) { chrome = !chrome }
+                ZoomableImage(item, isCurrent = page == pager.currentPage) { chrome = !chrome }
             }
         }
 
@@ -140,18 +145,30 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
+private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
     val context = LocalContext.current
+    val saver = LocalSaver.current
     val metrics = context.resources.displayMetrics
-    // On low battery decode just for the screen, otherwise twice as big for sharp zoom.
-    val maxSide = maxOf(metrics.widthPixels, metrics.heightPixels) * if (LocalSaver.current) 1 else 2
-    val bitmap = rememberLoaded(item.uri, maxSide) {
-        ImageCache.fullImage(context.contentResolver, item.uri, maxSide)
-    }
+    val screen = maxOf(metrics.widthPixels, metrics.heightPixels)
 
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var box by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(isCurrent) {
+        if (!isCurrent) {
+            scale = 1f
+            offset = Offset.Zero
+        }
+    }
+
+    // Screen size is enough until the user really zooms in; then a sharper copy (not on low battery).
+    val normal = rememberLoaded(item.uri, screen) { ImageCache.fullImage(context.contentResolver, item.uri, screen) }
+    val sharpSize = minOf(screen * 2, 4096)
+    val sharp = if (scale > 1.5f && !saver) {
+        rememberLoaded(item.uri, sharpSize) { ImageCache.fullImage(context.contentResolver, item.uri, sharpSize) }
+    } else {
+        null
+    }
 
     fun clamp(value: Offset): Offset {
         val maxX = box.width * (scale - 1) / 2
@@ -161,7 +178,7 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
 
     val transform = rememberTransformableState { zoom, pan, _ ->
         scale = (scale * zoom).coerceIn(1f, 6f)
-        offset = clamp(offset + pan * scale)
+        offset = clamp(offset + pan)
     }
 
     Box(
@@ -177,7 +194,10 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
                     },
                 )
             }
-            .transformable(transform, canPan = { scale > 1f }),
+            // At the edge of a zoomed photo a sideways swipe goes to the next photo.
+            .transformable(transform, canPan = { pan ->
+                scale > 1f && (abs(pan.y) > abs(pan.x) || clamp(offset + pan) != offset)
+            }),
     ) {
         val layer = Modifier.fillMaxSize().graphicsLayer {
             scaleX = scale
@@ -185,9 +205,9 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
             translationX = offset.x
             translationY = offset.y
         }
-        val full = bitmap
-        if (full != null) {
-            val image = remember(full) { full.asImageBitmap() }
+        val bitmap = sharp ?: normal
+        if (bitmap != null) {
+            val image = remember(bitmap) { bitmap.asImageBitmap() }
             Image(image, null, layer, contentScale = ContentScale.Fit)
         } else {
             Thumbnail(item.uri, 512, layer.background(Color.Black), contentScale = ContentScale.Fit)
@@ -198,10 +218,18 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
 /** Plays with the built-in hardware decoder; no extra player library. */
 @Composable
 private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
-    var playing by remember { mutableStateOf(false) }
+    var playing by rememberSaveable(item.id) { mutableStateOf(false) }
+    var positionMs by rememberSaveable(item.id) { mutableIntStateOf(0) }
+    var durationMs by remember { mutableIntStateOf(0) }
+    var seeking by remember { mutableStateOf(false) }
     var video by remember { mutableStateOf<VideoView?>(null) }
-    var position by remember { mutableFloatStateOf(0f) }
+
     LaunchedEffect(isCurrent) { if (!isCurrent) playing = false }
+    // Leaving the app stops the video; it continues from the same spot on the next play.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        video?.let { positionMs = it.currentPosition }
+        playing = false
+    }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (playing) {
@@ -209,8 +237,15 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
                 factory = { context ->
                     VideoView(context).apply {
                         setVideoURI(item.uri)
-                        setOnPreparedListener { start() }
-                        setOnCompletionListener { playing = false }
+                        setOnPreparedListener {
+                            durationMs = duration
+                            seekTo(positionMs)
+                            start()
+                        }
+                        setOnCompletionListener {
+                            positionMs = 0
+                            playing = false
+                        }
                         video = this
                     }
                 },
@@ -231,15 +266,19 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
             )
             LaunchedEffect(video) {
                 while (true) {
-                    video?.let { if (it.duration > 0) position = it.currentPosition.toFloat() / it.duration }
+                    video?.takeIf { it.isPlaying && !seeking }?.let { positionMs = it.currentPosition }
                     delay(500)
                 }
             }
             Slider(
-                value = position,
-                onValueChange = { value ->
-                    position = value
-                    video?.let { it.seekTo((value * it.duration).toInt()) }
+                value = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f,
+                onValueChange = {
+                    seeking = true
+                    positionMs = (it * durationMs).toInt()
+                },
+                onValueChangeFinished = {
+                    video?.seekTo(positionMs)
+                    seeking = false
                 },
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 24.dp),
             )

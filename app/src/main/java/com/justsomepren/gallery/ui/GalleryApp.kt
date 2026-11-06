@@ -49,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -96,6 +99,9 @@ private fun Main(vm: GalleryViewModel) {
         vm.setActive(true)
         onStopOrDispose { vm.setActive(false) }
     }
+    SystemBarIcons(
+        light = MaterialTheme.colorScheme.background.luminance() > 0.5f && vm.stack.lastOrNull() !is Screen.Viewer,
+    )
     val context = LocalContext.current
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
@@ -222,6 +228,19 @@ private fun GalleryTheme(saver: Boolean, content: @Composable () -> Unit) {
         )
     }
     MaterialTheme(colorScheme = scheme, content = content)
+}
+
+/** Dark icons on a light background and white icons on black (saver mode, viewer). */
+@Composable
+private fun SystemBarIcons(light: Boolean) {
+    val view = LocalView.current
+    val window = (view.context as? Activity)?.window ?: return
+    SideEffect {
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
+        }
+    }
 }
 
 /** The Pixel screen runs at up to 120 Hz; 60 Hz is plenty for browsing on low battery. */

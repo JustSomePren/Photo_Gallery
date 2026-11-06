@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
@@ -44,7 +45,6 @@ import com.justsomepren.gallery.data.MediaItem
 /** Actions shared by the grid and the photo viewer. */
 class MediaActions(private val context: Context, private val vm: GalleryViewModel) {
     lateinit var launcher: ActivityResultLauncher<IntentSenderRequest>
-    private var afterGrant: () -> Unit = {}
 
     var sending by mutableStateOf<List<MediaItem>?>(null)
     var adding by mutableStateOf<List<MediaItem>?>(null)
@@ -52,33 +52,47 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
     var info by mutableStateOf<MediaItem?>(null)
 
     fun toggleFavorite(items: List<MediaItem>) {
-        if (items.isEmpty()) return
+        if (items.isEmpty() || tooMany(items)) return
         val value = !items.all { it.isFavorite }
         ask(MediaStore.createFavoriteRequest(context.contentResolver, items.map { it.uri }, value))
     }
 
-    fun moveTo(items: List<MediaItem>, path: String) =
+    fun moveTo(items: List<MediaItem>, path: String) {
+        if (tooMany(items)) return
         ask(MediaStore.createWriteRequest(context.contentResolver, items.map { it.uri })) { vm.move(items, path) }
+    }
 
-    fun send(items: List<MediaItem>) { sending = items }
+    fun send(items: List<MediaItem>) {
+        if (!tooMany(items)) sending = items
+    }
 
     fun addToAlbum(items: List<MediaItem>) { adding = items }
 
     fun move(items: List<MediaItem>) { moving = items }
 
-    fun share(items: List<MediaItem>) = GooglePhotos.share(context, items)
+    fun share(items: List<MediaItem>) {
+        if (!tooMany(items)) GooglePhotos.share(context, items)
+    }
 
     fun onResult(granted: Boolean) {
         if (granted) {
-            afterGrant()
+            vm.afterGrant()
             vm.refresh()
         }
-        afterGrant = {}
+        vm.afterGrant = {}
+    }
+
+    private fun tooMany(items: List<MediaItem>): Boolean {
+        val tooMany = items.size > GooglePhotos.MAX_ITEMS
+        if (tooMany) {
+            Toast.makeText(context, "Najednou jde nejvýš ${GooglePhotos.MAX_ITEMS} fotek", Toast.LENGTH_LONG).show()
+        }
+        return tooMany
     }
 
     /** Android asks the user to confirm changes of photos (skipped with "manage media" access). */
     private fun ask(request: PendingIntent, then: () -> Unit = {}) {
-        afterGrant = then
+        vm.afterGrant = then
         launcher.launch(IntentSenderRequest.Builder(request.intentSender).build())
     }
 }

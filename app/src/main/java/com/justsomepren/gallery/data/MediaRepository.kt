@@ -18,6 +18,8 @@ data class MediaItem(
     val mime: String,
     val isVideo: Boolean,
     val date: Long,
+    /** 0 when the file has no capture date (e.g. some downloads). */
+    val dateTaken: Long,
     val bucketId: Long,
     val bucketName: String,
     val isFavorite: Boolean,
@@ -27,8 +29,8 @@ data class MediaItem(
     val size: Long,
     val relativePath: String,
 ) {
-    /** Survives a reindex or a new phone, unlike [id]. */
-    val key get() = "$name|$date"
+    /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
+    val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
 }
 
 data class MediaDetails(val rows: List<Pair<String, String>>, val location: DoubleArray?)
@@ -70,6 +72,7 @@ class MediaRepository(private val context: Context) {
                     mime = c.getString(1) ?: if (isVideo) "video/*" else "image/*",
                     isVideo = isVideo,
                     date = if (taken > 0) taken else c.getLong(3) * 1000,
+                    dateTaken = taken,
                     bucketId = c.getLong(4),
                     bucketName = c.getString(5) ?: "Bez názvu",
                     isFavorite = c.getInt(6) == 1,
@@ -143,9 +146,7 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
         Source.Favorites -> filter { it.isFavorite }
         is Source.Folder -> filter { it.bucketId == source.bucketId }
         is Source.Album -> {
-            val refs = albums.find { it.id == source.id }?.refs.orEmpty()
-            val ids = refs.map { it.id }.toSet()
-            val keys = refs.map { it.key }.toSet()
-            filter { it.id in ids || it.key in keys }
+            val keys = albums.find { it.id == source.id }?.refs.orEmpty().map { it.key }.toSet()
+            filter { it.key in keys }
         }
     }

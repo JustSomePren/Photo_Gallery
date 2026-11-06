@@ -46,6 +46,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val gridStates = mutableMapOf<Source, LazyGridState>()
     var tab by mutableIntStateOf(0)
 
+    /** What to do once the user confirms a change in the system dialog; survives rotation. */
+    var afterGrant: () -> Unit = {}
+
     /** The photo last shown in the viewer; the grid scrolls to it when coming back. */
     var returnTo: Long? = null
 
@@ -73,7 +76,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             delay(delayMs)
             val items = withContext(Dispatchers.IO) { repo.loadAll() }
             _media.value = items
-            prefs.repairAlbums(items)
             refreshing.value = false
         }
     }
