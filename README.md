@@ -13,6 +13,17 @@ oprávnění k internetu. Co neumí sama (úpravy, hledání, přehrávání vid
 - **Poslat do cloudu** – vybrané fotky pošle do zvoleného cíle (např. „Osobní – Fotky“,
   „Společný – Disk“). Cíle si nastavíš v *Nastavení → Kam posílat fotky*.
 - **Upravit / Hledat** – otevře Google Fotky.
+- **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
+- **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
+- **Přesunout do složky** – mezi složkami v DCIM/ a Pictures/ nebo do nové složky.
+- **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
+- **Obnovení** – stáhni seznam dolů.
+- Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
+
+### Moje alba
+
+Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky.
+Na nový telefon je přeneseš přes *Nastavení → Uložit alba do souboru* a pak *Načíst alba ze souboru*.
 
 ## Instalace na telefon (krok za krokem)
 

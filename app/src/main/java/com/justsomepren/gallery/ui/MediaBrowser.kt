@@ -6,7 +6,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
@@ -39,8 +46,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,7 +64,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.Source
@@ -70,7 +95,7 @@ fun MediaBrowser(
     onBack: (() -> Unit)? = null,
     extraActions: @Composable RowScope.() -> Unit = {},
 ) {
-    var selected by remember { mutableStateOf(emptySet<Long>()) }
+    var selected by rememberSaveable(source.toString(), stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
@@ -106,9 +131,10 @@ fun MediaBrowser(
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem({ Text("Přidat do alba") }, onClick = { actions.addToAlbum(picked); done() })
+                            DropdownMenuItem({ Text("Přesunout do složky") }, onClick = { actions.move(picked); done() })
                             if (album != null) {
                                 DropdownMenuItem({ Text("Odebrat z alba") }, onClick = {
-                                    vm.prefs.removeFromAlbum(album.id, picked.map { it.id })
+                                    vm.prefs.removeFromAlbum(album.id, picked)
                                     done()
                                 })
                             }
@@ -142,20 +168,28 @@ fun MediaBrowser(
             }
         },
     ) { padding ->
-        if (items.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Žádné fotky", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { vm.refresh(manual = true) },
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
+        ) {
+            if (items.isEmpty()) {
+                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
+                    Text("Žádné fotky", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                MediaGrid(
+                    items = items,
+                    selected = selected,
+                    state = gridState,
+                    bottomPadding = padding.calculateBottomPadding(),
+                    vm = vm,
+                    onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
+                    onLongClick = { toggle(listOf(it.id)) },
+                    onHeaderClick = { group -> if (selected.isNotEmpty()) toggle(group.map { it.id }) },
+                )
             }
-        } else {
-            MediaGrid(
-                items = items,
-                selected = selected,
-                state = gridState,
-                contentPadding = padding,
-                onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
-                onLongClick = { toggle(listOf(it.id)) },
-                onHeaderClick = { group -> if (selected.isNotEmpty()) toggle(group.map { it.id }) },
-            )
         }
     }
 
@@ -187,55 +221,156 @@ fun FavoriteButton(items: List<MediaItem>, onClick: () -> Unit) {
     }
 }
 
+private val SelectionSaver = Saver<Set<Long>, LongArray>({ it.toLongArray() }, { it.toSet() })
+
+private sealed interface GridEntry {
+    val month: String
+
+    data class Header(override val month: String, val items: List<MediaItem>) : GridEntry
+    data class Photo(override val month: String, val item: MediaItem) : GridEntry
+}
+
+private fun buildEntries(items: List<MediaItem>): List<GridEntry> {
+    val format = SimpleDateFormat("LLLL yyyy", Locale("cs"))
+    return items
+        .groupBy { format.format(Date(it.date)).replaceFirstChar { c -> c.uppercase() } }
+        .flatMap { (month, group) -> listOf(GridEntry.Header(month, group)) + group.map { GridEntry.Photo(month, it) } }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MediaGrid(
     items: List<MediaItem>,
     selected: Set<Long>,
     state: LazyGridState,
-    contentPadding: PaddingValues,
+    bottomPadding: Dp,
+    vm: GalleryViewModel,
     onClick: (MediaItem) -> Unit,
     onLongClick: (MediaItem) -> Unit,
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val columns = if (LocalSaver.current) 5 else 4
     val thumbPx = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / columns).roundToPx() }
-    val months = remember(items) {
-        val format = SimpleDateFormat("LLLL yyyy", Locale("cs"))
-        items.groupBy { format.format(Date(it.date)) }
+    val entries = remember(items) { buildEntries(items) }
+
+    // Coming back from the viewer: make sure the last viewed photo is on screen.
+    LaunchedEffect(Unit) {
+        val id = vm.returnTo ?: return@LaunchedEffect
+        vm.returnTo = null
+        val index = entries.indexOfFirst { it is GridEntry.Photo && it.item.id == id }
+        snapshotFlow { state.layoutInfo.visibleItemsInfo }.first { it.isNotEmpty() }
+        if (index >= 0 && state.layoutInfo.visibleItemsInfo.none { it.key == id }) state.scrollToItem(index)
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        state = state,
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        months.forEach { (month, group) ->
-            item(key = "month $month", span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    month.replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.clickable { onHeaderClick(group) }.padding(12.dp, 16.dp, 12.dp, 8.dp),
-                )
-            }
-            items(group, key = { it.id }) { item ->
-                val isSelected = item.id in selected
-                Box(
-                    Modifier
-                        .aspectRatio(1f)
-                        .combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }),
-                ) {
-                    Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
-                    if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
-                    if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
-                    if (isSelected) {
-                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
-                        CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)
+    Box {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = state,
+            contentPadding = PaddingValues(bottom = bottomPadding),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(
+                entries,
+                key = { if (it is GridEntry.Photo) it.item.id else "month ${it.month}" },
+                span = { GridItemSpan(if (it is GridEntry.Header) maxLineSpan else 1) },
+                contentType = { it::class },
+            ) { entry ->
+                when (entry) {
+                    is GridEntry.Header -> Text(
+                        entry.month,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 16.dp, 12.dp, 8.dp),
+                    )
+                    is GridEntry.Photo -> {
+                        val item = entry.item
+                        Box(
+                            Modifier
+                                .aspectRatio(1f)
+                                .combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }),
+                        ) {
+                            Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
+                            if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
+                            if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
+                            if (item.id in selected) {
+                                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
+                                CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
                 }
             }
+        }
+        if (entries.size > 60) FastScroller(state, entries, Modifier.padding(bottom = bottomPadding))
+    }
+}
+
+/** Drag along the right edge to jump through months quickly. */
+@Composable
+private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    var dragging by remember { mutableStateOf(false) }
+    var height by remember { mutableIntStateOf(1) }
+    val thumbHeight = 48.dp
+    val thumbPx = with(LocalDensity.current) { thumbHeight.roundToPx() }
+    val progress by remember(entries) {
+        derivedStateOf { state.firstVisibleItemIndex.toFloat() / (entries.size - 1).coerceAtLeast(1) }
+    }
+    val label by remember(entries) {
+        derivedStateOf { entries.getOrNull(state.firstVisibleItemIndex)?.month.orEmpty() }
+    }
+    val thumbOffset: Density.() -> IntOffset = { IntOffset(0, (progress * (height - thumbPx)).roundToInt()) }
+
+    fun jump(y: Float) {
+        val index = ((y / height).coerceIn(0f, 1f) * (entries.size - 1)).roundToInt()
+        scope.launch { state.scrollToItem(index) }
+    }
+
+    var recentlyScrolled by remember { mutableStateOf(false) }
+    LaunchedEffect(state.isScrollInProgress) {
+        if (state.isScrollInProgress) {
+            recentlyScrolled = true
+        } else {
+            delay(1500)
+            recentlyScrolled = false
+        }
+    }
+
+    if (!dragging && !recentlyScrolled) return
+    Box(modifier.fillMaxSize().onSizeChanged { height = it.height }) {
+        if (dragging) {
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(thumbOffset)
+                    .padding(end = 40.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .fillMaxHeight()
+                .width(32.dp)
+                .pointerInput(entries) {
+                    detectVerticalDragGestures(
+                        onDragStart = { dragging = true; jump(it.y) },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
+                    ) { change, _ -> jump(change.position.y) }
+                },
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(thumbOffset)
+                    .padding(end = 4.dp)
+                    .size(8.dp, thumbHeight)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),
+            )
         }
     }
 }

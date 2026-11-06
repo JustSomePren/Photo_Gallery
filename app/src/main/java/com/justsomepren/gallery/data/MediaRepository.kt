@@ -1,9 +1,16 @@
 package com.justsomepren.gallery.data
 
+import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
+import android.text.format.Formatter
+import androidx.exifinterface.media.ExifInterface
+import java.text.DateFormat
+import java.util.Date
+import kotlin.math.roundToInt
 
 data class MediaItem(
     val id: Long,
@@ -14,7 +21,17 @@ data class MediaItem(
     val bucketId: Long,
     val bucketName: String,
     val isFavorite: Boolean,
-)
+    val name: String,
+    val width: Int,
+    val height: Int,
+    val size: Long,
+    val relativePath: String,
+) {
+    /** Survives a reindex or a new phone, unlike [id]. */
+    val key get() = "$name|$date"
+}
+
+data class MediaDetails(val rows: List<Pair<String, String>>, val location: DoubleArray?)
 
 /**
  * Reads straight from MediaStore. Android already indexes the photos,
@@ -36,6 +53,11 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.BUCKET_ID,
             MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
             MediaStore.MediaColumns.IS_FAVORITE,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.RELATIVE_PATH,
         )
         val result = mutableListOf<MediaItem>()
         context.contentResolver.query(collection, projection, null, null, null)?.use { c ->
@@ -51,10 +73,52 @@ class MediaRepository(private val context: Context) {
                     bucketId = c.getLong(4),
                     bucketName = c.getString(5) ?: "Bez názvu",
                     isFavorite = c.getInt(6) == 1,
+                    name = c.getString(7) ?: "",
+                    width = c.getInt(8),
+                    height = c.getInt(9),
+                    size = c.getLong(10),
+                    relativePath = c.getString(11) ?: "",
                 )
             }
         }
         return result
+    }
+
+    fun details(item: MediaItem): MediaDetails {
+        val rows = mutableListOf(
+            "Datum" to DateFormat.getDateTimeInstance(DateFormat.LONG, DateFormat.SHORT).format(Date(item.date)),
+            "Soubor" to item.name,
+            "Složka" to item.relativePath,
+            "Rozlišení" to "${item.width} × ${item.height}",
+            "Velikost" to Formatter.formatShortFileSize(context, item.size),
+        )
+        if (item.isVideo) return MediaDetails(rows, null)
+        val exif = runCatching { readExif(item.uri) }.getOrNull() ?: return MediaDetails(rows, null)
+
+        val camera = listOfNotNull(exif.getAttribute(ExifInterface.TAG_MAKE), exif.getAttribute(ExifInterface.TAG_MODEL))
+        if (camera.isNotEmpty()) rows += "Fotoaparát" to camera.joinToString(" ")
+
+        val exposure = listOfNotNull(
+            exif.getAttribute(ExifInterface.TAG_F_NUMBER)?.let { "f/$it" },
+            exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0).takeIf { it > 0 }
+                ?.let { if (it < 1) "1/${(1 / it).roundToInt()} s" else "${it.roundToInt()} s" },
+            exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { "ISO $it" },
+            exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0).takeIf { it > 0 }
+                ?.let { "%.1f mm".format(it) },
+        )
+        if (exposure.isNotEmpty()) rows += "Expozice" to exposure.joinToString(" · ")
+
+        val location = exif.latLong
+        if (location != null) rows += "Poloha" to "%.5f, %.5f".format(location[0], location[1])
+        return MediaDetails(rows, location)
+    }
+
+    /** Without the original file Android hides the GPS position. */
+    private fun readExif(uri: Uri): ExifInterface {
+        val canSeeLocation = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        val source = if (canSeeLocation) MediaStore.setRequireOriginal(uri) else uri
+        return context.contentResolver.openInputStream(source)!!.use { ExifInterface(it) }
     }
 }
 
@@ -79,7 +143,9 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
         Source.Favorites -> filter { it.isFavorite }
         is Source.Folder -> filter { it.bucketId == source.bucketId }
         is Source.Album -> {
-            val ids = albums.find { it.id == source.id }?.mediaIds?.toSet().orEmpty()
-            filter { it.id in ids }
+            val refs = albums.find { it.id == source.id }?.refs.orEmpty()
+            val ids = refs.map { it.id }.toSet()
+            val keys = refs.map { it.key }.toSet()
+            filter { it.id in ids || it.key in keys }
         }
     }

@@ -1,6 +1,7 @@
 package com.justsomepren.gallery.ui
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Context
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,6 +9,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -38,37 +42,59 @@ import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 
 /** Actions shared by the grid and the photo viewer. */
-class MediaActions(
-    private val context: Context,
-    private val favoriteLauncher: ActivityResultLauncher<IntentSenderRequest>,
-) {
+class MediaActions(private val context: Context, private val vm: GalleryViewModel) {
+    lateinit var launcher: ActivityResultLauncher<IntentSenderRequest>
+    private var afterGrant: () -> Unit = {}
+
     var sending by mutableStateOf<List<MediaItem>?>(null)
     var adding by mutableStateOf<List<MediaItem>?>(null)
+    var moving by mutableStateOf<List<MediaItem>?>(null)
+    var info by mutableStateOf<MediaItem?>(null)
 
     fun toggleFavorite(items: List<MediaItem>) {
         if (items.isEmpty()) return
         val value = !items.all { it.isFavorite }
-        val request = MediaStore.createFavoriteRequest(context.contentResolver, items.map { it.uri }, value)
-        favoriteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+        ask(MediaStore.createFavoriteRequest(context.contentResolver, items.map { it.uri }, value))
     }
+
+    fun moveTo(items: List<MediaItem>, path: String) =
+        ask(MediaStore.createWriteRequest(context.contentResolver, items.map { it.uri })) { vm.move(items, path) }
 
     fun send(items: List<MediaItem>) { sending = items }
 
     fun addToAlbum(items: List<MediaItem>) { adding = items }
 
+    fun move(items: List<MediaItem>) { moving = items }
+
     fun share(items: List<MediaItem>) = GooglePhotos.share(context, items)
+
+    fun onResult(granted: Boolean) {
+        if (granted) {
+            afterGrant()
+            vm.refresh()
+        }
+        afterGrant = {}
+    }
+
+    /** Android asks the user to confirm changes of photos (skipped with "manage media" access). */
+    private fun ask(request: PendingIntent, then: () -> Unit = {}) {
+        afterGrant = then
+        launcher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+    }
 }
 
 @Composable
 fun rememberMediaActions(vm: GalleryViewModel): MediaActions {
     val context = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        if (it.resultCode == Activity.RESULT_OK) vm.refresh()
+    val actions = remember { MediaActions(context, vm) }
+    actions.launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        actions.onResult(it.resultCode == Activity.RESULT_OK)
     }
-    val actions = remember { MediaActions(context, launcher) }
 
     actions.sending?.let { items -> SendDialog(items, vm) { actions.sending = null } }
     actions.adding?.let { items -> AlbumPickerDialog(items, vm) { actions.adding = null } }
+    actions.moving?.let { items -> MoveDialog(items, vm, actions) { actions.moving = null } }
+    actions.info?.let { item -> InfoDialog(item, vm) { actions.info = null } }
     return actions
 }
 
@@ -99,11 +125,10 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
 private fun AlbumPickerDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: () -> Unit) {
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
-    val ids = items.map { it.id }
 
     if (creating) {
         TextInputDialog(title = "Nové album", confirm = "Vytvořit", onDismiss = onDismiss) {
-            vm.prefs.createAlbum(it, ids)
+            vm.prefs.createAlbum(it, items)
             onDismiss()
         }
         return
@@ -111,12 +136,67 @@ private fun AlbumPickerDialog(items: List<MediaItem>, vm: GalleryViewModel, onDi
     PickerDialog(title = "Přidat do alba", onDismiss = onDismiss) {
         items(albums) { album ->
             PickerRow(album.name, Icons.Default.PhotoAlbum) {
-                vm.prefs.addToAlbum(album.id, ids)
+                vm.prefs.addToAlbum(album.id, items)
                 onDismiss()
             }
         }
         item { PickerRow("Nové album…", Icons.Default.Add) { creating = true } }
     }
+}
+
+/** Photos may only live under DCIM/ or Pictures/, so only those folders are offered. */
+@Composable
+private fun MoveDialog(items: List<MediaItem>, vm: GalleryViewModel, actions: MediaActions, onDismiss: () -> Unit) {
+    val media by vm.media.collectAsStateWithLifecycle()
+    var creating by remember { mutableStateOf(false) }
+    val folders = remember(media) {
+        media.orEmpty().map { it.relativePath }.distinct()
+            .filter { it.startsWith("DCIM/") || it.startsWith("Pictures/") }
+            .sorted()
+    }
+    fun moveTo(path: String) {
+        actions.moveTo(items, path)
+        onDismiss()
+    }
+
+    if (creating) {
+        TextInputDialog(title = "Nová složka", confirm = "Přesunout", onDismiss = onDismiss) {
+            moveTo("Pictures/$it/")
+        }
+        return
+    }
+    PickerDialog(title = "Přesunout ${items.size} do složky", onDismiss = onDismiss) {
+        items(folders) { path -> PickerRow(path.trimEnd('/'), Icons.Default.Folder) { moveTo(path) } }
+        item { PickerRow("Nová složka…", Icons.Default.CreateNewFolder) { creating = true } }
+    }
+}
+
+@Composable
+private fun InfoDialog(item: MediaItem, vm: GalleryViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val details = rememberLoaded(item.id) { vm.details(item) }
+    val location = details?.location
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Informace") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                details?.rows?.forEach { (label, value) ->
+                    Column {
+                        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(value)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Zavřít") } },
+        dismissButton = {
+            if (location != null) {
+                TextButton(onClick = { GooglePhotos.showOnMap(context, location[0], location[1]) }) { Text("Na mapě") }
+            }
+        },
+    )
 }
 
 @Composable

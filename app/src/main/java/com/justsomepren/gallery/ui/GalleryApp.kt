@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Favorite
@@ -42,8 +42,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,6 +55,7 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.Screen
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.batteryFlow
@@ -65,10 +64,11 @@ import com.justsomepren.gallery.data.filterBy
 /** True when the battery is low and the app should do as little work as possible. */
 val LocalSaver = compositionLocalOf { false }
 
-private sealed interface Screen {
-    data class Grid(val source: Source) : Screen
-    data class Viewer(val source: Source, val startId: Long) : Screen
-}
+val MEDIA_PERMISSIONS = arrayOf(
+    Manifest.permission.READ_MEDIA_IMAGES,
+    Manifest.permission.READ_MEDIA_VIDEO,
+    Manifest.permission.ACCESS_MEDIA_LOCATION,
+)
 
 @Composable
 fun GalleryApp(vm: GalleryViewModel = viewModel()) {
@@ -99,9 +99,6 @@ private fun Main(vm: GalleryViewModel) {
     val context = LocalContext.current
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
-    val stack = remember { mutableStateListOf<Screen>() }
-    val gridStates = remember { mutableMapOf<Source, LazyGridState>() }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
     var searching by remember { mutableStateOf(false) }
 
     val all = media ?: run {
@@ -109,31 +106,39 @@ private fun Main(vm: GalleryViewModel) {
         return
     }
 
-    fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
-    fun open(source: Source) = stack.add(Screen.Grid(source))
-    fun view(source: Source, id: Long) = stack.add(Screen.Viewer(source, id))
+    val stack = vm.stack
     val back: () -> Unit = { stack.removeAt(stack.lastIndex) }
-
     BackHandler(stack.isNotEmpty(), back)
 
-    when (val top = stack.lastOrNull()) {
-        is Screen.Viewer -> Viewer(all.filterBy(top.source, albums), top.startId, vm, back)
-        is Screen.Grid -> MediaBrowser(
-            source = top.source,
-            items = all.filterBy(top.source, albums),
+    @Composable
+    fun browser(source: Source, onBack: (() -> Unit)?, extraActions: @Composable RowScope.() -> Unit = {}) {
+        MediaBrowser(
+            source = source,
+            items = remember(all, albums, source) { all.filterBy(source, albums) },
             vm = vm,
-            gridState = gridState(top.source),
-            onOpen = { view(top.source, it.id) },
+            gridState = vm.gridState(source),
+            onOpen = { stack.add(Screen.Viewer(source, it.id)) },
+            onBack = onBack,
+            extraActions = extraActions,
+        )
+    }
+
+    when (val top = stack.lastOrNull()) {
+        is Screen.Viewer -> Viewer(
+            items = remember(all, albums, top.source) { all.filterBy(top.source, albums) },
+            startId = top.startId,
+            vm = vm,
             onBack = back,
         )
+        is Screen.Grid -> browser(top.source, back)
         null -> Scaffold(
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
                 NavigationBar {
                     TABS.forEachIndexed { index, (label, icon) ->
                         NavigationBarItem(
-                            selected = tab == index,
-                            onClick = { tab = index },
+                            selected = vm.tab == index,
+                            onClick = { vm.tab = index },
                             icon = { Icon(icon, null) },
                             label = { Text(label) },
                         )
@@ -142,26 +147,16 @@ private fun Main(vm: GalleryViewModel) {
             },
         ) { padding ->
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
-                when (tab) {
-                    0, 1 -> {
-                        val source = if (tab == 0) Source.All else Source.Favorites
-                        MediaBrowser(
-                            source = source,
-                            items = all.filterBy(source, albums),
-                            vm = vm,
-                            gridState = gridState(source),
-                            onOpen = { view(source, it.id) },
-                            extraActions = {
-                                if (LocalSaver.current) {
-                                    Icon(Icons.Default.BatterySaver, "Úsporný režim", tint = MaterialTheme.colorScheme.primary)
-                                }
-                                IconButton(onClick = { searching = true }) {
-                                    Icon(Icons.Default.Search, "Hledat v Google Fotkách")
-                                }
-                            },
-                        )
+                when (vm.tab) {
+                    0, 1 -> browser(if (vm.tab == 0) Source.All else Source.Favorites, onBack = null) {
+                        if (LocalSaver.current) {
+                            Icon(Icons.Default.BatterySaver, "Úsporný režim", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(onClick = { searching = true }) {
+                            Icon(Icons.Default.Search, "Hledat v Google Fotkách")
+                        }
                     }
-                    2 -> AlbumsScreen(all, albums, vm, onOpen = ::open)
+                    2 -> AlbumsScreen(all, albums, vm, onOpen = { stack.add(Screen.Grid(it)) })
                     else -> SettingsScreen(vm)
                 }
             }
@@ -200,11 +195,12 @@ private fun PermissionScreen(onResult: () -> Unit) {
     ) {
         Text("Galerie potřebuje přístup k fotkám a videím.", style = MaterialTheme.typography.titleMedium)
         Text("Vše zůstává v telefonu, aplikace nemá přístup k internetu.")
-        Button(onClick = {
-            launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO))
-        }) { Text("Povolit přístup") }
+        Button(onClick = { launcher.launch(MEDIA_PERMISSIONS) }) { Text("Povolit přístup") }
     }
 }
+
+fun hasFullAccess(context: Context) =
+    context.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
 
 private fun hasMediaAccess(context: Context) = listOf(
     Manifest.permission.READ_MEDIA_IMAGES,

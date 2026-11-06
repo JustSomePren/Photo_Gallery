@@ -65,7 +65,7 @@ fun Thumbnail(
     contentScale: ContentScale = ContentScale.Crop,
 ) {
     val resolver = LocalContext.current.contentResolver
-    val bitmap = rememberBitmap(uri, sizePx, ImageCache.cachedThumbnail(uri, sizePx)) {
+    val bitmap = rememberLoaded(uri, sizePx, initial = ImageCache.cachedThumbnail(uri, sizePx)) {
         ImageCache.thumbnail(resolver, uri, sizePx)
     }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
@@ -76,12 +76,12 @@ fun Thumbnail(
     }
 }
 
-/** Shows [initial] right away and loads the bitmap in the background if it is missing. */
+/** Returns [initial] right away and loads the value in the background if it is missing. */
 @Composable
-fun rememberBitmap(uri: Uri, size: Int, initial: Bitmap? = null, load: suspend () -> Bitmap?): Bitmap? {
-    var bitmap by remember(uri, size) { mutableStateOf(initial) }
-    LaunchedEffect(uri, size) {
-        if (bitmap == null) bitmap = load()
+fun <T : Any> rememberLoaded(vararg keys: Any, initial: T? = null, load: suspend () -> T?): T? {
+    var value by remember(*keys) { mutableStateOf(initial) }
+    LaunchedEffect(*keys) {
+        if (value == null) value = load()
     }
-    return bitmap
+    return value
 }

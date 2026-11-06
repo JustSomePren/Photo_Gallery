@@ -1,5 +1,6 @@
 package com.justsomepren.gallery.ui
 
+import android.widget.VideoView
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,6 +9,8 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,6 +25,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -43,6 +47,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
@@ -65,6 +71,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
     var menu by remember { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
     val current = items[pager.currentPage.coerceAtMost(items.lastIndex)]
+    LaunchedEffect(current.id) { vm.returnTo = current.id }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(
@@ -74,7 +81,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
         ) { page ->
             val item = items[page]
             if (item.isVideo) {
-                VideoPage(item) { GooglePhotos.open(context, item) }
+                VideoPage(item, isCurrent = page == pager.currentPage) { chrome = !chrome }
             } else {
                 ZoomableImage(item) { chrome = !chrome }
             }
@@ -108,9 +115,17 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                             menu = false
                             GooglePhotos.open(context, current)
                         })
+                        DropdownMenuItem({ Text("Informace") }, onClick = {
+                            menu = false
+                            actions.info = current
+                        })
                         DropdownMenuItem({ Text("Přidat do alba") }, onClick = {
                             menu = false
                             actions.addToAlbum(listOf(current))
+                        })
+                        DropdownMenuItem({ Text("Přesunout do složky") }, onClick = {
+                            menu = false
+                            actions.move(listOf(current))
                         })
                         DropdownMenuItem({ Text("Sdílet") }, onClick = {
                             menu = false
@@ -130,7 +145,7 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
     val metrics = context.resources.displayMetrics
     // On low battery decode just for the screen, otherwise twice as big for sharp zoom.
     val maxSide = maxOf(metrics.widthPixels, metrics.heightPixels) * if (LocalSaver.current) 1 else 2
-    val bitmap = rememberBitmap(item.uri, maxSide) {
+    val bitmap = rememberLoaded(item.uri, maxSide) {
         ImageCache.fullImage(context.contentResolver, item.uri, maxSide)
     }
 
@@ -180,12 +195,59 @@ private fun ZoomableImage(item: MediaItem, onTap: () -> Unit) {
     }
 }
 
+/** Plays with the built-in hardware decoder; no extra player library. */
 @Composable
-private fun VideoPage(item: MediaItem, onPlay: () -> Unit) {
+private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
+    var playing by remember { mutableStateOf(false) }
+    var video by remember { mutableStateOf<VideoView?>(null) }
+    var position by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isCurrent) { if (!isCurrent) playing = false }
+
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Thumbnail(item.uri, 1024, Modifier.fillMaxSize().background(Color.Black), contentScale = ContentScale.Fit)
-        IconButton(onClick = onPlay, modifier = Modifier.size(96.dp)) {
-            Icon(Icons.Default.PlayCircle, "Přehrát", tint = Color.White, modifier = Modifier.size(80.dp))
+        if (playing) {
+            AndroidView(
+                factory = { context ->
+                    VideoView(context).apply {
+                        setVideoURI(item.uri)
+                        setOnPreparedListener { start() }
+                        setOnCompletionListener { playing = false }
+                        video = this
+                    }
+                },
+                onRelease = {
+                    it.stopPlayback()
+                    video = null
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Tapping pauses, swiping still goes to the pager.
+            Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    detectTapGestures {
+                        video?.run { if (isPlaying) pause() else start() }
+                        onTap()
+                    }
+                },
+            )
+            LaunchedEffect(video) {
+                while (true) {
+                    video?.let { if (it.duration > 0) position = it.currentPosition.toFloat() / it.duration }
+                    delay(500)
+                }
+            }
+            Slider(
+                value = position,
+                onValueChange = { value ->
+                    position = value
+                    video?.let { it.seekTo((value * it.duration).toInt()) }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 24.dp),
+            )
+        } else {
+            Thumbnail(item.uri, 1024, Modifier.fillMaxSize().background(Color.Black), contentScale = ContentScale.Fit)
+            IconButton(onClick = { playing = true }, modifier = Modifier.size(96.dp)) {
+                Icon(Icons.Default.PlayCircle, "Přehrát", tint = Color.White, modifier = Modifier.size(80.dp))
+            }
         }
     }
 }

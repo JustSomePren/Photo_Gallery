@@ -1,5 +1,9 @@
 package com.justsomepren.gallery.ui
 
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,12 +58,40 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val targets by vm.prefs.targets.collectAsStateWithLifecycle()
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var addingTarget by remember { mutableStateOf(false) }
+    var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
+
+    val accessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        fullAccess = hasFullAccess(context)
+        vm.refresh()
+    }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val ok = runCatching {
+            context.contentResolver.openOutputStream(uri)!!.use { it.write(vm.prefs.exportAlbums().toByteArray()) }
+        }.isSuccess
+        toast(context, if (ok) "Alba uložena" else "Uložení se nepovedlo")
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val count = runCatching {
+            val json = context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
+            vm.prefs.importAlbums(json)
+        }.getOrNull()
+        toast(context, if (count != null) "Načteno alb: $count" else "Soubor se nepodařilo načíst")
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Nastavení") }) }) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (!fullAccess) {
+                Section("Přístup k fotkám")
+                Hint("Aplikace vidí jen fotky, které jsi vybral. Můžeš přidat další nebo povolit všechny.")
+                SettingsButton("Změnit přístup k fotkám") { accessLauncher.launch(MEDIA_PERMISSIONS) }
+                HorizontalDivider()
+            }
+
             Section("Baterie")
             battery?.let {
                 Text("Baterie ${it.level} %" + if (it.charging) " · nabíjí se" else "")
@@ -93,6 +125,12 @@ fun SettingsScreen(vm: GalleryViewModel) {
             if (!GooglePhotos.canManageMedia(context)) {
                 SettingsButton("Oblíbené bez potvrzování") { GooglePhotos.manageMediaSettings(context) }
             }
+
+            HorizontalDivider()
+            Section("Moje alba")
+            Hint("Záloha vlastních alb do souboru, např. pro přenos na nový telefon.")
+            SettingsButton("Uložit alba do souboru") { exportLauncher.launch("galerie-alba.json") }
+            SettingsButton("Načíst alba ze souboru") { importLauncher.launch(arrayOf("application/json")) }
 
             HorizontalDivider()
             Section("Kam posílat fotky")
@@ -144,6 +182,8 @@ private fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
         onDismiss()
     }
 }
+
+private fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
 @Composable
 private fun Section(text: String) =

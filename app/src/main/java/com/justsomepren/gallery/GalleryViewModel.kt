@@ -1,16 +1,24 @@
 package com.justsomepren.gallery
 
 import android.app.Application
+import android.content.ContentValues
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.widget.Toast
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.MediaRepository
 import com.justsomepren.gallery.data.Prefs
+import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.WarmupWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,12 +28,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+sealed interface Screen {
+    data class Grid(val source: Source) : Screen
+    data class Viewer(val source: Source, val startId: Long) : Screen
+}
+
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = MediaRepository(app)
     val prefs = Prefs(app)
 
     private val _media = MutableStateFlow<List<MediaItem>?>(null)
     val media: StateFlow<List<MediaItem>?> = _media
+    val refreshing = MutableStateFlow(false)
+
+    // Navigation lives here, so turning the phone keeps the open screen and scroll position.
+    val stack = mutableStateListOf<Screen>()
+    val gridStates = mutableMapOf<Source, LazyGridState>()
+    var tab by mutableIntStateOf(0)
+
+    /** The photo last shown in the viewer; the grid scrolls to it when coming back. */
+    var returnTo: Long? = null
 
     /** In battery saver mode new photos show up when the app is reopened, not live. */
     var saver = false
@@ -42,12 +64,33 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         WarmupWorker.schedule(app, prefs.warmup.value)
     }
 
-    fun refresh(delayMs: Long = 0) {
+    fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
+
+    fun refresh(delayMs: Long = 0, manual: Boolean = false) {
+        if (manual) refreshing.value = true
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
-            _media.value = withContext(Dispatchers.IO) { repo.loadAll() }
+            val items = withContext(Dispatchers.IO) { repo.loadAll() }
+            _media.value = items
+            prefs.repairAlbums(items)
+            refreshing.value = false
         }
+    }
+
+    suspend fun details(item: MediaItem) = withContext(Dispatchers.IO) { repo.details(item) }
+
+    /** [path] is a folder like "Pictures/Trip/". Albums follow the photos, the id does not change. */
+    fun move(items: List<MediaItem>, path: String) = viewModelScope.launch {
+        val resolver = getApplication<Application>().contentResolver
+        val values = ContentValues().apply { put(MediaStore.MediaColumns.RELATIVE_PATH, path) }
+        val failed = withContext(Dispatchers.IO) {
+            items.count { runCatching { resolver.update(it.uri, values, null, null) > 0 }.getOrDefault(false).not() }
+        }
+        if (failed > 0) {
+            Toast.makeText(getApplication(), "Nepodařilo se přesunout $failed", Toast.LENGTH_SHORT).show()
+        }
+        refresh()
     }
 
     /** Called when the app comes on / leaves the screen, so nothing runs in the background. */
