@@ -144,6 +144,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveEvent(event: Event) {
         prefs.saveEvent(event)
+        prefs.pruneAuto()
         media.value?.let { prefs.collectAuto(it) }
         UploadWorker.schedule(getApplication())
     }
@@ -155,12 +156,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteEvent(event: Event) {
         prefs.deleteEvent(event)
+        prefs.pruneAuto()
         UploadWorker.schedule(getApplication())
     }
 
     fun setMobileData(enabled: Boolean) {
         prefs.setMobileData(enabled)
-        UploadWorker.schedule(getApplication())
+        UploadWorker.schedule(getApplication(), restart = true)
     }
 
     fun retryFailed() {

@@ -207,7 +207,7 @@ private fun MoveDialog(items: List<MediaItem>, vm: GalleryViewModel, actions: Me
     var creating by rememberSaveable { mutableStateOf(false) }
     val folders = remember(media) {
         media.orEmpty().map { it.relativePath }.distinct()
-            .filter { it.startsWith("DCIM/") || it.startsWith("Pictures/") }
+            .filter { (it.startsWith("DCIM/") || it.startsWith("Pictures/")) && !it.startsWith("DCIM/Camera/", ignoreCase = true) }
             .sorted()
     }
     fun moveTo(path: String) {

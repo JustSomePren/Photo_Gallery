@@ -24,6 +24,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -46,10 +48,30 @@ object GoogleAuth {
         .setAccount(Account(email, "com.google"))
         .build()
 
-    /** A token without any dialog, or null when the user has to confirm the login again. */
-    suspend fun silentToken(context: Context, email: String): String? = runCatching {
-        Identity.getAuthorizationClient(context).authorize(request(email)).await()
-    }.getOrNull()?.takeIf { !it.hasResolution() }?.accessToken
+    private val TRANSIENT = setOf(
+        CommonStatusCodes.NETWORK_ERROR,
+        CommonStatusCodes.INTERNAL_ERROR,
+        CommonStatusCodes.TIMEOUT,
+        CommonStatusCodes.INTERRUPTED,
+    )
+
+    /**
+     * A token without any dialog, or null when the user has to confirm the login again.
+     * A passing network problem throws IOException, so the upload is simply retried later.
+     */
+    suspend fun silentToken(context: Context, email: String): String? {
+        val result = try {
+            Identity.getAuthorizationClient(context).authorize(request(email)).await()
+        } catch (e: ApiException) {
+            if (e.statusCode in TRANSIENT) throw IOException(e)
+            return null
+        } catch (e: IOException) {
+            throw e
+        } catch (e: Exception) {
+            throw IOException(e)
+        }
+        return result.takeIf { !it.hasResolution() }?.accessToken
+    }
 }
 
 class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message")
@@ -132,7 +154,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             return Result.success()
         }
 
-        prefs.collectAuto(MediaRepository(applicationContext).loadAll())
+        val media = MediaRepository(applicationContext).loadAll()
+        // Last check of the owner's rule: only photos and videos taken with the camera ever leave the phone.
+        val cameraKeys = media.filter { it.isCameraShot }.map { it.key }.toSet()
+        prefs.removeFromQueue(prefs.queue.value.filter { it.key !in cameraKeys })
+        prefs.collectAuto(media)
         val total = prefs.queue.value.size
         if (total == 0) return Result.success()
 
@@ -144,10 +170,13 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.setAccountProblem(account, token == null)
                 if (token == null) continue
                 val api = PhotosApi(applicationContext, token)
-                for (batch in items.chunked(BATCH)) {
+                for (chunk in items.chunked(BATCH)) {
                     if (isStopped) return Result.retry()
-                    send(api, account, batch)
-                    done += batch.size
+                    // The user may clear the queue or remove the account while this runs.
+                    val queued = prefs.queue.value.map { it.sentKey }.toSet()
+                    val batch = chunk.filter { it.sentKey in queued && it.account in prefs.accounts.value }
+                    if (batch.isNotEmpty()) send(api, account, batch)
+                    done += chunk.size
                     prefs.uploading.value = done to total
                     runCatching { setForeground(foregroundInfo(done, total)) }
                 }
@@ -168,6 +197,12 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
                 prefs.removeFromQueue(listOf(item))
+            } catch (e: SecurityException) {
+                // The app may no longer read this photo; don't let it block the rest.
+                prefs.markFailed(listOf(item))
+            } catch (e: HttpException) {
+                // Google refused this one file; network and login problems still retry the whole run.
+                if (e.code in 400..499 && e.code !in setOf(401, 408, 429)) prefs.markFailed(listOf(item)) else throw e
             }
         }
         for ((album, group) in uploads.groupBy { it.second.album }) {
@@ -228,7 +263,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
          * Keeps the background sending in line with the settings: a periodic check while some
          * event sends automatically, and one run as soon as there is something in the queue.
          */
-        fun schedule(context: Context) {
+        /** [restart]: replace waiting runs, so a new network setting or a new login applies right away. */
+        fun schedule(context: Context, restart: Boolean = false) {
             val prefs = Prefs.get(context)
             val work = WorkManager.getInstance(context)
             val constraints = constraints(prefs.mobileData.value)
@@ -244,8 +280,10 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
             if (prefs.queue.value.isNotEmpty()) {
                 val once = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints).build()
-                work.enqueueUniqueWork(ONCE, ExistingWorkPolicy.KEEP, once)
+                val policy = if (restart) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
+                work.enqueueUniqueWork(ONCE, policy, once)
             }
+            if (restart) work.cancelUniqueWork(CHARGING)
         }
 
         private fun waitForCharger(context: Context) {

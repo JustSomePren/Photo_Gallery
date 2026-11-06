@@ -27,12 +27,16 @@ data class QueueItem(
     val mime: String,
     val account: String,
     val album: String?,
+    /** Set when an auto-send event added it, so it can be taken back when the event changes. */
+    val eventId: String? = null,
+    val day: Long = 0,
 ) {
     val sentKey get() = "$account|$key"
 
     companion object {
-        fun of(item: MediaItem, account: String, album: String?) =
-            QueueItem(item.key, item.uri.toString(), item.name, item.mime, account, album?.ifBlank { null })
+        fun of(item: MediaItem, account: String, album: String?, eventId: String? = null) = QueueItem(
+            item.key, item.uri.toString(), item.name, item.mime, account, album?.ifBlank { null }, eventId, item.day,
+        )
     }
 }
 
@@ -145,6 +149,7 @@ class Prefs(context: Context) {
     fun removeAccount(email: String) {
         accountList.update { it - email }
         queueList.update { list -> list.filterNot { it.account == email } }
+        failedList.update { list -> list.filterNot { it.account == email } }
         setAccountProblem(email, false)
         // Events stop sending there too, otherwise the next refresh would queue everything again.
         eventList.update { list ->
@@ -169,8 +174,10 @@ class Prefs(context: Context) {
     fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
         val queued = queue.value.map { it.sentKey }.toSet()
         val failedKeys = failed.value.map { it.sentKey }.toSet()
+        val connected = accounts.value.toSet()
         val new = items.distinctBy { it.sentKey }.filter {
-            it.sentKey !in queued && !isSent(it) && (byHand || (it.sentKey !in failedKeys && it.sentKey !in dismissed))
+            it.account in connected && it.sentKey !in queued && !isSent(it) &&
+                (byHand || (it.sentKey !in failedKeys && it.sentKey !in dismissed))
         }
         if (new.isEmpty()) return 0
         if (byHand) {
@@ -188,10 +195,19 @@ class Prefs(context: Context) {
         if (rules.isEmpty()) return 0
         return enqueue(
             media.filter { it.isCameraShot }.flatMap { item ->
-                rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album) }
+                rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album, it.id) }
             },
             byHand = false,
         )
+    }
+
+    /** Takes back photos an event added that it no longer sends (turned off, deleted, shortened, other account). */
+    fun pruneAuto() = queueList.update { list ->
+        val byId = events.value.associateBy { it.id }
+        list.filter { item ->
+            val event = item.eventId?.let(byId::get) ?: return@filter item.eventId == null
+            event.autoSend && event.account == item.account && event.covers(item.day)
+        }
     }
 
     fun markSent(items: List<QueueItem>) {
@@ -300,6 +316,7 @@ class Prefs(context: Context) {
     private fun queueToJson(q: QueueItem) = JSONObject()
         .put("key", q.key).put("uri", q.uri).put("name", q.name).put("mime", q.mime)
         .put("account", q.account).put("album", q.album ?: "")
+        .put("event", q.eventId ?: "").put("day", q.day)
 
     private fun queueFromJson(o: JSONObject) = QueueItem(
         key = o.getString("key"),
@@ -308,6 +325,8 @@ class Prefs(context: Context) {
         mime = o.getString("mime"),
         account = o.getString("account"),
         album = o.getString("album").ifBlank { null },
+        eventId = o.optString("event").ifBlank { null },
+        day = o.optLong("day"),
     )
 
     companion object {

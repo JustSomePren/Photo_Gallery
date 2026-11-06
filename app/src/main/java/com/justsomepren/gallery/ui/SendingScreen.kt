@@ -88,7 +88,7 @@ fun SendingScreen(vm: GalleryViewModel) {
         }.getOrNull()
         if (result.resultCode == Activity.RESULT_OK && token != null) {
             prefs.addAccount(email)
-            UploadWorker.schedule(context)
+            UploadWorker.schedule(context, restart = true)
         }
     }
 
@@ -102,7 +102,7 @@ fun SendingScreen(vm: GalleryViewModel) {
                     consent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
                 } else {
                     prefs.addAccount(email)
-                    UploadWorker.schedule(context)
+                    UploadWorker.schedule(context, restart = true)
                 }
                 loginError = null
             } catch (e: Exception) {

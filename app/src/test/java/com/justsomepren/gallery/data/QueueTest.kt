@@ -44,6 +44,8 @@ class QueueTest {
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.filesDir, "sent.txt").delete()
         prefs = Prefs(context)
+        prefs.addAccount("me@gmail.com")
+        prefs.addAccount("shared@gmail.com")
     }
 
     private val trip = Event(
@@ -91,6 +93,7 @@ class QueueTest {
 
         val restarted = Prefs(context)
         assertEquals(0, restarted.enqueue(listOf(item)))
+        assertEquals(0, restarted.enqueue(listOf(item.copy(account = "unknown@gmail.com"))))
         // The same photo can still go to a different account.
         assertEquals(1, restarted.enqueue(listOf(item.copy(account = "shared@gmail.com"))))
     }
@@ -125,7 +128,7 @@ class QueueTest {
         prefs.addAccount("me@gmail.com")
         prefs.enqueue(listOf(QueueItem.of(photoOn(LocalDate.of(2026, 11, 10), 1), "me@gmail.com", null)))
         prefs.removeAccount("me@gmail.com")
-        assertEquals(emptyList<String>(), prefs.accounts.value)
+        assertEquals(listOf("shared@gmail.com"), prefs.accounts.value)
         assertEquals(0, prefs.queue.value.size)
     }
 
