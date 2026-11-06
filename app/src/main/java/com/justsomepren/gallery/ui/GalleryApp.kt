@@ -166,10 +166,14 @@ private fun Main(vm: GalleryViewModel) {
             vm = vm,
             onBack = back,
         )
-        is Screen.Grid -> {
-            val event = events.firstOrNull { it.source == top.source }
-            browser(top.source, back) {
-                if (event != null) {
+        is Screen.Grid -> browser(top.source, back)
+        is Screen.EventPhotos -> {
+            val event = events.firstOrNull { it.id == top.eventId }
+            if (event == null) {
+                // Deleted in the editor.
+                LaunchedEffect(Unit) { back() }
+            } else {
+                browser(event.source, back) {
                     IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
                 }
             }
@@ -192,7 +196,7 @@ private fun Main(vm: GalleryViewModel) {
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
                 when (vm.tab) {
                     0 -> if (calendar) {
-                        CalendarScreen(all, events, vm, openSending, actions = { photoActions() }) { stack.add(Screen.Grid(it)) }
+                        CalendarScreen(all, events, vm, openSending, actions = { photoActions() }) { stack.add(it) }
                     } else {
                         browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }
@@ -238,7 +242,7 @@ private fun CalendarScreen(
     vm: GalleryViewModel,
     openSending: () -> Unit,
     actions: @Composable RowScope.() -> Unit,
-    onOpen: (Source) -> Unit,
+    onOpen: (Screen) -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text("Fotky") }, actions = actions) }) { padding ->
         CalendarView(
@@ -247,9 +251,9 @@ private fun CalendarScreen(
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },
-            onDay = { onOpen(Source.Period(formatDay(it), it, it)) },
+            onDay = { onOpen(Screen.Grid(Source.Period(formatDay(it), it, it))) },
             onNewEvent = vm::newEvent,
-            onEvent = { onOpen(it.source) },
+            onEvent = { onOpen(Screen.EventPhotos(it.id)) },
         )
     }
 }

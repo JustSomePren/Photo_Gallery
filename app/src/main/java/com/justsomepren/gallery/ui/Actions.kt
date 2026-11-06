@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,14 +45,20 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 
-/** Actions shared by the grid and the photo viewer. */
-class MediaActions(private val context: Context, private val vm: GalleryViewModel) {
-    lateinit var launcher: ActivityResultLauncher<IntentSenderRequest>
-
+/** Which dialog is open and for which photos. */
+class OpenDialogs {
     var sending by mutableStateOf<List<MediaItem>?>(null)
     var adding by mutableStateOf<List<MediaItem>?>(null)
     var moving by mutableStateOf<List<MediaItem>?>(null)
     var info by mutableStateOf<MediaItem?>(null)
+}
+
+/** Actions shared by the grid and the photo viewer. */
+class MediaActions(private val context: Context, private val vm: GalleryViewModel) {
+    lateinit var launcher: ActivityResultLauncher<IntentSenderRequest>
+
+    // Kept in the ViewModel, so turning the phone does not close an open dialog.
+    private val dialogs = vm.dialogs
 
     fun toggleFavorite(items: List<MediaItem>) {
         if (items.isEmpty() || tooMany(items)) return
@@ -65,12 +72,14 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
     }
 
     fun send(items: List<MediaItem>) {
-        if (!tooMany(items)) sending = items
+        if (!tooMany(items)) dialogs.sending = items
     }
 
-    fun addToAlbum(items: List<MediaItem>) { adding = items }
+    fun addToAlbum(items: List<MediaItem>) { dialogs.adding = items }
 
-    fun move(items: List<MediaItem>) { moving = items }
+    fun move(items: List<MediaItem>) { dialogs.moving = items }
+
+    fun showInfo(item: MediaItem) { dialogs.info = item }
 
     fun share(items: List<MediaItem>) {
         if (!tooMany(items)) GooglePhotos.share(context, items)
@@ -107,10 +116,11 @@ fun rememberMediaActions(vm: GalleryViewModel): MediaActions {
         actions.onResult(it.resultCode == Activity.RESULT_OK)
     }
 
-    actions.sending?.let { items -> SendDialog(items, vm) { actions.sending = null } }
-    actions.adding?.let { items -> AlbumPickerDialog(items, vm) { actions.adding = null } }
-    actions.moving?.let { items -> MoveDialog(items, vm, actions) { actions.moving = null } }
-    actions.info?.let { item -> InfoDialog(item, vm) { actions.info = null } }
+    val dialogs = vm.dialogs
+    dialogs.sending?.let { items -> SendDialog(items, vm) { dialogs.sending = null } }
+    dialogs.adding?.let { items -> AlbumPickerDialog(items, vm) { dialogs.adding = null } }
+    dialogs.moving?.let { items -> MoveDialog(items, vm, actions) { dialogs.moving = null } }
+    dialogs.info?.let { item -> InfoDialog(item, vm) { dialogs.info = null } }
     return actions
 }
 
@@ -120,7 +130,7 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
     val targets by vm.prefs.targets.collectAsStateWithLifecycle()
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
     // A running event with an album is the most likely place for these photos.
-    var album by remember {
+    var album by rememberSaveable {
         mutableStateOf(vm.prefs.events.value.firstOrNull { it.isActive && it.album != null }?.album.orEmpty())
     }
     PickerDialog(title = "Poslat ${items.size} do cloudu", onDismiss = onDismiss) {
@@ -134,7 +144,11 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
             items(accounts) { account ->
                 PickerRow(account, Icons.Default.CloudQueue) {
                     val added = vm.enqueue(items, account, album)
-                    toast(context, if (added > 0) "Ve frontě: $added" else "Už je odesláno nebo ve frontě")
+                    val skipped = items.count { !it.isCameraShot }
+                    toast(context, buildString {
+                        append(if (added > 0) "Ve frontě: $added" else "Nic nového k odeslání")
+                        if (skipped > 0) append(" · vynecháno $skipped (ne z fotoaparátu)")
+                    })
                     onDismiss()
                 }
             }
@@ -166,7 +180,7 @@ private fun DialogLabel(text: String) = Text(
 @Composable
 private fun AlbumPickerDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: () -> Unit) {
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
-    var creating by remember { mutableStateOf(false) }
+    var creating by rememberSaveable { mutableStateOf(false) }
 
     if (creating) {
         TextInputDialog(title = "Nové album", confirm = "Vytvořit", onDismiss = onDismiss) {
@@ -190,7 +204,7 @@ private fun AlbumPickerDialog(items: List<MediaItem>, vm: GalleryViewModel, onDi
 @Composable
 private fun MoveDialog(items: List<MediaItem>, vm: GalleryViewModel, actions: MediaActions, onDismiss: () -> Unit) {
     val media by vm.media.collectAsStateWithLifecycle()
-    var creating by remember { mutableStateOf(false) }
+    var creating by rememberSaveable { mutableStateOf(false) }
     val folders = remember(media) {
         media.orEmpty().map { it.relativePath }.distinct()
             .filter { it.startsWith("DCIM/") || it.startsWith("Pictures/") }
@@ -274,7 +288,7 @@ fun TextInputDialog(
     extra: @Composable () -> Unit = {},
     onConfirm: (String) -> Unit,
 ) {
-    var text by remember { mutableStateOf(initial) }
+    var text by rememberSaveable { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

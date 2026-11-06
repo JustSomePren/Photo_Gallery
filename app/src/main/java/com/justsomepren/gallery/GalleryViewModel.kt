@@ -28,6 +28,7 @@ import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.WarmupWorker
 import com.justsomepren.gallery.data.today
+import com.justsomepren.gallery.ui.OpenDialogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -39,6 +40,9 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data class Grid(val source: Source) : Screen
     data class Viewer(val source: Source, val startId: Long) : Screen
+
+    /** Photos of an event; found by id, so editing the event updates the open screen. */
+    data class EventPhotos(val eventId: String) : Screen
 }
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
@@ -74,6 +78,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     val calendarState = LazyListState()
+
+    val dialogs = OpenDialogs()
 
     /** The event open in the editor, from whichever screen it was opened. */
     var editingEvent by mutableStateOf<Event?>(null)
@@ -129,8 +135,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Only photos and videos from the camera go to the queue; returns how many were added. */
     fun enqueue(items: List<MediaItem>, account: String, album: String?): Int {
-        val added = prefs.enqueue(items.map { QueueItem.of(it, account, album) })
+        val added = prefs.enqueue(items.filter { it.isCameraShot }.map { QueueItem.of(it, account, album) })
         UploadWorker.schedule(getApplication())
         return added
     }

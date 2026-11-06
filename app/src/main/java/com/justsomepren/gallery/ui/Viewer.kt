@@ -123,7 +123,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                         })
                         DropdownMenuItem({ Text("Informace") }, onClick = {
                             menu = false
-                            actions.info = current
+                            actions.showInfo(current)
                         })
                         DropdownMenuItem({ Text("Přidat do alba") }, onClick = {
                             menu = false

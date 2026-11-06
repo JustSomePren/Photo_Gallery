@@ -168,7 +168,7 @@ class AppScreenshotTest {
     @Test
     fun eventPhotos() {
         showApp()
-        vm.stack.add(Screen.Grid(trip.source))
+        vm.stack.add(Screen.EventPhotos(trip.id))
         compose.waitForIdle()
         capture("7_fotky_udalosti")
     }

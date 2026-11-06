@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,16 +60,16 @@ fun EventEditor(initial: Event, vm: GalleryViewModel, onDismiss: () -> Unit) {
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
     val exists = remember { vm.prefs.events.value.any { it.id == initial.id } }
 
-    var name by remember { mutableStateOf(initial.name) }
-    var color by remember { mutableIntStateOf(initial.color) }
-    var start by remember { mutableLongStateOf(initial.startDay) }
-    var end by remember { mutableLongStateOf(initial.endDay) }
-    var autoSend by remember { mutableStateOf(initial.autoSend) }
-    var account by remember { mutableStateOf(initial.account ?: accounts.firstOrNull()) }
-    var album by remember { mutableStateOf(initial.album ?: initial.name) }
+    var name by rememberSaveable { mutableStateOf(initial.name) }
+    var color by rememberSaveable { mutableIntStateOf(initial.color) }
+    var start by rememberSaveable { mutableLongStateOf(initial.startDay) }
+    var end by rememberSaveable { mutableLongStateOf(initial.endDay) }
+    var autoSend by rememberSaveable { mutableStateOf(initial.autoSend) }
+    var account by rememberSaveable { mutableStateOf(initial.account ?: accounts.firstOrNull()) }
+    var album by rememberSaveable { mutableStateOf(initial.album ?: initial.name) }
     // The album is named like the event until the user types their own name.
-    var albumFollowsName by remember { mutableStateOf(initial.album == null || initial.album == initial.name) }
-    var pickingDates by remember { mutableStateOf(false) }
+    var albumFollowsName by rememberSaveable { mutableStateOf(initial.album == null || initial.album == initial.name) }
+    var pickingDates by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

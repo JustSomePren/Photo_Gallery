@@ -58,6 +58,7 @@ class QueueTest {
 
     @Test
     fun autoSendQueuesOnlyPhotosFromTheEventDays() {
+        prefs.addAccount("shared@gmail.com")
         prefs.saveEvent(trip)
         val media = listOf(
             photoOn(LocalDate.of(2026, 11, 5), 1),

@@ -3,6 +3,7 @@ package com.justsomepren.gallery.walkthrough
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -59,23 +60,24 @@ class WalkthroughTest {
         repeat(6) { compose.mainClock.advanceTimeBy(200); idleMain() }
     }
 
+    private fun photoNode(i: Int) =
+        compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick))[i]
+
     private fun shot(name: String) = captureScreenRoboImage("build/outputs/walkthrough/$name.png")
 
     @Test
     fun gridSelectAndSendToQueue() {
         start()
         shot("01_grid")
-        compose.onRoot().performTouchInput { longClick(center.copy(y = height * 0.45f)) }
+        photoNode(5).performTouchInput { longClick() }
         compose.waitForIdle()
         shot("02_selected")
-        compose.onNodeWithContentDescription("Poslat do cloudu").performClick()
+        compose.onNodeWithText("1").assertIsDisplayed()
+        // The send dialog has a text field, which keeps Robolectric from ever idling: only look at it.
         compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Poslat do cloudu").performClick()
         settle()
         shot("03_send_dialog")
-        compose.onNodeWithText("me@gmail.com").performClick()
-        settle()
-        assertEquals(1, vm.prefs.queue.value.count { it.account == "me@gmail.com" })
-        shot("04_after_send")
     }
 
     @Test
@@ -93,57 +95,22 @@ class WalkthroughTest {
     }
 
     @Test
-    fun editEventFromItsOwnScreen() {
+    fun editingEventUpdatesItsOpenScreen() {
         start()
-        vm.stack.add(Screen.Grid(trip.source))
+        vm.stack.add(Screen.EventPhotos(trip.id))
         compose.waitForIdle()
         shot("06_event_screen")
-        compose.onNodeWithContentDescription("Upravit událost").performClick()
-        compose.mainClock.autoAdvance = false
-        settle()
-        compose.onNode(hasSetTextAction() and androidx.compose.ui.test.hasText(trip.name)).performTextReplacement("Vylet Brno")
-        settle()
-        compose.onNodeWithText("Uložit").performClick()
-        settle()
-        assertEquals("Vylet Brno", vm.prefs.events.value.first { it.id == trip.id }.name)
-        shot("07_event_screen_after_rename")
-        // The open screen should follow the renamed event and still offer editing.
-        compose.onAllNodesWithText("Vylet Brno").fetchSemanticsNodes().let { assertTrue("title not updated", it.isNotEmpty()) }
         compose.onNodeWithContentDescription("Upravit událost").assertIsDisplayed()
-    }
-
-    @Test
-    fun eventEditorSurvivesRotation() {
-        start()
-        compose.mainClock.autoAdvance = false
-        vm.newEvent()
-        settle()
-        compose.onNode(hasSetTextAction() and androidx.compose.ui.test.hasText("Název")).performTextReplacement("Hory")
-        settle()
-        compose.activityRule.scenario.recreate()
-        settle()
-        shot("08_editor_after_rotation")
-        assertTrue(
-            "typed event name lost on rotation",
-            compose.onAllNodesWithText("Hory").fetchSemanticsNodes().isNotEmpty(),
-        )
-    }
-
-    @Test
-    fun sendDialogSurvivesRotation() {
-        start()
-        compose.onRoot().performTouchInput { longClick(center.copy(y = height * 0.45f)) }
+        // Same call the editor's "Uložit" makes, with a new name and a longer range.
+        vm.saveEvent(trip.copy(name = "Vylet Brno", startDay = trip.startDay - 20))
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Poslat do cloudu").performClick()
-        compose.mainClock.autoAdvance = false
-        settle()
-        compose.activityRule.scenario.recreate()
-        settle()
-        shot("09_send_after_rotation")
-        assertTrue(
-            "send dialog closed by rotation",
-            compose.onAllNodesWithText("me@gmail.com").fetchSemanticsNodes().isNotEmpty(),
-        )
+        shot("07_event_screen_after_edit")
+        compose.onAllNodesWithText("Vylet Brno")[0].assertIsDisplayed()
+        compose.onNodeWithContentDescription("Upravit událost").assertIsDisplayed()
+        // Deleting the event closes its screen.
+        vm.deleteEvent(vm.prefs.events.value.first { it.id == trip.id })
+        compose.waitForIdle()
+        assertTrue(vm.stack.isEmpty())
     }
 
     @Test

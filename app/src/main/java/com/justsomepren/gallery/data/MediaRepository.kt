@@ -31,6 +31,9 @@ data class MediaItem(
 ) {
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
+
+    /** Taken with the phone's camera; screenshots, downloads and chat photos are never sent to the cloud. */
+    val isCameraShot get() = relativePath.startsWith("DCIM/Camera/", ignoreCase = true)
 }
 
 data class MediaDetails(val rows: List<Pair<String, String>>, val location: DoubleArray?)

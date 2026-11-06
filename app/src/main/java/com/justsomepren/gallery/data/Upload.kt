@@ -26,6 +26,8 @@ import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -120,26 +122,30 @@ class PhotosApi(private val context: Context, private val token: String) {
 class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     private val prefs = Prefs.get(context)
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val now = inputData.getBoolean(NOW, false)
-        if (!now && lowBattery()) return@withContext Result.retry()
+    // The periodic and the one-time run share the queue; only one may send at a time.
+    override suspend fun doWork(): Result = sending.withLock { withContext(Dispatchers.IO) { sendQueue() } }
+
+    private suspend fun sendQueue(): Result {
+        if (!inputData.getBoolean(NOW, false) && lowBattery()) {
+            // Waiting for the charger instead of retrying, so it starts right after plugging in.
+            waitForCharger(applicationContext)
+            return Result.success()
+        }
 
         prefs.collectAuto(MediaRepository(applicationContext).loadAll())
         val total = prefs.queue.value.size
-        if (total == 0) return@withContext Result.success()
+        if (total == 0) return Result.success()
 
         runCatching { setForeground(foregroundInfo(0, total)) }
         var done = 0
         try {
             for ((account, items) in prefs.queue.value.groupBy { it.account }) {
                 val token = GoogleAuth.silentToken(applicationContext, account)
-                if (token == null) {
-                    prefs.accountProblems.value += account
-                    continue
-                }
+                prefs.setAccountProblem(account, token == null)
+                if (token == null) continue
                 val api = PhotosApi(applicationContext, token)
                 for (batch in items.chunked(BATCH)) {
-                    if (isStopped) return@withContext Result.retry()
+                    if (isStopped) return Result.retry()
                     send(api, account, batch)
                     done += batch.size
                     prefs.uploading.value = done to total
@@ -147,11 +153,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 }
             }
         } catch (e: IOException) {
-            return@withContext Result.retry()
+            return Result.retry()
         } finally {
             prefs.uploading.value = null
         }
-        if (prefs.queue.value.isEmpty()) Result.success() else Result.retry()
+        return if (prefs.queue.value.isEmpty()) Result.success() else Result.retry()
     }
 
     private fun send(api: PhotosApi, account: String, batch: List<QueueItem>) {
@@ -215,6 +221,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private const val NOTIFICATION = 1
         private const val PERIODIC = "upload-periodic"
         private const val ONCE = "upload-once"
+        private const val CHARGING = "upload-charging"
+        private val sending = Mutex()
 
         /**
          * Keeps the background sending in line with the settings: a periodic check while some
@@ -240,19 +248,28 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             }
         }
 
+        private fun waitForCharger(context: Context) {
+            val request = OneTimeWorkRequestBuilder<UploadWorker>()
+                .setConstraints(constraints(Prefs.get(context).mobileData.value, charging = true))
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(CHARGING, ExistingWorkPolicy.KEEP, request)
+        }
+
         /** "Send now": any network, battery is ignored. */
         fun sendNow(context: Context) {
             val request = OneTimeWorkRequestBuilder<UploadWorker>()
-                .setConstraints(constraints(mobileData = true))
+                .setConstraints(constraints(mobileData = true, batteryNotLow = false))
                 .setInputData(workDataOf(NOW to true))
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(ONCE, ExistingWorkPolicy.REPLACE, request)
         }
 
-        private fun constraints(mobileData: Boolean) = Constraints.Builder()
-            .setRequiredNetworkType(if (mobileData) NetworkType.CONNECTED else NetworkType.UNMETERED)
-            .setRequiresBatteryNotLow(true)
-            .build()
+        private fun constraints(mobileData: Boolean, batteryNotLow: Boolean = true, charging: Boolean = false) =
+            Constraints.Builder()
+                .setRequiredNetworkType(if (mobileData) NetworkType.CONNECTED else NetworkType.UNMETERED)
+                .setRequiresBatteryNotLow(batteryNotLow)
+                .setRequiresCharging(charging)
+                .build()
     }
 }

@@ -62,8 +62,11 @@ class Prefs(context: Context) {
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
 
-    /** Accounts whose Google login has to be confirmed again. */
-    val accountProblems = MutableStateFlow(emptySet<String>())
+    /** Accounts whose Google login has to be confirmed again; saved, as the worker finds out while the app is closed. */
+    val accountProblems = MutableStateFlow(sp.getStringSet("accountProblems", null).orEmpty().toSet())
+
+    /** Photos the user removed from the queue; events do not add them again. */
+    private val dismissed = sp.getStringSet("dismissed", null).orEmpty().toMutableSet()
 
     /** Done / total while the upload is running, otherwise null. */
     val uploading = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -136,33 +139,59 @@ class Prefs(context: Context) {
 
     fun addAccount(email: String) {
         accountList.update { (it + email).distinct() }
-        accountProblems.value -= email
+        setAccountProblem(email, false)
     }
 
     fun removeAccount(email: String) {
         accountList.update { it - email }
         queueList.update { list -> list.filterNot { it.account == email } }
+        setAccountProblem(email, false)
+        // Events stop sending there too, otherwise the next refresh would queue everything again.
+        eventList.update { list ->
+            list.map { if (it.account == email) it.copy(autoSend = false, account = null, album = null) else it }
+        }
+    }
+
+    fun setAccountProblem(email: String, problem: Boolean) {
+        accountProblems.value = if (problem) accountProblems.value + email else accountProblems.value - email
+        sp.edit { putStringSet("accountProblems", accountProblems.value) }
     }
 
     // ---- Upload queue ----
 
     fun isSent(item: QueueItem) = item.sentKey in sent
 
-    /** Adds what is not queued or sent yet; returns how many were added. */
-    fun enqueue(items: List<QueueItem>): Int {
+    /**
+     * Adds what is not queued or sent yet; returns how many were added.
+     * Photos that failed or that the user removed come back only when chosen by hand.
+     */
+    @Synchronized
+    fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
         val queued = queue.value.map { it.sentKey }.toSet()
-        val new = items.distinctBy { it.sentKey }.filter { it.sentKey !in queued && !isSent(it) }
-        if (new.isNotEmpty()) queueList.update { it + new }
+        val failedKeys = failed.value.map { it.sentKey }.toSet()
+        val new = items.distinctBy { it.sentKey }.filter {
+            it.sentKey !in queued && !isSent(it) && (byHand || (it.sentKey !in failedKeys && it.sentKey !in dismissed))
+        }
+        if (new.isEmpty()) return 0
+        if (byHand) {
+            val keys = new.map { it.sentKey }.toSet()
+            failedList.update { list -> list.filterNot { it.sentKey in keys } }
+            if (dismissed.removeAll(keys)) sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+        }
+        queueList.update { it + new }
         return new.size
     }
 
     /** Queues photos of active auto-send events, from their first to their last day. */
     fun collectAuto(media: List<MediaItem>): Int {
-        val rules = events.value.filter { it.autoSend && it.account != null }
+        val rules = events.value.filter { it.autoSend && it.account in accounts.value }
         if (rules.isEmpty()) return 0
-        return enqueue(media.flatMap { item ->
-            rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album) }
-        })
+        return enqueue(
+            media.filter { it.isCameraShot }.flatMap { item ->
+                rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album) }
+            },
+            byHand = false,
+        )
     }
 
     fun markSent(items: List<QueueItem>) {
@@ -183,7 +212,11 @@ class Prefs(context: Context) {
         enqueue(items)
     }
 
-    fun clearQueue() = queueList.update { emptyList() }
+    fun clearQueue() {
+        dismissed += queue.value.map { it.sentKey }
+        sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+        queueList.update { emptyList() }
+    }
 
     fun removeFromQueue(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }.toSet()
