@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android backs this up to the Google account and restores it when the app is installed again -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="gallery.xml" />
+        <include domain="file" path="sent.txt" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="gallery.xml" />
+        <include domain="file" path="sent.txt" />
+    </device-transfer>
+</data-extraction-rules>

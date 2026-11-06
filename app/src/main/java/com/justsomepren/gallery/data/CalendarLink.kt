@@ -64,7 +64,7 @@ data class CalendarItem(
 object CalendarLink {
     private const val PACKAGE = "cz.calendar"
     private const val AUTHORITY = "cz.calendar.link"
-    private const val CERT = "2A90076DE8A6B9144CF7F015CB989BD185E0017FA20A20572E7F03C89C59C0E0"
+    private const val CERT = "8B48624FEFF248DEBB0906A02E0255030B3FE85CE5D2C2420FA653CB2ED81ABE"
     const val ACTION_SHOW = "com.justsomepren.gallery.action.SHOW_PHOTOS"
 
     fun installed(context: Context) = context.packageManager.resolveContentProvider(AUTHORITY, 0) != null

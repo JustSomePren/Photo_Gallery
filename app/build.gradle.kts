@@ -16,13 +16,17 @@ android {
         versionName = "0.1"
     }
 
-    // Same key on every machine, so a new APK installs over the old one without losing albums.
+    // The key is not in the repository. GitHub Actions gets it from secrets (see README),
+    // without it the build uses this computer's own debug key.
+    val keyFile = System.getenv("SIGNING_KEY_FILE")
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        if (keyFile != null) {
+            create("own") {
+                storeFile = file(keyFile)
+                storePassword = System.getenv("SIGNING_KEY_PASSWORD")
+                keyAlias = "release"
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
         }
     }
 
@@ -31,7 +35,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("own") ?: signingConfigs.getByName("debug")
         }
     }
 

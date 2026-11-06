@@ -1,6 +1,7 @@
 package com.justsomepren.gallery.ui
 
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,17 +68,24 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         val ok = runCatching {
-            context.contentResolver.openOutputStream(uri)!!.use { it.write(vm.prefs.exportAlbums().toByteArray()) }
+            context.contentResolver.openOutputStream(uri)!!.use { it.write(vm.prefs.exportAll().toByteArray()) }
         }.isSuccess
-        toast(context, if (ok) "Alba uložena" else "Uložení se nepovedlo")
+        toast(context, if (ok) "Záloha uložena" else "Uložení se nepovedlo")
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val count = runCatching {
+        val full = runCatching {
             val json = context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
-            vm.prefs.importAlbums(json)
+            vm.prefs.restore(json)
         }.getOrNull()
-        toast(context, if (count != null) "Načteno alb: $count" else "Soubor se nepodařilo načíst")
+        when (full) {
+            null -> toast(context, "Soubor se nepodařilo načíst")
+            false -> toast(context, "Alba načtena")
+            true -> {
+                toast(context, "Záloha načtena")
+                restartApp(context)
+            }
+        }
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Nastavení") }) }) { padding ->
@@ -127,10 +135,13 @@ fun SettingsScreen(vm: GalleryViewModel) {
             }
 
             HorizontalDivider()
-            Section("Moje alba")
-            Hint("Záloha vlastních alb do souboru, např. pro přenos na nový telefon.")
-            SettingsButton("Uložit alba do souboru") { exportLauncher.launch("galerie-alba.json") }
-            SettingsButton("Načíst alba ze souboru") { importLauncher.launch(arrayOf("application/json")) }
+            Section("Záloha")
+            Hint(
+                "Alba, události, účty, fronta i seznam odeslaných fotek se samy zálohují do Google účtu " +
+                    "(zhruba jednou denně) a po nové instalaci se vrátí. Před odinstalací je můžeš uložit i do souboru.",
+            )
+            SettingsButton("Uložit zálohu do souboru") { exportLauncher.launch("galerie-zaloha.json") }
+            SettingsButton("Načíst zálohu ze souboru") { importLauncher.launch(arrayOf("application/json", "*/*")) }
 
         }
     }
@@ -167,6 +178,13 @@ fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
 }
 
 fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+
+/** Starts the app again, so every screen and the upload worker read the restored data. */
+private fun restartApp(context: Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+    Runtime.getRuntime().exit(0)
+}
 
 @Composable
 fun Section(text: String) =

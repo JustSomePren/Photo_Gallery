@@ -14,7 +14,19 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Podpisový klíč ze secrets
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::Chybí secret SIGNING_KEY (viz README, Podpisový klíč)"
+            exit 1
+          fi
+          echo "$SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/klic.p12"
+          echo "SIGNING_KEY_FILE=$RUNNER_TEMP/klic.p12" >> "$GITHUB_ENV"
       - run: ./gradlew testDebugUnitTest assembleRelease
+        env:
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: galerie-apk

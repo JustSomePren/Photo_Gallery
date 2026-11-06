@@ -114,6 +114,22 @@ class Prefs(context: Context) {
         return imported.size
     }
 
+    /** Everything the app keeps, including which photos were already sent, so nothing goes twice. */
+    fun exportAll(): String = Backup.export(sp, listOf(sentFile))
+
+    /**
+     * Accepts a full backup or an older file with albums only.
+     * Returns true for a full backup; the app then has to start again to read it.
+     */
+    fun restore(json: String): Boolean {
+        if (json.trimStart().startsWith("[")) {
+            importAlbums(json)
+            return false
+        }
+        Backup.restore(json, sp, listOf(sentFile))
+        return true
+    }
+
     private fun changeRefs(id: String, change: (List<AlbumRef>) -> List<AlbumRef>) = albumList.update { list ->
         list.map { if (it.id == id) it.copy(refs = change(it.refs)) else it }
     }

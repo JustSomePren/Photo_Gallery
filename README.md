@@ -46,8 +46,39 @@ Změnu v Kalendáři Galerie zachytí hned, jinak při otevření a při odesíl
 
 ### Moje alba
 
-Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky.
-Na nový telefon je přeneseš přes *Nastavení → Uložit alba do souboru* a pak *Načíst alba ze souboru*.
+Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky i nový telefon (viz Záloha).
+
+## Podpisový klíč (jednou, před první instalací)
+
+Klíč není v repozitáři (je veřejný). Obě aplikace, Kalendář i Galerie, mají **stejný** klíč,
+díky tomu se navzájem poznají a nová verze se vždy nainstaluje přes starou.
+
+1. Na GitHubu otevři repozitář → **Settings** → **Secrets and variables** → **Actions**.
+2. **New repository secret**, název `SIGNING_KEY`, hodnota = celý obsah souboru `SIGNING_KEY.txt`.
+3. **New repository secret**, název `SIGNING_KEY_PASSWORD`, hodnota = obsah `SIGNING_KEY_PASSWORD.txt`.
+4. Totéž udělej v druhém repozitáři (Calendar i Photo_Gallery).
+5. V **Actions** spusť znovu poslední běh **Build APK** (bez klíče skončí chybou „Chybí secret SIGNING_KEY“).
+
+Soubor `podpisovy-klic.p12` a heslo si **schovej** (správce hesel nebo soukromý Disk).
+Bez nich nepůjde vydat novou verzi, která se nainstaluje přes starou, a Google záloha se nevrátí.
+Do repozitáře je nikdy nedávej.
+
+Vlastní sestavení s tímto klíčem: nastav proměnné `SIGNING_KEY_FILE` (cesta k `.p12`) a `SIGNING_KEY_PASSWORD`.
+Bez nich se APK podepíše vývojovým klíčem počítače a přes verzi z GitHubu se nenainstaluje.
+
+## Záloha a nová instalace
+
+Alba, události, Google účty, ruční cíle, fronta, nastavení i **seznam už odeslaných fotek**
+se samy zálohují do Google účtu a po nové instalaci se vrátí. Díky seznamu odeslaných se nic
+nepošle do Google Fotek podruhé.
+
+- Telefon musí mít zapnuté *Nastavení → Google → Zálohování*.
+- Záloha běží zhruba jednou denně (v noci při nabíjení na Wi-Fi), dnešní změny v ní ještě být nemusí.
+- Funguje jen se stejným podpisovým klíčem (viz výše).
+
+Před odinstalací pro jistotu: *Nastavení → Záloha → Uložit zálohu do souboru*, po instalaci
+*Načíst zálohu ze souboru* (aplikace se pak sama spustí znovu). Načíst jde i starší soubor jen s alby.
+Fotky samotné se neodinstalují, jsou v telefonu.
 
 ## Instalace na telefon (krok za krokem)
 
@@ -57,7 +88,7 @@ Na nový telefon je přeneseš přes *Nastavení → Uložit alba do souboru* a 
 4. Povol instalaci z neznámých zdrojů, když se telefon zeptá.
 5. Při prvním spuštění povol přístup k fotkám a videím.
 
-Nová verze se nainstaluje přes starou, alba a nastavení zůstanou (APK je vždy podepsané stejným klíčem `app/debug.keystore`).
+Nová verze se nainstaluje přes starou, alba a nastavení zůstanou (APK je vždy podepsané stejným klíčem, viz Podpisový klíč).
 
 Sestavení na počítači: `./gradlew assembleRelease` (potřebuje Android SDK).
 
@@ -100,7 +131,7 @@ Google vyžaduje, aby si aplikaci, která nahrává do Google Fotek, zaregistrov
    (osobní i společný, např. SharedXXO).
 5. *Credentials → Create credentials → OAuth client ID* → typ **Android**:
    - Package name: `com.justsomepren.gallery`
-   - SHA-1: `9A:F4:44:88:64:64:4E:C4:E8:AA:65:24:A9:59:BA:22:38:CC:E4:B7`
+   - SHA-1: `BF:C5:D1:98:01:55:77:D6:95:C5:7C:89:7E:39:10:0A:46:07:29:DE`
 6. V aplikaci: *Odesílání → Google účty → +* → vyber účet → potvrď.
 
 Pokud Google po týdnu chce přihlášení znovu (u projektů v testovacím režimu se to může stát),
