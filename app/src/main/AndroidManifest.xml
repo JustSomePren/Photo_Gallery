@@ -56,14 +56,6 @@
             android:authorities="com.justsomepren.gallery.link"
             android:exported="true" />
 
-        <receiver
-            android:name=".data.CalendarChangedReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.justsomepren.gallery.action.CALENDAR_CHANGED" />
-            </intent-filter>
-        </receiver>
-
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

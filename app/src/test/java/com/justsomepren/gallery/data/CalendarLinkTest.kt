@@ -68,6 +68,8 @@ class CalendarLinkTest {
         color = EVENT_COLORS[2],
     )
 
+    private val accounts = listOf("ja@gmail.com")
+
     @Before
     fun setUp() {
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
@@ -79,8 +81,8 @@ class CalendarLinkTest {
     fun syncReplacesOnlyVacationsFromTheCalendar() {
         val own = Event(name = "Vlastní", color = 0, startDay = day.toEpochDay(), endDay = day.toEpochDay())
         prefs.saveEvent(own)
-        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.toEvent()))
-        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.copy(title = "Řecko").toEvent()))
+        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.toEvent(accounts)))
+        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.copy(title = "Řecko").toEvent(accounts)))
 
         assertEquals(listOf("Vlastní", "Řecko"), prefs.events.value.map { it.name })
         // Survives a restart of the app
@@ -94,7 +96,7 @@ class CalendarLinkTest {
 
     @Test
     fun vacationSendsPhotosWithoutScreenshots() {
-        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.toEvent()))
+        prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.toEvent(accounts)))
         val media = listOf(
             photo(day.atTime(10, 0), 1),
             photo(day.atTime(11, 0), 2, folder = "Pictures/Screenshots/"),
@@ -103,6 +105,12 @@ class CalendarLinkTest {
 
         assertEquals(1, prefs.collectAuto(media))
         assertEquals(QueueItem.of(media[0], "ja@gmail.com", "Moře"), prefs.queue.value.single())
+    }
+
+    @Test
+    fun calendarCannotSendToAnAccountNotConnectedHere() {
+        val event = trip.copy(account = "cizi@gmail.com").toEvent(accounts)
+        assertEquals(false, event.autoSend)
     }
 
     @Test

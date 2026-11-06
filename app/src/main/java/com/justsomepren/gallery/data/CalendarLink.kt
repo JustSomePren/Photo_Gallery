@@ -1,6 +1,5 @@
 package com.justsomepren.gallery.data
 
-import android.content.BroadcastReceiver
 import android.content.ContentProvider
 import android.content.ContentUris
 import android.content.ContentValues
@@ -11,6 +10,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.util.Size
@@ -40,13 +40,14 @@ data class CalendarItem(
 
     fun covers(day: Long) = day in firstDay..lastDay
 
-    fun toEvent() = Event(
+    /** Sends only to an account the user connected here, whatever the calendar says. */
+    fun toEvent(accounts: List<String>) = Event(
         id = "calendar:$id:$begin",
         name = title,
         color = color,
         startDay = firstDay,
         endDay = lastDay,
-        autoSend = autoSend && account != null,
+        autoSend = autoSend && account in accounts,
         account = account,
         album = album,
         linkedId = id,
@@ -105,8 +106,20 @@ object CalendarLink {
     /** Brings the vacations into the events, so they show in the calendar and send automatically. */
     fun sync(context: Context, from: Long = today() - 400, to: Long = today() + 400): List<CalendarItem>? {
         val items = events(context, from, to) ?: return null
-        Prefs.get(context).syncLinked(from, to, items.filter { it.vacation }.map { it.toEvent() })
+        val prefs = Prefs.get(context)
+        prefs.syncLinked(from, to, items.filter { it.vacation }.map { it.toEvent(prefs.accounts.value) })
         return items
+    }
+
+    /** The Kalendář app says a vacation changed. */
+    fun onCalendarChanged(context: Context) {
+        val prefs = Prefs.get(context)
+        val before = prefs.events.value
+        sync(context)
+        if (prefs.events.value != before) {
+            runCatching { prefs.collectAuto(MediaRepository(context).loadAll()) }
+            UploadWorker.schedule(context)
+        }
     }
 
     fun openEvent(context: Context, id: Long, begin: Long?) {
@@ -170,6 +183,15 @@ class LinkProvider : ContentProvider() {
         return medianPlace(photos.filterIndexed { index, _ -> index % step == 0 }.take(20).mapNotNull(repo::location))
     }
 
+    /** Instead of an open broadcast, so only the Kalendář app can make the gallery read again. */
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        val context = context ?: return null
+        if (method == "calendar_changed" && CalendarLink.isCalendar(context, callingPackage)) {
+            thread { CalendarLink.onCalendarChanged(context) }
+        }
+        return null
+    }
+
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
         val context = context ?: return null
         if (!CalendarLink.isCalendar(context, callingPackage)) return null
@@ -190,24 +212,4 @@ class LinkProvider : ContentProvider() {
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
     override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?) = 0
     override fun delete(uri: Uri, selection: String?, args: Array<out String>?) = 0
-}
-
-/** The Kalendář app says a vacation changed; anyone may send it, it only makes the app read again. */
-class CalendarChangedReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val pending = goAsync()
-        thread {
-            try {
-                val prefs = Prefs.get(context)
-                val before = prefs.events.value
-                CalendarLink.sync(context)
-                if (prefs.events.value != before) {
-                    runCatching { prefs.collectAuto(MediaRepository(context).loadAll()) }
-                    UploadWorker.schedule(context)
-                }
-            } finally {
-                pending.finish()
-            }
-        }
-    }
 }

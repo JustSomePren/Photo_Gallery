@@ -23,6 +23,7 @@ import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.filterBy
 import com.justsomepren.gallery.data.formatRange
@@ -59,8 +60,12 @@ fun LinkedEventDialog(event: Event, onDismiss: () -> Unit) {
             Column {
                 Text(formatRange(event.startDay, event.endDay))
                 Text(
-                    if (event.autoSend) "Posílá do ${event.account}" + (event.album?.let { " · album $it" } ?: "")
-                    else "Fotky se neposílají",
+                    when {
+                        event.autoSend -> "Posílá do ${event.account}" + (event.album?.let { " · album $it" } ?: "")
+                        event.account != null && event.account !in Prefs.get(context).accounts.value ->
+                            "Účet ${event.account} není v Galerii přihlášený, fotky se neposílají"
+                        else -> "Fotky se neposílají"
+                    },
                 )
                 Hint("Dovolená z Kalendáře. Název, dny, album a účet změníš tam.")
             }
