@@ -309,7 +309,9 @@ private fun MediaGrid(
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val chosen by vm.prefs.gridColumns.collectAsStateWithLifecycle()
-    val columns = if (LocalSaver.current) (chosen + 1).coerceAtMost(7) else chosen
+    val saver = LocalSaver.current
+    fun columnsFor(chosen: Int) = if (saver) (chosen + 1).coerceAtMost(7) else chosen
+    val columns = columnsFor(chosen)
     val thumbPx = gridThumbPx(columns)
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
@@ -345,7 +347,10 @@ private fun MediaGrid(
             columns = GridCells.Fixed(columns),
             state = state,
             modifier = Modifier
-                .pinchToZoom { vm.prefs.setGridColumns(chosen - it) }
+                .pinchToZoom {
+                    vm.prefs.setGridColumns(chosen - it)
+                    columns.toFloat() / columnsFor(vm.prefs.gridColumns.value)
+                }
                 .dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(2.dp),

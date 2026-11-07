@@ -110,4 +110,53 @@ class ZoomWalkthroughTest {
         compose.waitForIdle()
         assertTrue(vm.stack.lastOrNull() is Screen.Viewer)
     }
+
+    private fun swipeUpAt(xFraction: Float) = compose.onRoot().performTouchInput {
+        val x = width * xFraction
+        down(Offset(x, height * 0.75f))
+        for (step in 1..20) {
+            moveTo(Offset(x, height * (0.75f - 0.02f * step)))
+            advanceEventTime(16)
+        }
+        up()
+    }
+
+    /** Dragging on empty space next to photos scrolls just like on the photos. */
+    @Test
+    fun emptySpaceScrollsGrid() {
+        val many = (0L until 300L).map { Fixtures.photo(it, Fixtures.today.minusDays(it / 3)) }
+        vm.loadMedia = { many }
+        vm.refresh()
+        compose.waitUntil(30_000) { idleMain(); vm.media.value == many }
+        compose.waitForIdle()
+        val state = vm.gridState(com.justsomepren.gallery.data.Source.All)
+        swipeUpAt(0.9f)
+        compose.waitForIdle()
+        assertTrue("grid did not move: ${state.firstVisibleItemIndex}/${state.firstVisibleItemScrollOffset}",
+            state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0)
+    }
+
+    @Test
+    fun emptySpaceScrollsCalendar() {
+        val many = (0L until 300L).map { Fixtures.photo(it, Fixtures.today.minusDays(it * 2)) }
+        vm.prefs.setCalendarView(true)
+        vm.loadMedia = { many }
+        vm.refresh()
+        compose.waitUntil(30_000) { idleMain(); vm.media.value == many }
+        compose.waitForIdle()
+        for (zoom in listOf(CalendarZoom.MONTH, CalendarZoom.DAYS, CalendarZoom.YEAR)) {
+            vm.prefs.setCalendarZoom(zoom)
+            compose.waitForIdle()
+            compose.runOnUiThread { kotlinx.coroutines.runBlocking { vm.calendarState.scrollToItem(0) } }
+            compose.waitForIdle()
+            for (x in listOf(0.05f, 0.3f, 0.95f)) {
+                compose.runOnUiThread { kotlinx.coroutines.runBlocking { vm.calendarState.scrollToItem(0) } }
+                compose.waitForIdle()
+                swipeUpAt(x)
+                compose.waitForIdle()
+                val state = vm.calendarState
+                assertTrue("calendar $zoom did not move at $x", state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0)
+            }
+        }
+    }
 }

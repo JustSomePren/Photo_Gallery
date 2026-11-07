@@ -120,7 +120,10 @@ fun CalendarView(
         if (index >= 0) state.scrollToItem(index + 1)
     }
 
-    LazyColumn(state = state, contentPadding = contentPadding, modifier = Modifier.pinchToZoom { zoomTo(zoom + it) }) {
+    LazyColumn(state = state, contentPadding = contentPadding, modifier = Modifier.pinchToZoom {
+        zoomTo(zoom + it)
+        1f
+    }) {
         item {
             header()
             ZoomChips(zoom) { zoomTo(it) }
@@ -223,7 +226,7 @@ private fun DayPhotos(
     val thumbPx = gridThumbPx(3)
     val date = day.toDate()
     val weekend = date.dayOfWeek.value >= 6
-    Row(Modifier.padding(vertical = 2.dp).height(120.dp)) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).height(120.dp)) {
         Column(
             Modifier
                 .width(52.dp)
