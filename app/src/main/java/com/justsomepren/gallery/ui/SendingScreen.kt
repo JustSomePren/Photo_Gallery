@@ -1,7 +1,6 @@
 package com.justsomepren.gallery.ui
 
 import android.Manifest
-import android.accounts.AccountManager
 import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -90,11 +89,9 @@ fun SendingScreen(vm: GalleryViewModel) {
 
     fun connect(email: String) = authorize(email, GoogleAuth.UPLOAD)
 
-    val chooseAccount = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)?.let(::connect)
-    }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        chooseAccount.launch(AccountManager.newChooseAccountIntent(null, null, arrayOf("com.google"), null, null, null, null))
+        // Google's own list of accounts: one tap picks the account
+        authorize(null, GoogleAuth.UPLOAD)
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Odesílání") }) }) { padding ->

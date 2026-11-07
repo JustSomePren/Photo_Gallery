@@ -7,7 +7,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material3.FilterChip
@@ -20,6 +19,7 @@ import com.justsomepren.gallery.data.mostSpecific
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -252,11 +252,27 @@ private fun DayPhotos(
             Text("${items.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             event?.let { Box(Modifier.padding(top = 4.dp).width(24.dp).height(4.dp).background(Color(it.color), RoundedCornerShape(2.dp))) }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            items(items, key = { it.id }) { item ->
-                Box(Modifier.fillMaxHeight().aspectRatio(1f).clickable { onPhoto(day, item) }) {
-                    Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
-                    if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+        // No sideways scrolling here: a slightly diagonal swipe would catch the row and stop the list.
+        // As many photos as fit; the last tile of a busy day opens the whole day.
+        BoxWithConstraints(Modifier.fillMaxHeight()) {
+            val fit = (maxWidth / maxHeight).toInt().coerceAtLeast(1)
+            val shown = if (items.size > fit) items.take(fit - 1) else items
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                shown.forEach { item ->
+                    Box(Modifier.fillMaxHeight().aspectRatio(1f).clickable { onPhoto(day, item) }) {
+                        Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
+                        if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                    }
+                }
+                if (items.size > shown.size) {
+                    Box(
+                        Modifier.fillMaxHeight().aspectRatio(1f)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clickable { onDay(day) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("+${items.size - shown.size}", style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
         }

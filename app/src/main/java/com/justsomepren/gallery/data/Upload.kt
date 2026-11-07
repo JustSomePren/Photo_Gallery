@@ -54,9 +54,13 @@ object GoogleAuth {
     /** Read what the user picks in Google Photos (Picker). */
     const val PICKER = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
 
-    fun request(email: String, scope: String = UPLOAD): AuthorizationRequest = AuthorizationRequest.builder()
-        .setRequestedScopes(listOf(Scope(scope)))
-        .setAccount(Account(email, "com.google"))
+    /**
+     * Without [email] Google shows its own account list, where one tap picks the account;
+     * the email is then asked for too, so the app knows which account it got.
+     */
+    fun request(email: String?, scope: String = UPLOAD): AuthorizationRequest = AuthorizationRequest.builder()
+        .setRequestedScopes(if (email == null) listOf(Scope(scope), Scope("email")) else listOf(Scope(scope)))
+        .apply { if (email != null) setAccount(Account(email, "com.google")) }
         .build()
 
     private val TRANSIENT = setOf(

@@ -20,23 +20,21 @@ import kotlinx.coroutines.tasks.await
 /**
  * Asks Google for access to an account, showing the consent screen when needed.
  * Returns a function (email, scope) that starts it; [onGranted] gets the email once allowed.
+ * With no email Google lets the user pick the account with one tap.
  */
 @Composable
-fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onError: (String) -> Unit): (String, String) -> Unit {
+fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onError: (String) -> Unit): (String?, String) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val granted by rememberUpdatedState(onGranted)
     val failed by rememberUpdatedState(onError)
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val email = vm.pendingAccount
         // Google puts the reason into the result also when its dialog ends without success
-        val login = runCatching {
-            Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data).accessToken
-        }
+        val login = runCatching { Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data) }
+        val email = vm.pendingAccount ?: login.getOrNull()?.toGoogleSignInAccount()?.email
         val error = login.exceptionOrNull()
         when {
-            email == null -> failed("Přihlášení se nepodařilo dokončit, zkus to prosím znovu.")
-            result.resultCode == Activity.RESULT_OK && login.getOrNull() != null -> granted(email)
+            result.resultCode == Activity.RESULT_OK && login.getOrNull()?.accessToken != null && email != null -> granted(email)
             error is ApiException -> failed(GoogleAuth.problem(error))
             else -> failed(
                 "Přihlášení neprošlo. Jestli jsi ho nezrušil sám, Google tuhle aplikaci nejspíš ještě nezná: " +
@@ -45,7 +43,7 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
         }
     }
     return remember {
-        { email: String, scopeUrl: String ->
+        { email: String?, scopeUrl: String ->
             vm.pendingAccount = email
             scope.launch {
                 try {
@@ -54,7 +52,8 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
                     if (result.hasResolution() && pending != null) {
                         consent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
                     } else {
-                        granted(email)
+                        val account = email ?: result.toGoogleSignInAccount()?.email
+                        if (account != null) granted(account) else failed("Google nevrátil účet, zkus to prosím znovu.")
                     }
                 } catch (e: Exception) {
                     failed(GoogleAuth.problem(e))
