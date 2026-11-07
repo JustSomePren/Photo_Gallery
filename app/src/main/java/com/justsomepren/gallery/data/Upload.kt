@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.BatteryManager
@@ -82,6 +83,9 @@ class UploadCancelled : Exception()
 
 /** The battery dropped below the threshold during a normal run; it continues on the charger. */
 class LowBattery : Exception()
+
+/** Mobile data was switched off during a normal run on a paid network; it continues on Wi-Fi. */
+class NoWifi : Exception()
 
 class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message") {
     /** Google said no for good; unlike login, timeouts or rate limits, retrying will not help. */
@@ -242,6 +246,14 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     /** "Odeslat hned" ignores the battery. */
     private val now get() = inputData.getBoolean(NOW, false)
     private val batteryStop get() = !now && lowBattery()
+    private val wifiStop get() = !now && !prefs.mobileData.value &&
+        applicationContext.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
+
+    /** Stops a normal run that may no longer go on: below the battery threshold or on paid data. */
+    private fun checkPause() {
+        if (batteryStop) throw LowBattery()
+        if (wifiStop) throw NoWifi()
+    }
 
     /** A photo hit a passing error this run and waits in the queue for the next one. */
     private var needsRetry = false
@@ -284,6 +296,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                         } catch (e: LowBattery) {
                             waitForCharger(applicationContext)
                             return Result.success()
+                        } catch (e: NoWifi) {
+                            waitForWifi(applicationContext)
+                            return Result.success()
                         }
                     }
                     done += chunk.size
@@ -323,12 +338,12 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private fun uploadEach(api: PhotosApi, account: String, batch: List<QueueItem>, uploads: MutableList<Pair<String, QueueItem>>) {
         var failuresInRow = 0
         for (queued in batch) {
-            if (batteryStop) throw LowBattery()
+            checkPause()
             val item = current(queued) ?: continue
             val token = try {
-                api.upload(item) { !isStopped && current(item) != null && !batteryStop }
+                api.upload(item) { !isStopped && current(item) != null && !batteryStop && !wifiStop }
             } catch (e: UploadCancelled) {
-                if (batteryStop) throw LowBattery()
+                checkPause()
                 null
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
@@ -436,6 +451,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private const val PERIODIC = "upload-periodic"
         private const val ONCE = "upload-once"
         private const val CHARGING = "upload-charging"
+        private const val WIFI = "upload-wifi"
         private val sending = Mutex()
 
         /**
@@ -465,6 +481,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 work.enqueueUniqueWork(ONCE, policy, once)
             }
             if (restart) work.cancelUniqueWork(CHARGING)
+        }
+
+        private fun waitForWifi(context: Context) {
+            val request = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints(mobileData = false)).build()
+            WorkManager.getInstance(context).enqueueUniqueWork(WIFI, ExistingWorkPolicy.KEEP, request)
         }
 
         private fun waitForCharger(context: Context) {

@@ -31,11 +31,12 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-xxhdpi")
 class Pass18WalkthroughTest {
-    private val loads = mutableMapOf<Uri, Int>()
+    // Pictures load on a background thread.
+    private val loads = java.util.concurrent.ConcurrentHashMap<Uri, Int>()
     private val setup = AppSetupRule { prefs ->
         prefs.addAccount("shared@gmail.com")
         ImageCache.clear()
-        ImageCache.fake = { uri -> loads[uri] = (loads[uri] ?: 0) + 1; fakePhoto(uri) }
+        ImageCache.fake = { uri -> loads.merge(uri, 1, Int::plus); fakePhoto(uri) }
         // The cache lives as long as the test JVM; start without pictures of earlier tests.
         ImageCache.forget(photos.map { it.uri })
     }
@@ -62,10 +63,10 @@ class Pass18WalkthroughTest {
     fun editedPhotoReloadsInGrid() {
         start()
         val uri = photos[1].uri
+        compose.waitUntil(10_000) { idleMain(); (loads[uri] ?: 0) > 0 }
         val before = loads[uri] ?: 0
-        assertTrue(before > 0)
         start(edited(photos[1].id))
-        assertTrue("grid kept the old picture of an edited photo", (loads[uri] ?: 0) > before)
+        compose.waitUntil(10_000) { idleMain(); (loads[uri] ?: 0) > before }
     }
 
     /** Control: the same in the open viewer (the user comes back from Google Photos' editor). */
@@ -74,9 +75,10 @@ class Pass18WalkthroughTest {
         start()
         vm.stack.add(Screen.Viewer(Source.All, photos[1].id)); compose.waitForIdle()
         val uri = photos[1].uri
+        compose.waitUntil(10_000) { idleMain(); (loads[uri] ?: 0) > 0 }
         val before = loads[uri] ?: 0
         start(edited(photos[1].id))
-        assertTrue("viewer kept the old picture of an edited photo", (loads[uri] ?: 0) > before)
+        compose.waitUntil(10_000) { idleMain(); (loads[uri] ?: 0) > before }
     }
 
     /**

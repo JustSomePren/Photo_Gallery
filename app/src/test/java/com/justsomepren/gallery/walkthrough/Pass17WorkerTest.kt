@@ -44,6 +44,7 @@ class Pass17WorkerTest {
 
     @Before
     fun setUp() {
+        onWifi(context)
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.filesDir, "sent.txt").delete()
         Prefs.reset()

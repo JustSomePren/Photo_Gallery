@@ -93,3 +93,17 @@ fun fakePhoto(uri: Uri): Bitmap {
     Canvas(bitmap).drawColor(Color.HSVToColor(floatArrayOf((id * 37 % 360).toFloat(), 0.4f, 0.9f)))
     return bitmap
 }
+
+/** Robolectric starts on mobile data; worker tests that are not about the network run on Wi-Fi. */
+@Suppress("DEPRECATION")
+fun onWifi(context: android.content.Context) {
+    val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+    val wifi = org.robolectric.shadows.ShadowNetworkInfo.newInstance(
+        android.net.NetworkInfo.DetailedState.CONNECTED,
+        android.net.ConnectivityManager.TYPE_WIFI,
+        0,
+        true,
+        android.net.NetworkInfo.State.CONNECTED,
+    )
+    org.robolectric.Shadows.shadowOf(cm).setActiveNetworkInfo(wifi)
+}

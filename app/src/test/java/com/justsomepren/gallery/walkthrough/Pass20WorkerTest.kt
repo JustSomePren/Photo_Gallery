@@ -46,6 +46,7 @@ class Pass20WorkerTest {
 
     @Before
     fun setUp() {
+        onWifi(context)
         runCatching { WorkManager.initialize(context, Configuration.Builder().build()) }
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.filesDir, "sent.txt").delete()
