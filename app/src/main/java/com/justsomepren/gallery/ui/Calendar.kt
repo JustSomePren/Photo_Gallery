@@ -4,10 +4,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material3.FilterChip
@@ -84,10 +86,12 @@ fun CalendarView(
     media: List<MediaItem>,
     events: List<Event>,
     zoom: Int,
+    columns: Int,
     state: LazyListState,
     contentPadding: PaddingValues,
     header: @Composable () -> Unit,
     onZoom: (Int) -> Unit,
+    onColumns: (Int) -> Unit,
     onDay: (Long) -> Unit,
     onPhoto: (Long, MediaItem) -> Unit,
     onNewEvent: (Long) -> Unit,
@@ -120,10 +124,36 @@ fun CalendarView(
         if (index >= 0) state.scrollToItem(index + 1)
     }
 
-    LazyColumn(state = state, contentPadding = contentPadding, modifier = Modifier.pinchToZoom {
-        zoomTo(zoom + it)
-        1f
-    }) {
+    // In days the pinch first makes the photos bigger or smaller, like in the gallery; past the smallest
+    // size it goes on to months.
+    fun pinch(step: Int): Float {
+        val wanted = columns - step
+        return when {
+            zoom == CalendarZoom.DAYS && wanted in 1..7 -> {
+                onColumns(wanted)
+                columns.toFloat() / wanted
+            }
+            zoom == CalendarZoom.DAYS && step > 0 -> 0f
+            zoom == CalendarZoom.YEAR && step < 0 -> 0f
+            else -> {
+                zoomTo(zoom + step)
+                1f
+            }
+        }
+    }
+    val scrolling = rememberRecentlyScrolled(state.isScrollInProgress)
+    val current by remember(rows) {
+        derivedStateOf {
+            when (val row = rows.getOrNull(state.firstVisibleItemIndex - 1)) {
+                is CalendarRow.Day -> row.day
+                null -> null
+                else -> row.month.atDay(1).toEpochDay()
+            }
+        }
+    }
+
+    Box {
+    LazyColumn(state = state, contentPadding = contentPadding, modifier = Modifier.pinchToZoom { pinch(it) }) {
         item {
             header()
             ZoomChips(zoom) { zoomTo(it) }
@@ -141,9 +171,21 @@ fun CalendarView(
                         MonthCalendar(row.month, byDay, inMonth, onDay, onNewEvent, onEvent)
                     }
                 }
-                is CalendarRow.Day -> DayPhotos(row.day, byDay[row.day].orEmpty(), events.mostSpecific(row.day), onDay, onPhoto, onNewEvent)
+                is CalendarRow.Day -> DayPhotos(row.day, byDay[row.day].orEmpty(), events.mostSpecific(row.day), columns, onDay, onPhoto, onNewEvent)
             }
         }
+    }
+    val day = current
+    if (zoom == CalendarZoom.DAYS && day != null && scrolling && state.firstVisibleItemIndex > 0) {
+        ContextPill(day, events.mostSpecific(day), Modifier.align(Alignment.TopCenter).padding(top = contentPadding.calculateTopPadding() + 8.dp))
+    }
+    if (rows.size > 20) {
+        FastScroller(
+            state.position(),
+            day?.let { it to events.mostSpecific(it) },
+            Modifier.padding(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding()),
+        )
+    }
     }
 }
 
@@ -212,24 +254,31 @@ private fun MonthTitle(month: YearMonth, events: List<Event>, onEvent: (Event) -
     }
 }
 
-/** One day: its date on the left, its photos in a row to scroll through and open. */
+/**
+ * One day in one row: its date on the left and as many photos as fit at the chosen size.
+ * When there are more, the last one shows how many are left and opens the whole day.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayPhotos(
     day: Long,
     items: List<MediaItem>,
     event: Event?,
+    columns: Int,
     onDay: (Long) -> Unit,
     onPhoto: (Long, MediaItem) -> Unit,
     onNewEvent: (Long) -> Unit,
 ) {
-    val thumbPx = gridThumbPx(3)
+    val labelWidth = 52.dp
+    val tile = (LocalConfiguration.current.screenWidthDp.dp - labelWidth - 2.dp * (columns - 1)) / columns
+    val thumbPx = gridThumbPx(columns)
     val date = day.toDate()
     val weekend = date.dayOfWeek.value >= 6
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).height(120.dp)) {
+    val hidden = items.size - columns
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp).height(tile), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Column(
             Modifier
-                .width(52.dp)
+                .width(labelWidth)
                 .fillMaxHeight()
                 .combinedClickable(onClick = { onDay(day) }, onLongClick = { onNewEvent(day) })
                 .padding(4.dp),
@@ -241,14 +290,17 @@ private fun DayPhotos(
                 color = if (weekend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text("${date.dayOfMonth}", style = MaterialTheme.typography.titleLarge, fontWeight = if (day == today()) FontWeight.Bold else null)
-            Text("${items.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             event?.let { Box(Modifier.padding(top = 4.dp).width(24.dp).height(4.dp).background(Color(it.color), RoundedCornerShape(2.dp))) }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            items(items, key = { it.id }) { item ->
-                Box(Modifier.fillMaxHeight().aspectRatio(1f).clickable { onPhoto(day, item) }) {
-                    Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
-                    if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+        items.take(columns).forEachIndexed { index, item ->
+            val more = index == columns - 1 && hidden > 0
+            Box(Modifier.size(tile).clickable { if (more) onDay(day) else onPhoto(day, item) }) {
+                Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
+                if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                if (more) {
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+                        Text("+$hidden", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
         }
