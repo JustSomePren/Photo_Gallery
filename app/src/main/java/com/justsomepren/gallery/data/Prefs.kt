@@ -181,10 +181,12 @@ class Prefs(context: Context) {
     @Synchronized
     fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
         val queued = queue.value.map { it.sentKey }.toSet()
+        // A photo listed as failed for an account counts as refused there too (it may have moved with its event).
+        val failedKeys = failed.value.map { it.sentKey }.toSet()
         val connected = accounts.value.toSet()
         val new = items.distinctBy { it.sentKey }.filter {
             it.account in connected && it.sentKey !in queued && !isSent(it) &&
-                (byHand || (it.sentKey !in refused && it.sentKey !in dismissed))
+                (byHand || (it.sentKey !in refused && it.sentKey !in failedKeys && it.sentKey !in dismissed))
         }
         if (new.isEmpty()) return 0
         if (byHand) {
@@ -218,9 +220,6 @@ class Prefs(context: Context) {
         queueList.update { list -> list.filter { followEvent(it) == it } }
         // Failed photos follow the event's current account and album, or go when it no longer wants them.
         failedList.update { list -> list.mapNotNull(::followEvent).distinctBy { it.sentKey } }
-        // A failed photo moved to another account stays refused there too.
-        refused += failed.value.map { it.sentKey }
-        sp.edit { putStringSet("refused", refused.toSet()) }
     }
 
     /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */

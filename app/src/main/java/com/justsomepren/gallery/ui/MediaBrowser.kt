@@ -64,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
@@ -81,6 +82,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -363,7 +366,7 @@ private fun MediaGrid(
         current?.takeIf { scrolling && state.firstVisibleItemIndex > 0 }?.let {
             ContextPill(it, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
         }
-        if (entries.size > 60) FastScroller(state, entries, current, Modifier.padding(bottom = bottomPadding))
+        if (entries.size > 60) FastScroller(state, current, Modifier.padding(bottom = bottomPadding))
     }
 }
 
@@ -429,56 +432,71 @@ private fun rememberRecentlyScrolled(state: LazyGridState): Boolean {
     return recentlyScrolled
 }
 
-/** Drag along the right edge to jump through months quickly. */
+/**
+ * A handle on the right edge to move through months quickly. Only the handle itself takes touches,
+ * so taps and normal swipes near the edge still reach the photos.
+ */
 @Composable
-private fun FastScroller(state: LazyGridState, entries: List<GridEntry>, current: GridEntry.Photo?, modifier: Modifier) {
+private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     var dragging by remember { mutableStateOf(false) }
+    var dragTop by remember { mutableFloatStateOf(0f) }
     var height by remember { mutableIntStateOf(1) }
+    val density = LocalDensity.current
     val thumbHeight = 48.dp
-    val thumbPx = with(LocalDensity.current) { thumbHeight.roundToPx() }
-    val exclusionPad = with(LocalDensity.current) { 70.dp.toPx() }
-    val progress by remember(entries) {
+    val thumbPx = with(density) { thumbHeight.roundToPx() }
+    val exclusionPad = with(density) { 70.dp.toPx() }
+    val track = (height - thumbPx).coerceAtLeast(1)
+    val progress by remember {
         derivedStateOf {
-            val range = entries.size - state.layoutInfo.visibleItemsInfo.size
+            val info = state.layoutInfo
+            val range = info.totalItemsCount - info.visibleItemsInfo.size
             (state.firstVisibleItemIndex.toFloat() / range.coerceAtLeast(1)).coerceIn(0f, 1f)
         }
     }
-    val thumbOffset: Density.() -> IntOffset = { IntOffset(0, (progress * (height - thumbPx)).roundToInt()) }
+    val top = if (dragging) dragTop else progress * track
+    val offset: Density.() -> IntOffset = { IntOffset(0, top.roundToInt()) }
 
-    fun jump(y: Float) {
-        val range = entries.size - state.layoutInfo.visibleItemsInfo.size
-        val index = ((y / height).coerceIn(0f, 1f) * range.coerceAtLeast(0)).roundToInt()
-        scope.launch { state.scrollToItem(index) }
+    fun moveTo(y: Float) {
+        dragTop = y.coerceIn(0f, track.toFloat())
+        val fraction = dragTop / track
+        val total = state.layoutInfo.totalItemsCount
+        val range = (total - state.layoutInfo.visibleItemsInfo.size).coerceAtLeast(0)
+        // At the bottom go to the very last photo, wherever the months fall.
+        val index = if (fraction >= 0.995f) total - 1 else (fraction * range).roundToInt()
+        scope.launch { state.scrollToItem(index.coerceAtLeast(0)) }
     }
 
     val recentlyScrolled = rememberRecentlyScrolled(state)
     if (!dragging && !recentlyScrolled) return
     Box(modifier.fillMaxSize().onSizeChanged { height = it.height }) {
         if (dragging && current != null) {
-            ContextPill(current, Modifier.align(Alignment.TopEnd).offset(thumbOffset).padding(end = 40.dp))
+            ContextPill(current, Modifier.align(Alignment.TopEnd).offset(offset).padding(end = 40.dp))
         }
         Box(
             Modifier
                 .align(Alignment.TopEnd)
-                .fillMaxHeight()
-                .width(32.dp)
-                .systemGestureExclusion { coordinates ->
-                    val top = progress * (height - thumbPx)
-                    Rect(0f, top - exclusionPad, coordinates.size.width.toFloat(), top + thumbPx + exclusionPad)
-                }
-                .pointerInput(entries) {
+                .offset(offset)
+                .size(32.dp, thumbHeight)
+                .semantics { contentDescription = "Rychlé posouvání" }
+                .systemGestureExclusion { Rect(0f, -exclusionPad, it.size.width.toFloat(), it.size.height + exclusionPad) }
+                .pointerInput(track) {
                     detectVerticalDragGestures(
-                        onDragStart = { dragging = true; jump(it.y) },
+                        onDragStart = {
+                            dragTop = progress * track
+                            dragging = true
+                        },
                         onDragEnd = { dragging = false },
                         onDragCancel = { dragging = false },
-                    ) { change, _ -> jump(change.position.y) }
+                    ) { change, dy ->
+                        change.consume()
+                        moveTo(dragTop + dy)
+                    }
                 },
         ) {
             Box(
                 Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(thumbOffset)
+                    .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)
                     .size(8.dp, thumbHeight)
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),

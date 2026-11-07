@@ -147,20 +147,21 @@ class Pass7WalkthroughTest {
         )
     }
 
-    /** Drag the fast scroller from the top to the bottom of the right edge: the grid ends at the oldest month. */
+    /** Drag the fast scroller handle all the way down: the grid ends at the oldest month. */
     @Test
     fun fastScrollerDragReachesOldestPhotos() {
         val many = (0L until 400L).map { Fixtures.photo(it, LocalDate.now().minusDays(it)) }
         start(many)
         compose.onRoot().performTouchInput { swipeUp(startY = bottom * 0.8f, endY = top + bottom * 0.3f) }
         compose.mainClock.advanceTimeBy(100)
-        compose.onRoot().performTouchInput {
-            down(Offset(right - 20f, top + 300f))
-            repeat(20) { i -> moveTo(Offset(right - 20f, top + 300f + (bottom - 500f) * (i + 1) / 20f)); advanceEventTime(30) }
+        val handle = compose.onNodeWithContentDescription("Rychlé posouvání")
+        handle.performTouchInput {
+            down(center)
+            repeat(20) { moveBy(Offset(0f, 150f)); advanceEventTime(30) }
         }
         compose.waitForIdle()
         shot("p7_05_fast_scroller_dragging")
-        compose.onRoot().performTouchInput { moveTo(Offset(right - 20f, bottom - 5f)); up() }
+        handle.performTouchInput { moveBy(Offset(0f, 3000f)); up() }
         compose.waitForIdle()
         shot("p7_06_fast_scroller_end")
         val state = vm.gridState(Source.All)
