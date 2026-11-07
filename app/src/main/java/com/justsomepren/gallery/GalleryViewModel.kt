@@ -148,11 +148,8 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         refreshJob = viewModelScope.launch {
             delay(delayMs)
             val local = withContext(Dispatchers.IO) { loadMedia() }
-            val items = if (prefs.showCloud.value) {
-                (local + withContext(Dispatchers.IO) { cloud.asMediaItems(local) }).sortedByDescending { it.date }
-            } else {
-                local
-            }
+            val fromCloud = if (prefs.showCloud.value) withContext(Dispatchers.IO) { cloud.asMediaItems(local) } else emptyList()
+            val items = if (fromCloud.isEmpty()) local else (local + fromCloud).sortedByDescending { it.date }
             val before = _media.value?.associateBy { it.id }.orEmpty()
             ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items

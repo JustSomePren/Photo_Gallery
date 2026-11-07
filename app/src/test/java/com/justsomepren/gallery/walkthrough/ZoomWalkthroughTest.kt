@@ -106,7 +106,7 @@ class ZoomWalkthroughTest {
         vm.prefs.setCalendarView(true)
         vm.prefs.setCalendarZoom(CalendarZoom.DAYS)
         start()
-        compose.onRoot().performTouchInput { click(Offset(width * 0.3f, height * 0.4f)) }
+        compose.onRoot().performTouchInput { down(Offset(width * 0.3f, height * 0.4f)); up() }
         compose.waitForIdle()
         assertTrue(vm.stack.lastOrNull() is Screen.Viewer)
     }

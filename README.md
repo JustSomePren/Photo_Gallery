@@ -50,6 +50,10 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
 - **Přesunout do složky** – mezi složkami v DCIM/ a Pictures/ nebo do nové složky.
+- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (2–7 sloupců).
+- **Kalendář fotek** – tři úrovně (tlačítka nahoře nebo roztažení prstů):
+  **Rok** (12 malých měsíců, klepnutím na měsíc se přiblíží), **Měsíc** (kalendář, rušné dny
+  ukazují 4 fotky) a **Dny** (každý den s fotkami jako řada velkých náhledů, klepnutím fotku otevřeš).
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.

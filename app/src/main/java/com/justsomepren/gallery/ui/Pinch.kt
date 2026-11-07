@@ -13,7 +13,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 private const val STEP = 1.3f
 
 /**
- * Two fingers apart = +1 (bigger), together = -1 (smaller), like in Google Photos.
+ * Two fingers apart = +1 (bigger), together = -1 (smaller), one step per pinch, like in Google Photos.
  * One finger keeps scrolling and selecting as before.
  */
 fun Modifier.pinchToZoom(onStep: (Int) -> Unit): Modifier = composed {
@@ -22,14 +22,16 @@ fun Modifier.pinchToZoom(onStep: (Int) -> Unit): Modifier = composed {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             var zoom = 1f
+            var stepped = false
             do {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 if (event.changes.count { it.pressed } >= 2) {
                     zoom *= event.calculateZoom()
                     event.changes.forEach { it.consume() }
-                    if (zoom > STEP || zoom < 1 / STEP) {
+                    // One step per pinch, so the size does not race past the wanted one.
+                    if (!stepped && (zoom > STEP || zoom < 1 / STEP)) {
                         step(if (zoom > 1) 1 else -1)
-                        zoom = 1f
+                        stepped = true
                     }
                 }
             } while (event.changes.any { it.pressed })
