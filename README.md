@@ -27,6 +27,12 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
   fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
   proč, např. „podle polohy · 5× víc fotek než obvykle“.
+- **Uvolnit místo** – *Nastavení → Uvolnit místo*. Smaže z telefonu jen fotky a videa, které tahle
+  aplikace nahrála do Google Fotek a které tam jsou ověřeně: Google při kontrole potvrdí, že položka
+  v účtu je se stejným názvem, a soubor v telefonu má stejnou velikost jako při nahrání. Bez internetu
+  se nic nesmaže, oblíbené lze ponechat a smazání ještě potvrdíš v dialogu Androidu. Fotky zálohované
+  samotnými Google Fotkami ověřit nejde (Google je jiným aplikacím neukáže) – na ty je Uvolnit místo
+  v Google Fotkách. Ověření potřebuje jednou povolit čtení „jen toho, co nahrála tahle aplikace“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).

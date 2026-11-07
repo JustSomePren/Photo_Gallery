@@ -45,10 +45,14 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 
 object GoogleAuth {
-    private const val SCOPE = "https://www.googleapis.com/auth/photoslibrary.appendonly"
+    /** Upload into the account; the only access the queue needs. */
+    const val UPLOAD = "https://www.googleapis.com/auth/photoslibrary.appendonly"
 
-    fun request(email: String): AuthorizationRequest = AuthorizationRequest.builder()
-        .setRequestedScopes(listOf(Scope(SCOPE)))
+    /** Read only what this app uploaded, to check a photo is in the cloud before freeing space. */
+    const val READ = "https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"
+
+    fun request(email: String, scope: String = UPLOAD): AuthorizationRequest = AuthorizationRequest.builder()
+        .setRequestedScopes(listOf(Scope(scope)))
         .setAccount(Account(email, "com.google"))
         .build()
 
@@ -63,9 +67,9 @@ object GoogleAuth {
      * A token without any dialog, or null when the user has to confirm the login again.
      * A passing network problem throws IOException, so the upload is simply retried later.
      */
-    suspend fun silentToken(context: Context, email: String): String? {
+    suspend fun silentToken(context: Context, email: String, scope: String = UPLOAD): String? {
         val result = try {
-            Identity.getAuthorizationClient(context).authorize(request(email)).await()
+            Identity.getAuthorizationClient(context).authorize(request(email, scope)).await()
         } catch (e: ApiException) {
             if (e.statusCode in TRANSIENT) throw IOException(e)
             return null
@@ -167,7 +171,8 @@ class PhotosApi(private val context: Context, private val token: String) {
     }
 
     /** Which upload tokens Google Photos accepted, and which hit a passing error worth another try. */
-    data class Created(val accepted: Set<String>, val tryLater: Set<String>)
+    /** Accepted upload tokens with the id Google Photos gave each item; passing errors worth another try. */
+    data class Created(val accepted: Map<String, String>, val tryLater: Set<String>)
 
     fun create(uploads: List<Pair<String, QueueItem>>, albumId: String?): Created {
         val body = JSONObject().put("newMediaItems", JSONArray(uploads.map { (token, item) ->
@@ -178,7 +183,8 @@ class PhotosApi(private val context: Context, private val token: String) {
             .optJSONArray("newMediaItemResults") ?: JSONArray()
         val all = (0 until results.length()).map { results.getJSONObject(it) }
         return Created(
-            accepted = all.filter { it.has("mediaItem") }.map { it.getString("uploadToken") }.toSet(),
+            accepted = all.filter { it.has("mediaItem") }
+                .associate { it.getString("uploadToken") to it.getJSONObject("mediaItem").optString("id") },
             tryLater = all.filter { it.optJSONObject("status")?.optInt("code") in PASSING_ERRORS }
                 .map { it.getString("uploadToken") }.toSet(),
         )
@@ -195,6 +201,18 @@ class PhotosApi(private val context: Context, private val token: String) {
         @VisibleForTesting
         var baseUrl = "https://photoslibrary.googleapis.com/v1"
     }
+
+    /** Which of these items (created by this app) are in the account now, with their file names. */
+    fun existing(ids: List<String>): Map<String, String> = ids.chunked(50).flatMap { chunk ->
+        val query = chunk.joinToString("&") { "mediaItemIds=" + java.net.URLEncoder.encode(it, "UTF-8") }
+        val connection = open("$baseUrl/mediaItems:batchGet?$query").apply {
+            requestMethod = "GET"
+            doOutput = false
+        }
+        val results = JSONObject(read(connection)).optJSONArray("mediaItemResults") ?: JSONArray()
+        (0 until results.length()).mapNotNull { results.getJSONObject(it).optJSONObject("mediaItem") }
+            .map { it.getString("id") to it.optString("filename") }
+    }.toMap()
 
     fun createAlbum(title: String): String {
         val body = JSONObject().put("album", JSONObject().put("title", title))
@@ -255,6 +273,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         if (wifiStop) throw NoWifi()
     }
 
+    /** Sizes of the camera files by key, recorded with each upload. */
+    private var fileSizes: Map<String, Long> = emptyMap()
+
     /** A photo hit a passing error this run and waits in the queue for the next one. */
     private var needsRetry = false
 
@@ -264,6 +285,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val media = MediaRepository(applicationContext).loadAll()
         // Last check of the owner's rule: only photos and videos taken with the camera ever leave the phone.
         val camera = media.filter { it.isCameraShot }.associateBy { it.key }
+        fileSizes = camera.mapValues { it.value.size }
         val unseen = prefs.queue.value.filter { it.key !in camera }
         // Remove them only when the app sees all photos; with limited access they just wait.
         if (seesAllPhotos() && media.isNotEmpty()) prefs.removeFromQueue(unseen)
@@ -396,7 +418,13 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val wanted = uploads.mapNotNull { (token, item) -> current(item)?.let { token to it } }
         for ((album, group) in wanted.groupBy { it.second.album }) {
             val created = createInAlbum(api, account, album, group)
-            prefs.markSent(group.filter { it.first in created.accepted }.map { it.second })
+            val sent = group.filter { it.first in created.accepted }
+            // The id and size let "Uvolnit místo" check later that exactly this file is in the cloud.
+            prefs.markSent(
+                sent.map { it.second },
+                ids = sent.associate { (token, item) -> item.sentKey to created.accepted.getValue(token) },
+                sizes = fileSizes,
+            )
             // Passing errors stay in the queue for the next run; only real refusals count as failed.
             prefs.markFailed(group.filter { it.first !in created.accepted && it.first !in created.tryLater }.map { it.second })
         }
@@ -420,7 +448,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.setAlbumId(account, album, null)
                 throw e
             }
-            PhotosApi.Created(emptySet(), emptySet())
+            PhotosApi.Created(emptyMap(), emptySet())
         }
     }
 

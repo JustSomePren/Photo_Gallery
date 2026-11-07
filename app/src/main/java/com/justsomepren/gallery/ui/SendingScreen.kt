@@ -5,7 +5,6 @@ import android.accounts.AccountManager
 import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,7 +45,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,14 +53,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.gms.auth.api.identity.Identity
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.formatRange
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,37 +75,18 @@ fun SendingScreen(vm: GalleryViewModel) {
     val threshold by prefs.threshold.collectAsStateWithLifecycle()
     var addingTarget by rememberSaveable { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
-    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val email = vm.pendingAccount ?: return@rememberLauncherForActivityResult
-        val token = runCatching {
-            Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data).accessToken
-        }.getOrNull()
-        if (result.resultCode == Activity.RESULT_OK && token != null) {
+    val authorize = rememberGoogleConsent(
+        vm,
+        onGranted = { email ->
             prefs.addAccount(email)
             UploadWorker.schedule(context, restart = true)
-        }
-    }
+            loginError = null
+        },
+        onError = { loginError = it },
+    )
 
-    fun connect(email: String) {
-        vm.pendingAccount = email
-        scope.launch {
-            try {
-                val result = Identity.getAuthorizationClient(context).authorize(GoogleAuth.request(email)).await()
-                val pending = result.pendingIntent
-                if (result.hasResolution() && pending != null) {
-                    consent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
-                } else {
-                    prefs.addAccount(email)
-                    UploadWorker.schedule(context, restart = true)
-                }
-                loginError = null
-            } catch (e: Exception) {
-                loginError = "Google přihlášení odmítl (${e.message}). Zkontroluj nastavení Google Cloud podle README."
-            }
-        }
-    }
+    fun connect(email: String) = authorize(email, GoogleAuth.UPLOAD)
 
     val chooseAccount = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)?.let(::connect)

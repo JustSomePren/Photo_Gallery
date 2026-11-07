@@ -23,13 +23,17 @@ import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.MediaRepository
+import com.justsomepren.gallery.data.PhotosApi
 import com.justsomepren.gallery.data.Places
 import com.justsomepren.gallery.data.SpotCache
 import com.justsomepren.gallery.data.Timeline
 import com.justsomepren.gallery.data.TripProposal
 import com.justsomepren.gallery.data.TripFinder
+import com.justsomepren.gallery.data.confirmedInCloud
 import com.justsomepren.gallery.data.day
+import com.justsomepren.gallery.data.freeUpCandidates
 import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
@@ -270,6 +274,66 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         val filled = SpotCache(app).fillFrom(timeline, loadMedia().filter { it.isCameraShot })
         findTrips()
         filled
+    }
+
+    /** Photos that can go from the phone because they are, checked just now, in Google Photos. */
+    data class FreeUp(
+        val photos: List<MediaItem>,
+        val bytes: Long,
+        val perAccount: Map<String, Int>,
+        /** Accounts that first have to allow the check. */
+        val needsLogin: List<String>,
+        /** Sent, but not provably the same file (changed since, or sent by an older version). */
+        val unsure: Int,
+    )
+
+    val freeUp = MutableStateFlow<FreeUp?>(null)
+    val freeUpChecking = MutableStateFlow(false)
+    val freeUpError = MutableStateFlow<String?>(null)
+
+    /**
+     * Only photos this app uploaded qualify: same file size as when sent, and Google confirms right now
+     * that the item is still in the account under the same file name. Anything unsure stays on the phone.
+     */
+    fun checkFreeUp(keepFavorites: Boolean) {
+        if (freeUpChecking.value) return
+        freeUpChecking.value = true
+        freeUpError.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>()
+                val camera = loadMedia().filter { it.isCameraShot && !(keepFavorites && it.isFavorite) }
+                val candidates = freeUpCandidates(camera, prefs, keepFavorites)
+                val verified = mutableListOf<Pair<MediaItem, String>>()
+                val needsLogin = mutableListOf<String>()
+                for ((account, group) in candidates.groupBy { it.second.account }) {
+                    val token = GoogleAuth.silentToken(app, account, GoogleAuth.READ)
+                    if (token == null) {
+                        needsLogin += account
+                        continue
+                    }
+                    val there = PhotosApi(app, token).existing(group.map { it.second.mediaItemId })
+                    verified += confirmedInCloud(group, there).map { it to account }
+                }
+                val photos = verified.map { it.first }.distinctBy { it.id }
+                freeUp.value = FreeUp(
+                    photos = photos,
+                    bytes = photos.sumOf { it.size },
+                    perAccount = verified.groupingBy { it.second }.eachCount(),
+                    needsLogin = needsLogin,
+                    unsure = camera.count { prefs.wasSent(it.key) } - candidates.map { it.first.id }.distinct().size,
+                )
+            } catch (e: java.io.IOException) {
+                freeUpError.value = "Ověření u Googlu se nepovedlo (${e.message?.take(80)}). Bez internetu se nic nesmaže."
+            } finally {
+                freeUpChecking.value = false
+            }
+        }
+    }
+
+    fun onFreed() {
+        freeUp.value = null
+        refresh()
     }
 
     /** Confirmed trips become events, and if wanted albums in the app (links only, nothing is uploaded). */

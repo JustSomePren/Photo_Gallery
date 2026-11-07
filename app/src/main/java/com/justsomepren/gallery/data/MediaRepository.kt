@@ -77,7 +77,7 @@ class MediaRepository(private val context: Context) {
                     uri = ContentUris.withAppendedId(collection, id),
                     mime = c.getString(1) ?: if (isVideo) "video/*" else "image/*",
                     isVideo = isVideo,
-                    date = if (taken > 0) taken else c.getLong(3) * 1000,
+                    date = bestDate(taken, c.getString(7).orEmpty(), c.getString(11).orEmpty(), c.getLong(3), c.getLong(12)),
                     dateTaken = taken,
                     bucketId = c.getLong(4),
                     bucketName = c.getString(5) ?: "Bez názvu",
@@ -164,3 +164,43 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
         }
         is Source.Period -> filter { it.day in source.start..source.end }
     }
+
+/**
+ * The capture date for camera photos. Other files (WhatsApp, downloads) often have none, or one set when
+ * they arrived on this phone; a date in their name is more reliable then.
+ */
+internal fun bestDate(taken: Long, name: String, relativePath: String, addedSeconds: Long, modifiedSeconds: Long): Long {
+    val camera = relativePath.startsWith("DCIM/Camera/", ignoreCase = true)
+    val fromName = if (camera) null else dateFromName(name)
+    return when {
+        taken > 0 && (fromName == null || kotlin.math.abs(fromName - taken) < 86_400_000L) -> taken
+        fromName != null -> fromName
+        else -> fallbackDate(name, addedSeconds, modifiedSeconds)
+    }
+}
+
+/**
+ * For files without a capture date (WhatsApp, downloads): the date in the file name, else the older of
+ * modified and added. "Added" alone would put a whole history on the day the phone was set up.
+ */
+internal fun fallbackDate(name: String, addedSeconds: Long, modifiedSeconds: Long): Long =
+    dateFromName(name) ?: listOf(addedSeconds, modifiedSeconds).filter { it > 0 }.minOrNull()?.times(1000) ?: 0
+
+private val datePattern = Regex(
+    """(?<!\d)((?:19|20)\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])""" +
+        """(?:[-_. ]?([01]\d|2[0-3])[-_.]?([0-5]\d)[-_.]?([0-5]\d))?""",
+)
+
+/** "IMG-20230514-WA0003.jpg", "Screenshot_20230514-101010.png", "PXL_20230514_101010123.jpg" → that moment. */
+internal fun dateFromName(name: String): Long? {
+    val m = datePattern.find(name) ?: return null
+    val (y, mo, d, h, mi, se) = m.destructured
+    val time = runCatching {
+        java.time.LocalDateTime.of(
+            y.toInt(), mo.toInt(), d.toInt(),
+            h.toIntOrNull() ?: 12, mi.toIntOrNull() ?: 0, se.toIntOrNull() ?: 0,
+        ).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }.getOrNull() ?: return null
+    // A number that only looks like a date must not move a photo into the future.
+    return time.takeIf { it <= System.currentTimeMillis() + 86_400_000L }
+}

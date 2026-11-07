@@ -128,6 +128,8 @@ class Pass24WorkerTest {
         assertEquals(null, send(items))
         assertEquals(listOf("PXL_1.jpg"), created)
         assertTrue(prefs.isSent(items[0]))
+        // The id Google gave is kept, for checking later before freeing space.
+        assertEquals("m", prefs.cloudCopies(items[0].key).single().mediaItemId)
         assertEquals("passing error waits for the next run", listOf("PXL_2.jpg"), prefs.queue.value.map { it.name })
         assertEquals("only the refusal counts as failed", listOf("PXL_3.jpg"), prefs.failed.value.map { it.name })
 

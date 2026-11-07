@@ -21,6 +21,9 @@ data class UploadTarget(val name: String, val packageName: String, val activityN
     val appId get() = "$packageName/$activityName"
 }
 
+/** A photo this app put into Google Photos: the account, the item id there and the file size then. */
+data class CloudCopy(val account: String, val mediaItemId: String, val size: Long)
+
 /** A photo waiting to be uploaded to a Google account, optionally into an album. */
 data class QueueItem(
     val key: String,
@@ -47,7 +50,13 @@ class Prefs(context: Context) {
 
     /** An append-only file, so marking photos as sent stays cheap. */
     private val sentFile = File(context.filesDir, "sent.txt")
-    private val sent = sentFile.takeIf { it.exists() }?.readLines()?.toMutableSet() ?: mutableSetOf()
+    private val sentLines = sentFile.takeIf { it.exists() }?.readLines().orEmpty().map { it.split('\t') }
+    private val sent = sentLines.map { it[0] }.toMutableSet()
+
+    /** Where each sent photo is in Google Photos: account|key → item id and file size at upload. */
+    private val cloud = sentLines.filter { it.size >= 3 }
+        .associate { it[0] to CloudCopy(it[0].substringBefore('|'), it[1], it[2].toLongOrNull() ?: -1) }
+        .toMutableMap()
 
     private val albumList = Stored("albums", ::albumToJson, ::albumFromJson)
     private val targetList = Stored("targets", ::targetToJson, ::targetFromJson)
@@ -283,12 +292,25 @@ class Prefs(context: Context) {
     }
 
     @Synchronized
-    fun markSent(items: List<QueueItem>) {
+    fun markSent(items: List<QueueItem>, ids: Map<String, String> = emptyMap(), sizes: Map<String, Long> = emptyMap()) {
         val keys = items.map { it.sentKey }
         sent += keys
-        sentFile.appendText(keys.joinToString("") { "$it\n" })
+        val lines = items.joinToString("") { item ->
+            val id = ids[item.sentKey]
+            if (id.isNullOrEmpty()) "${item.sentKey}\n" else {
+                val size = sizes[item.key] ?: -1
+                cloud[item.sentKey] = CloudCopy(item.account, id, size)
+                "${item.sentKey}\t$id\t$size\n"
+            }
+        }
+        sentFile.appendText(lines)
         removeFromQueue(items)
     }
+
+    fun wasSent(key: String) = accounts.value.any { "$it|$key" in sent }
+
+    /** Copies of this photo the app put into Google Photos, in any account. */
+    fun cloudCopies(key: String): List<CloudCopy> = accounts.value.mapNotNull { cloud["$it|$key"] }
 
     @Synchronized
     fun markFailed(items: List<QueueItem>) {

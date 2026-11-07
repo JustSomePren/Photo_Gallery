@@ -1,6 +1,9 @@
 package com.justsomepren.gallery.ui
 
 import android.content.Context
+import androidx.activity.result.IntentSenderRequest
+import android.text.format.Formatter
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
@@ -58,6 +62,23 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val trips by vm.prefs.trips.collectAsStateWithLifecycle()
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
+    var keepFavorites by rememberSaveable { mutableStateOf(true) }
+    var deleting by rememberSaveable { mutableStateOf(0L) }
+    val freeUp by vm.freeUp.collectAsStateWithLifecycle()
+    val freeUpChecking by vm.freeUpChecking.collectAsStateWithLifecycle()
+    val freeUpError by vm.freeUpError.collectAsStateWithLifecycle()
+    val allowCheck = rememberGoogleConsent(
+        vm,
+        onGranted = { vm.checkFreeUp(keepFavorites) },
+        onError = { toast(context, it) },
+    )
+    // Android itself asks to confirm the deletion.
+    val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            toast(context, "Uvolněno ${Formatter.formatShortFileSize(context, deleting)}")
+            vm.onFreed()
+        }
+    }
     val scope = rememberCoroutineScope()
     val timelineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -134,6 +155,47 @@ fun SettingsScreen(vm: GalleryViewModel) {
                     "(Nastavení → Poloha → Časová osa → Exportovat) a načti ji sem. Poloha se doplní podle času fotky."
             )
             SettingsButton("Načíst Časovou osu (Timeline.json)") { timelineLauncher.launch(arrayOf("application/json", "*/*")) }
+
+            HorizontalDivider()
+            Section("Uvolnit místo")
+            Hint(
+                "Smaže z telefonu jen fotky a videa, které tahle aplikace nahrála do Google Fotek a které tam " +
+                    "teď ověřeně jsou: Google potvrdí, že tam položka je, se stejným názvem, a soubor v telefonu se " +
+                    "od nahrání nezměnil. Potřebuje internet. Fotky zálohované samotnými Google Fotkami ověřit " +
+                    "nejde – na ty použij Uvolnit místo přímo v Google Fotkách."
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ponechat oblíbené", Modifier.weight(1f))
+                Switch(keepFavorites, onCheckedChange = { keepFavorites = it })
+            }
+            if (freeUpChecking) {
+                Text("Ověřuji u Googlu…")
+            } else {
+                SettingsButton("Zkontrolovat, co je bezpečně v cloudu") { vm.checkFreeUp(keepFavorites) }
+            }
+            freeUpError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            freeUp?.let { result ->
+                Text(
+                    "${result.photos.size} fotek a videí (${Formatter.formatShortFileSize(context, result.bytes)}) " +
+                        "je ověřeně v Google Fotkách",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                result.perAccount.forEach { (account, count) -> Hint("$account: $count") }
+                if (result.unsure > 0) {
+                    Hint("${result.unsure} odeslaných nejde ověřit (soubor se od nahrání změnil) – zůstanou v telefonu.")
+                }
+                result.needsLogin.forEach { account ->
+                    SettingsButton("Povolit ověření pro $account") { allowCheck(account, GoogleAuth.READ) }
+                }
+                if (result.photos.isNotEmpty()) {
+                    SettingsButton("Smazat ${minOf(result.photos.size, GooglePhotos.MAX_ITEMS)} z telefonu") {
+                        val batch = result.photos.take(GooglePhotos.MAX_ITEMS)
+                        val request = MediaStore.createDeleteRequest(context.contentResolver, batch.map { it.uri })
+                        deleting = batch.sumOf { it.size }
+                        deleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                    }
+                }
+            }
 
             HorizontalDivider()
             Section("Baterie")
