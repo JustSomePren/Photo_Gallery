@@ -97,7 +97,7 @@ object GoogleAuth {
     private fun problemByCode(e: Throwable): String = when ((e as? ApiException)?.statusCode) {
         CommonStatusCodes.DEVELOPER_ERROR ->
             "Google tuhle aplikaci nezná. Zkontroluj v Google Cloud balíček a SHA-1 klienta (README, krok 5)."
-        CommonStatusCodes.SERVICE_MISSING, CommonStatusCodes.SERVICE_DISABLED, CommonStatusCodes.SERVICE_VERSION_UPDATE_REQUIRED ->
+        ConnectionResult.SERVICE_MISSING, ConnectionResult.SERVICE_DISABLED, ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED ->
             "Google Play Services na telefonu chybí nebo je zastaralé – aktualizuj je v Play Store a zkus to znovu."
         CommonStatusCodes.INVALID_ACCOUNT ->
             "Tenhle účet už v telefonu není. Přidej ho v Nastavení telefonu (Hesla a účty → Google) a zkus to znovu."

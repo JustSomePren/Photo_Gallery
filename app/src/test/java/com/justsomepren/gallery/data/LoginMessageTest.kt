@@ -1,5 +1,6 @@
 package com.justsomepren.gallery.data
 
+import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
@@ -34,8 +35,8 @@ class LoginMessageTest {
 
     @Test
     fun playServicesProblemsPointToTheStore() {
-        assertTrue(message(CommonStatusCodes.SERVICE_VERSION_UPDATE_REQUIRED).contains("Play Store"))
-        assertTrue(message(CommonStatusCodes.SERVICE_MISSING).contains("Play Store"))
+        assertTrue(message(ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED).contains("Play Store"))
+        assertTrue(message(ConnectionResult.SERVICE_MISSING).contains("Play Store"))
     }
 
     @Test
