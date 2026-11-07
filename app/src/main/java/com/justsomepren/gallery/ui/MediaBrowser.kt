@@ -313,7 +313,9 @@ private fun MediaGrid(
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val chosen by vm.prefs.gridColumns.collectAsStateWithLifecycle()
-    val columns = if (LocalSaver.current) (chosen + 1).coerceAtMost(7) else chosen
+    val saver = LocalSaver.current
+    fun columnsFor(chosen: Int) = if (saver) (chosen + 1).coerceAtMost(7) else chosen
+    val columns = columnsFor(chosen)
     val thumbPx = gridThumbPx(columns)
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
@@ -333,7 +335,7 @@ private fun MediaGrid(
     }
     // Grid position 0 is the header, so entry i sits at position i + 1.
     val current by remember(entries) { derivedStateOf { entries.photoAt(state.firstVisibleItemIndex - 1) } }
-    val scrolling = rememberRecentlyScrolled(state)
+    val scrolling = rememberRecentlyScrolled(state.isScrollInProgress)
 
     // Coming back from the viewer: make sure the last viewed photo is on screen.
     LaunchedEffect(Unit) {
@@ -349,7 +351,10 @@ private fun MediaGrid(
             columns = GridCells.Fixed(columns),
             state = state,
             modifier = Modifier
-                .pinchToZoom { vm.prefs.setGridColumns(chosen - it) }
+                .pinchToZoom {
+                    vm.prefs.setGridColumns(chosen - it)
+                    columns.toFloat() / columnsFor(vm.prefs.gridColumns.value)
+                }
                 .dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -410,9 +415,11 @@ private fun MediaGrid(
             }
         }
         current?.takeIf { scrolling && state.firstVisibleItemIndex > 0 }?.let {
-            ContextPill(it, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+            ContextPill(it.item.day, it.event, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
         }
-        if (entries.size > 60) FastScroller(state, current, Modifier.padding(bottom = bottomPadding))
+        if (entries.size > 60) {
+            FastScroller(state.position(), current?.let { it.item.day to it.event }, Modifier.padding(bottom = bottomPadding))
+        }
     }
 }
 
@@ -513,7 +520,7 @@ private fun EventRow(event: Event, onClick: () -> Unit) {
 
 /** "čt 12. 11. 2026 · ● Dovča Praha" floating over the grid. */
 @Composable
-private fun ContextPill(photo: GridEntry.Photo, modifier: Modifier = Modifier) {
+internal fun ContextPill(day: Long, event: Event?, modifier: Modifier = Modifier) {
     Row(
         modifier
             .background(MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f), RoundedCornerShape(16.dp))
@@ -521,8 +528,8 @@ private fun ContextPill(photo: GridEntry.Photo, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(formatWeekday(photo.item.day), color = MaterialTheme.colorScheme.inverseOnSurface)
-        photo.event?.let {
+        Text(formatWeekday(day), color = MaterialTheme.colorScheme.inverseOnSurface)
+        event?.let {
             Box(Modifier.size(10.dp).background(Color(it.color), CircleShape))
             Text(it.name, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -531,10 +538,10 @@ private fun ContextPill(photo: GridEntry.Photo, modifier: Modifier = Modifier) {
 
 /** True while the list scrolls and a moment after, so labels do not flicker away. */
 @Composable
-private fun rememberRecentlyScrolled(state: LazyGridState): Boolean {
+internal fun rememberRecentlyScrolled(isScrolling: Boolean): Boolean {
     var recentlyScrolled by remember { mutableStateOf(false) }
-    LaunchedEffect(state.isScrollInProgress) {
-        if (state.isScrollInProgress) {
+    LaunchedEffect(isScrolling) {
+        if (isScrolling) {
             recentlyScrolled = true
         } else {
             delay(1500)
@@ -548,8 +555,27 @@ private fun rememberRecentlyScrolled(state: LazyGridState): Boolean {
  * A handle on the right edge to move through months quickly. Only the handle itself takes touches,
  * so taps and normal swipes near the edge still reach the photos.
  */
+/** What the fast scroller needs to know from a grid or a list. */
+internal class ScrollPosition(
+    val first: () -> Int,
+    val total: () -> Int,
+    val visible: () -> Int,
+    val scrolling: () -> Boolean,
+    val scrollTo: suspend (Int) -> Unit,
+)
+
+internal fun LazyGridState.position() = ScrollPosition(
+    { firstVisibleItemIndex }, { layoutInfo.totalItemsCount }, { layoutInfo.visibleItemsInfo.size },
+    { isScrollInProgress }, { scrollToItem(it) },
+)
+
+internal fun androidx.compose.foundation.lazy.LazyListState.position() = ScrollPosition(
+    { firstVisibleItemIndex }, { layoutInfo.totalItemsCount }, { layoutInfo.visibleItemsInfo.size },
+    { isScrollInProgress }, { scrollToItem(it) },
+)
+
 @Composable
-private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifier: Modifier) {
+internal fun FastScroller(state: ScrollPosition, current: Pair<Long, Event?>?, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     var dragging by remember { mutableStateOf(false) }
     var dragTop by remember { mutableFloatStateOf(0f) }
@@ -561,9 +587,8 @@ private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifi
     val track = (height - thumbPx).coerceAtLeast(1)
     val progress by remember(state) {
         derivedStateOf {
-            val info = state.layoutInfo
-            val range = info.totalItemsCount - info.visibleItemsInfo.size
-            (state.firstVisibleItemIndex.toFloat() / range.coerceAtLeast(1)).coerceIn(0f, 1f)
+            val range = state.total() - state.visible()
+            (state.first().toFloat() / range.coerceAtLeast(1)).coerceIn(0f, 1f)
         }
     }
     val top = if (dragging) dragTop else progress * track
@@ -572,18 +597,18 @@ private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifi
     fun moveTo(y: Float) {
         dragTop = y.coerceIn(0f, track.toFloat())
         val fraction = dragTop / track
-        val total = state.layoutInfo.totalItemsCount
-        val range = (total - state.layoutInfo.visibleItemsInfo.size).coerceAtLeast(0)
+        val total = state.total()
+        val range = (total - state.visible()).coerceAtLeast(0)
         // At the bottom go to the very last photo, wherever the months fall.
         val index = if (fraction >= 0.995f) total - 1 else (fraction * range).roundToInt()
-        scope.launch { state.scrollToItem(index.coerceAtLeast(0)) }
+        scope.launch { state.scrollTo(index.coerceAtLeast(0)) }
     }
 
-    val recentlyScrolled = rememberRecentlyScrolled(state)
+    val recentlyScrolled = rememberRecentlyScrolled(state.scrolling())
     if (!dragging && !recentlyScrolled) return
     Box(modifier.fillMaxSize().onSizeChanged { height = it.height }) {
         if (dragging && current != null) {
-            ContextPill(current, Modifier.align(Alignment.TopEnd).offset(offset).padding(end = 40.dp))
+            ContextPill(current.first, current.second, Modifier.align(Alignment.TopEnd).offset(offset).padding(end = 40.dp))
         }
         Box(
             Modifier
