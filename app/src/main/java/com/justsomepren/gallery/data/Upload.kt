@@ -202,7 +202,10 @@ class PhotosApi(private val context: Context, private val token: String) {
         var baseUrl = "https://photoslibrary.googleapis.com/v1"
     }
 
-    /** Which of these items (created by this app) are in the account now, with their file names. */
+    /**
+     * Which of these items (created by this app) are in the account now, with their file names.
+     * A video counts only once Google has finished processing it.
+     */
     fun existing(ids: List<String>): Map<String, String> = ids.chunked(50).flatMap { chunk ->
         val query = chunk.joinToString("&") { "mediaItemIds=" + java.net.URLEncoder.encode(it, "UTF-8") }
         val connection = open("$baseUrl/mediaItems:batchGet?$query").apply {
@@ -211,6 +214,10 @@ class PhotosApi(private val context: Context, private val token: String) {
         }
         val results = JSONObject(read(connection)).optJSONArray("mediaItemResults") ?: JSONArray()
         (0 until results.length()).mapNotNull { results.getJSONObject(it).optJSONObject("mediaItem") }
+            .filter { item ->
+                val video = item.optJSONObject("mediaMetadata")?.optJSONObject("video")
+                video == null || video.optString("status") == "READY"
+            }
             .map { it.getString("id") to it.optString("filename") }
     }.toMap()
 

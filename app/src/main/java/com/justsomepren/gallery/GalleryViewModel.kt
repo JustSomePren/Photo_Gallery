@@ -331,6 +331,18 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         }
     }
 
+    /**
+     * Asks Google again, right before deleting, which of these photos are in the cloud now.
+     * Only those may go; throws when Google cannot be asked (then nothing is deleted).
+     */
+    suspend fun confirmNow(photos: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        freeUpCandidates(photos, prefs, keepFavorites = false).groupBy { it.second.account }.flatMap { (account, group) ->
+            val token = GoogleAuth.silentToken(app, account, GoogleAuth.READ) ?: return@flatMap emptyList()
+            confirmedInCloud(group, PhotosApi(app, token).existing(group.map { it.second.mediaItemId }))
+        }
+    }
+
     fun onFreed() {
         freeUp.value = null
         refresh()

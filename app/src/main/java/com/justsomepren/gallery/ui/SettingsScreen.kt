@@ -1,9 +1,7 @@
 package com.justsomepren.gallery.ui
 
 import android.content.Context
-import androidx.activity.result.IntentSenderRequest
 import android.text.format.Formatter
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,7 +61,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
     var keepFavorites by rememberSaveable { mutableStateOf(true) }
-    var deleting by rememberSaveable { mutableStateOf(0L) }
+    var choosingFreeUp by rememberSaveable { mutableStateOf(false) }
     val freeUp by vm.freeUp.collectAsStateWithLifecycle()
     val freeUpChecking by vm.freeUpChecking.collectAsStateWithLifecycle()
     val freeUpError by vm.freeUpError.collectAsStateWithLifecycle()
@@ -72,13 +70,6 @@ fun SettingsScreen(vm: GalleryViewModel) {
         onGranted = { vm.checkFreeUp(keepFavorites) },
         onError = { toast(context, it) },
     )
-    // Android itself asks to confirm the deletion.
-    val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            toast(context, "Uvolněno ${Formatter.formatShortFileSize(context, deleting)}")
-            vm.onFreed()
-        }
-    }
     val scope = rememberCoroutineScope()
     val timelineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -188,11 +179,9 @@ fun SettingsScreen(vm: GalleryViewModel) {
                     SettingsButton("Povolit ověření pro $account") { allowCheck(account, GoogleAuth.READ) }
                 }
                 if (result.photos.isNotEmpty()) {
-                    SettingsButton("Smazat ${minOf(result.photos.size, GooglePhotos.MAX_ITEMS)} z telefonu") {
-                        val batch = result.photos.take(GooglePhotos.MAX_ITEMS)
-                        val request = MediaStore.createDeleteRequest(context.contentResolver, batch.map { it.uri })
-                        deleting = batch.sumOf { it.size }
-                        deleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                    SettingsButton("Vybrat, co smazat z telefonu") {
+                        vm.selection("free-up").value = result.photos.map { it.id }.toSet()
+                        choosingFreeUp = true
                     }
                 }
             }
@@ -243,6 +232,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
 
 
     if (showingTrips) TripsDialog(vm) { showingTrips = false }
+    if (choosingFreeUp) freeUp?.let { FreeUpDialog(it.photos, vm) { choosingFreeUp = false } }
 }
 
 @Composable
@@ -275,7 +265,10 @@ fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     }
 }
 
-fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+/** Shows a short message; safe to call from any thread. */
+fun toast(context: Context, text: String) {
+    android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+}
 
 @Composable
 fun Section(text: String) =

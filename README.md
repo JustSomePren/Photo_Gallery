@@ -30,7 +30,10 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Uvolnit místo** – *Nastavení → Uvolnit místo*. Smaže z telefonu jen fotky a videa, které tahle
   aplikace nahrála do Google Fotek a které tam jsou ověřeně: Google při kontrole potvrdí, že položka
   v účtu je se stejným názvem, a soubor v telefonu má stejnou velikost jako při nahrání. Bez internetu
-  se nic nesmaže, oblíbené lze ponechat a smazání ještě potvrdíš v dialogu Androidu. Fotky zálohované
+  se nic nesmaže a oblíbené lze ponechat. Ověřené fotky vidíš v mřížce a sám vybereš, které smazat;
+  videa jen ta, která Google už plně zpracoval. Pak potvrdíš v aplikaci (vždy, i se „správou médií“)
+  a těsně před smazáním se každá vybraná fotka znovu ověří u Googlu – co neprojde, zůstane.
+  Nakonec ještě dialog Androidu (ten se „správou médií“ vynechá). Jinde aplikace nic nemaže. Fotky zálohované
   samotnými Google Fotkami ověřit nejde (Google je jiným aplikacím neukáže) – na ty je Uvolnit místo
   v Google Fotkách. Ověření potřebuje jednou povolit čtení „jen toho, co nahrála tahle aplikace“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album

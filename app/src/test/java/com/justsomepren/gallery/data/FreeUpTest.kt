@@ -87,6 +87,22 @@ class FreeUpTest {
     }
 
     @Test
+    fun videoStillProcessingAtGoogleDoesNotCount() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"mediaItemResults": [
+                    {"mediaItem": {"id": "V1", "filename": "PXL_1.mp4", "mediaMetadata": {"video": {"status": "PROCESSING"}}}},
+                    {"mediaItem": {"id": "V2", "filename": "PXL_2.mp4", "mediaMetadata": {"video": {"status": "READY"}}}},
+                    {"mediaItem": {"id": "V3", "filename": "PXL_3.mp4", "mediaMetadata": {"video": {"status": "FAILED"}}}}
+                ]}""",
+            ),
+        )
+        server.start()
+        PhotosApi.baseUrl = server.url("/").toString().trimEnd('/')
+        assertEquals(setOf("V2"), PhotosApi(context, "token").existing(listOf("V1", "V2", "V3")).keys)
+    }
+
+    @Test
     fun asksGoogleWhichItemsExist() {
         server.enqueue(
             MockResponse().setBody(
