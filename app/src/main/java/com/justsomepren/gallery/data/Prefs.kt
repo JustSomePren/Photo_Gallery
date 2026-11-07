@@ -401,9 +401,10 @@ class Prefs(context: Context) {
 
     private fun tripToJson(t: TripProposal) = JSONObject()
         .put("id", t.id).put("name", t.name).put("start", t.startDay).put("end", t.endDay).put("photos", t.photos)
+        .put("note", t.note)
 
     private fun tripFromJson(o: JSONObject) =
-        TripProposal(o.getString("id"), o.getString("name"), o.getLong("start"), o.getLong("end"), o.getInt("photos"))
+        TripProposal(o.getString("id"), o.getString("name"), o.getLong("start"), o.getLong("end"), o.getInt("photos"), o.optString("note"))
 
     private fun queueToJson(q: QueueItem) = JSONObject()
         .put("key", q.key).put("uri", q.uri).put("name", q.name).put("mime", q.mime)

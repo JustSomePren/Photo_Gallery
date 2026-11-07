@@ -54,6 +54,9 @@ fun TripsDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                if (trip.note.isNotEmpty()) {
+                                    Text(trip.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                }
                             }
                         }
                     }

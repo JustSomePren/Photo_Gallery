@@ -89,6 +89,8 @@ class TripsWalkthroughTest {
 
         val trip = prefs.trips.value.single()
         assertTrue(trip.name, trip.name.startsWith("Tchaj-wan"))
+        // Evenly spread test photos: no "more photos than usual" claim.
+        assertEquals("podle polohy", trip.note)
 
         compose.onNodeWithText("Návrhy výletů: 1").performScrollTo().performClick()
         compose.waitForIdle()

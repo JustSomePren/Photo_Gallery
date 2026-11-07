@@ -17,6 +17,8 @@ data class TripProposal(
     val startDay: Long,
     val endDay: Long,
     val photos: Int,
+    /** Why it was proposed, e.g. "podle polohy · 5× víc fotek než obvykle". */
+    val note: String = "",
 )
 
 /**
@@ -26,6 +28,11 @@ data class TripProposal(
 object TripFinder {
     private const val AWAY_KM = 50.0
     private const val MAX_GAP_DAYS = 2
+
+    /** Three times the usual number of photos (and at least ten) is a busy day; one and a half a lively one. */
+    private const val BUSY = 3.0
+    private const val LIVELY = 1.5
+    private const val MIN_BUSY_PHOTOS = 10
 
     fun find(spots: List<Spot>, places: Places): List<TripProposal> {
         if (spots.isEmpty()) return emptyList()
@@ -44,7 +51,7 @@ object TripFinder {
             val tripSpots = days.flatMap { byDay.getValue(it) }
             // One afternoon with a couple of photos is not a trip.
             if (days.size < 2 && tripSpots.size < 8) return@mapNotNull null
-            proposal(placeName(tripSpots, places, homeCountry), days, tripSpots.size)
+            proposal(placeName(tripSpots, places, homeCountry), days, tripSpots.size, "podle polohy")
         }
     }
 
@@ -77,19 +84,58 @@ object TripFinder {
         return runs(away.keys.sorted(), zones.keys).mapNotNull { days ->
             if (days.size < 2) return@mapNotNull null
             val zone = days.mapNotNull { away[it] }.groupingBy { it }.eachCount().maxBy { it.value }.key
-            proposal("Výlet ${utc(zone)}", days, days.size)
+            proposal("Výlet ${utc(zone)}", days, days.size, "podle časového pásma")
         }
     }
 
-    /** Without places or zones: several days in a row with far more photos than usual. */
-    fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
-        if (perDay.size < 7) return emptyList()
-        val usual = perDay.values.sorted()[perDay.size / 2]
-        val busy = perDay.filter { (day, count) -> day !in skip && count >= maxOf(15, usual * 3) }.keys.sorted()
-        return runs(busy, perDay.keys).filter { it.size >= 2 }.map { days ->
-            proposal("Možná výlet", days, days.sumOf { perDay.getValue(it) })
+    /**
+     * How many times more photos than usual each day has. "Usual" is the median of the days with photos
+     * within 45 days around it, so it follows how photo habits change over the years.
+     */
+    fun busyness(perDay: Map<Long, Int>): Map<Long, Double> {
+        val days = perDay.keys.sorted()
+        return days.associateWith { day ->
+            val around = days.filter { it != day && kotlin.math.abs(it - day) <= 45 }.map { perDay.getValue(it) }.sorted()
+            val usual = if (around.isEmpty()) 1 else maxOf(1, around[around.size / 2])
+            perDay.getValue(day).toDouble() / usual
         }
     }
+
+    /**
+     * Without places or zones: days in a row with far more photos than usual. A calmer day inside
+     * (still above usual) keeps the run together; it needs at least two really busy days.
+     */
+    fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
+        if (perDay.size < 7) return emptyList()
+        val ratio = busyness(perDay)
+        val busy = { day: Long -> ratio.getValue(day) >= BUSY && perDay.getValue(day) >= MIN_BUSY_PHOTOS }
+        val candidates = perDay.keys.filter { it !in skip && ratio.getValue(it) >= LIVELY }.sorted()
+        return runs(candidates, perDay.keys).mapNotNull { run ->
+            val days = run.dropWhile { !busy(it) }.dropLastWhile { !busy(it) }
+            if (days.count(busy) < 2) return@mapNotNull null
+            val photos = days.sumOf { perDay[it] ?: 0 }
+            proposal("Možná výlet", days, photos, "${timesMore(days, ratio)}× víc fotek než obvykle")
+        }
+    }
+
+    /**
+     * A trip found by place or time zone takes in the busy days right before and after it that say
+     * nothing about the place themselves, such as the day of the flight.
+     */
+    fun extendByBusyDays(trip: TripProposal, perDay: Map<Long, Int>, ratio: Map<Long, Double>, known: Set<Long>): TripProposal {
+        val lively = { day: Long -> day !in known && (ratio[day] ?: 0.0) >= LIVELY }
+        var start = trip.startDay
+        var end = trip.endDay
+        repeat(2) { if (lively(start - 1)) start-- }
+        repeat(2) { if (lively(end + 1)) end++ }
+        val days = (start..end).filter { it in perDay }
+        val times = timesMore(days, ratio)
+        val note = listOfNotNull(trip.note.ifEmpty { null }, "$times× víc fotek než obvykle".takeIf { times >= 2 })
+        return trip.copy(startDay = start, endDay = end, note = note.joinToString(" · "))
+    }
+
+    private fun timesMore(days: List<Long>, ratio: Map<Long, Double>): Int =
+        days.mapNotNull { ratio[it] }.average().takeIf { !it.isNaN() }?.let { kotlin.math.round(it).toInt() } ?: 1
 
     /** Groups sorted days into runs; a gap of up to two days without photos is allowed, a day with others is not. */
     private fun runs(days: List<Long>, withPhotos: Set<Long>): List<List<Long>> {
@@ -102,11 +148,12 @@ object TripFinder {
         return runs
     }
 
-    private fun proposal(name: String, days: List<Long>, photos: Int) = TripProposal(
+    private fun proposal(name: String, days: List<Long>, photos: Int, note: String) = TripProposal(
         name = "$name – ${monthTitle(java.time.YearMonth.from(days.first().toDate())).lowercase()}",
         startDay = days.first(),
         endDay = days.last(),
         photos = photos,
+        note = note,
     )
 
     private fun utc(minutes: Int): String {

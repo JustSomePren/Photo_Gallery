@@ -248,10 +248,15 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
 
         val zones = camera.mapNotNull { item -> cache.offset(item)?.let { item.day to it } }.toMap()
         val byZone = TripFinder.byTimeZone(zones, covered(byPlace))
-        val perDay = camera.groupingBy { it.day }.eachCount()
-        val byBurst = TripFinder.byBursts(perDay, covered(byPlace + byZone))
 
-        return (byPlace + byZone + byBurst)
+        // Many more photos than usual: extends trips found by place or zone, and finds the rest.
+        val perDay = camera.groupingBy { it.day }.eachCount()
+        val ratio = TripFinder.busyness(perDay)
+        val known = camera.filter { cache.spot(it) != null || cache.offset(it) != null }.map { it.day }.toSet()
+        val located = (byPlace + byZone).map { TripFinder.extendByBusyDays(it, perDay, ratio, known) }
+        val byBurst = TripFinder.byBursts(perDay, covered(located))
+
+        return (located + byBurst)
             .filter { trip -> prefs.events.value.none { it.overlaps(trip.startDay, trip.endDay) } }
             .filter { trip -> (trip.startDay..trip.endDay).none { it in eventDays } }
             .map { trip -> trip.copy(photos = camera.count { it.day in trip.startDay..trip.endDay }) }

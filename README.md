@@ -22,6 +22,11 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
     podle času pořízení; nejpřesnější, pokud byla Časová osa zapnutá.
   - Časové pásmo ve fotce – pozná cestu do zahraničí („Výlet UTC+8“), pokud ho telefon zapsal.
   - Dny s mnohem víc fotkami než obvykle – návrh „Možná výlet“.
+
+  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než obvykle v tom období (±45 dní), takže
+  sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
+  fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
+  proč, např. „podle polohy · 5× víc fotek než obvykle“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).

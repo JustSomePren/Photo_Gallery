@@ -78,6 +78,50 @@ class NoGpsTripsTest {
     }
 
     @Test
+    fun busyMeansBusierThanUsualAtThatTime() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val perDay = mutableMapOf<Long, Int>()
+        // Years ago: one photo a day, a holiday with 12 a day still stands out.
+        (0L until 60).forEach { perDay[day(LocalDate.of(2019, 3, 1).plusDays(it))] = 1 }
+        (0L until 5).forEach { perDay[day(LocalDate.of(2019, 4, 10).plusDays(it))] = 12 }
+        // Nowadays 20 photos a day is normal and must not look like a trip.
+        (0L until 90).forEach { perDay[day(LocalDate.of(2025, 1, 1).plusDays(it))] = 20 }
+
+        val trips = TripFinder.byBursts(perDay, skip = emptySet())
+        assertEquals(listOf(day(LocalDate.of(2019, 4, 10))), trips.map { it.startDay })
+        assertEquals("12× víc fotek než obvykle", trips.single().note)
+    }
+
+    @Test
+    fun calmerDayInsideHolidayKeepsItTogether() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 60).forEach { perDay[day(LocalDate.of(2025, 9, 1).plusDays(it))] = 4 }
+        listOf(30, 35, 8, 40).forEachIndexed { i, n -> perDay[day(LocalDate.of(2025, 10, 10).plusDays(i.toLong()))] = n }
+
+        val trip = TripFinder.byBursts(perDay, skip = emptySet()).single()
+        assertEquals(day(LocalDate.of(2025, 10, 10)), trip.startDay)
+        assertEquals(day(LocalDate.of(2025, 10, 13)), trip.endDay)
+    }
+
+    @Test
+    fun tripByPlaceTakesInBusyTravelDays() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 60).forEach { perDay[day(LocalDate.of(2025, 9, 1).plusDays(it))] = 3 }
+        // Flight day without location (18 photos), then 5 days in Taiwan with location, flight back.
+        (0L until 7).forEach { perDay[day(LocalDate.of(2025, 10, 2).plusDays(it))] = 18 }
+        val found = TripProposal(name = "Tchaj-wan – říjen 2025", startDay = day(LocalDate.of(2025, 10, 3)),
+            endDay = day(LocalDate.of(2025, 10, 7)), photos = 90, note = "podle polohy")
+        val known = (3L..7).map { day(LocalDate.of(2025, 10, 1).plusDays(it - 1)) }.toSet()
+
+        val trip = TripFinder.extendByBusyDays(found, perDay, TripFinder.busyness(perDay), known)
+        assertEquals(day(LocalDate.of(2025, 10, 2)), trip.startDay)
+        assertEquals(day(LocalDate.of(2025, 10, 8)), trip.endDay)
+        assertTrue(trip.note, trip.note.startsWith("podle polohy · "))
+    }
+
+    @Test
     fun offsetText() {
         assertEquals(480, parseOffset("+08:00"))
         assertEquals(-330, parseOffset("-05:30"))
