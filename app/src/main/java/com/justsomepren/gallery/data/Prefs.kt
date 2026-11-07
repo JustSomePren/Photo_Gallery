@@ -68,6 +68,9 @@ class Prefs(context: Context) {
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
 
+    /** Photos grouped by day (like most galleries) or only by month. */
+    val groupByDay = MutableStateFlow(sp.getBoolean("groupByDay", true))
+
     /** "Odeslat hned" was tapped and its run has not finished yet. */
     val sendNowPending get() = sp.getBoolean("sendNowPending", false)
 
@@ -94,6 +97,7 @@ class Prefs(context: Context) {
     fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
+    fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)
 
     // ---- Albums ----
 

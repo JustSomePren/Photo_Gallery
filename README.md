@@ -5,7 +5,8 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 
 ## Co umí
 
-- **Mřížka fotek** (výchozí) – fotky po měsících; kde začíná událost, je barevný řádek
+- **Mřížka fotek** (výchozí) – fotky po dnech („Dnes“, „Včera“, „Čtvrtek 5. 11.“) uvnitř měsíců;
+  v Nastavení jde přepnout jen na měsíce. Kde začíná událost, je barevný řádek
   s jejím názvem, pod fotkami z události barevný proužek a při posouvání plave nahoře datum a událost.
 - **Kalendář** – ikonou nahoře; celý měsíc na obrazovce, víkendy vpravo. Klepnutí na den otevře
   jeho fotky, **dlouhý stisk na den založí událost**.
@@ -15,13 +16,12 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
 - **Záložka Odesílání** – fronta, události, Google účty a ruční cíle na jednom místě.
-- **Fotky** – všechny fotky a videa po měsících.
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
 - **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
-- **Výběr více fotek** – dlouhý stisk na fotku, pak klepáním přidáváš další.
-  Klepnutím na měsíc vybereš celý měsíc, ikonou v albu celé album.
-- **Poslat do cloudu** – vybrané fotky pošle do zvoleného cíle (např. „Osobní – Fotky“,
-  „Společný – Disk“). Cíle si nastavíš v *Odesílání → Poslat ručně přes aplikaci*.
+- **Výběr více fotek** – podrž fotku a táhni prstem přes další (u okraje se seznam sám posouvá),
+  nebo pak klepáním přidávej. Klepnutím na den či měsíc vybereš celý, ikonou v albu celé album.
+- **Poslat do cloudu** – vybrané fotky dá do fronty pro zvolený Google účet (osobní, společný…)
+  a album; odešlou se samy do Google Fotek.
 - **Upravit / Hledat** – otevře Google Fotky.
 - **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
@@ -105,10 +105,8 @@ v Odesílání se u účtu objeví „Přihlásit“.
 
 ## Ruční odesílání přes aplikace
 
-- **Google Disk** se při nahrávání vždy zeptá, na který účet.
-- **Google Fotky** nahrají do účtu, který je v nich právě aktivní.
-
-Doporučení: společný cloud přes Disk (sdílená složka), osobní přes Fotky.
-Cílů si můžeš přidat kolik chceš, každý s vlastním názvem.
+Hlavní cesta je fronta do Google Fotek (výběr účtu i alba přímo v aplikaci).
+Ruční cíle jsou navíc: otevřou jinou aplikaci s vybranými fotkami. Google Fotky takto nahrají
+do účtu, který je v nich právě aktivní.
 
 Pokud chceš potvrzovat oblíbené bez dialogu, povol *Nastavení → Oblíbené bez potvrzování*.

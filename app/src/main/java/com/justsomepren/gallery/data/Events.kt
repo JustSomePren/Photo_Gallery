@@ -53,6 +53,14 @@ private val longDate = DateTimeFormatter.ofPattern("d. M. yyyy", Locale("cs"))
 fun formatDay(day: Long): String = day.toDate().format(longDate)
 
 private val weekdayDate = DateTimeFormatter.ofPattern("EEE d. M. yyyy", Locale("cs"))
+private val dayInMonth = DateTimeFormatter.ofPattern("EEEE d. M.", Locale("cs"))
+
+/** "Dnes", "Včera" or "pátek 6. 11." for a day header inside its month. */
+fun formatDayHeader(day: Long): String = when (day) {
+    today() -> "Dnes"
+    today() - 1 -> "Včera"
+    else -> day.toDate().format(dayInMonth).replaceFirstChar { it.uppercase() }
+}
 
 fun formatWeekday(day: Long): String = day.toDate().format(weekdayDate)
 

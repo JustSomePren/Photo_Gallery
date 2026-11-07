@@ -52,6 +52,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
+    val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
     var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
@@ -93,6 +94,14 @@ fun SettingsScreen(vm: GalleryViewModel) {
                 HorizontalDivider()
             }
 
+            Section("Zobrazení")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Seskupovat fotky po dnech", Modifier.weight(1f))
+                Switch(groupByDay, onCheckedChange = vm.prefs::setGroupByDay)
+            }
+            Hint("Vypnuto: jen po měsících, víc fotek na obrazovce.")
+
+            HorizontalDivider()
             Section("Baterie")
             battery?.let {
                 Text("Baterie ${it.level} %" + if (it.charging) " · nabíjí se" else "")

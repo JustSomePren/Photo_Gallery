@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,6 +81,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,6 +97,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.formatDayHeader
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.MutableFloatState
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.day
@@ -221,7 +229,7 @@ fun MediaBrowser(
                     vm = vm,
                     header = header,
                     onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
-                    onLongClick = { toggle(listOf(it.id)) },
+                    onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
             }
@@ -260,21 +268,23 @@ private sealed interface GridEntry {
     val month: String
 
     data class Header(override val month: String, val items: List<MediaItem>) : GridEntry
+    data class DayHeader(override val month: String, val day: Long, val items: List<MediaItem>) : GridEntry
     data class EventStart(override val month: String, val event: Event, val firstId: Long) : GridEntry
     data class Photo(override val month: String, val item: MediaItem, val event: Event?) : GridEntry
 }
 
-/** Months, and inside them a colored row where the photos of an event begin. */
-private fun buildEntries(items: List<MediaItem>, events: List<Event>): List<GridEntry> =
-    items.groupBy { monthTitle(it.month) }.flatMap { (month, group) ->
-        val entries = mutableListOf<GridEntry>(GridEntry.Header(month, group))
+/** Months, optionally days inside them, and a colored row where the photos of an event begin. */
+private fun buildEntries(items: List<MediaItem>, events: List<Event>, byDay: Boolean): List<GridEntry> =
+    items.groupBy { monthTitle(it.month) }.flatMap { (month, monthItems) ->
+        val entries = mutableListOf<GridEntry>(GridEntry.Header(month, monthItems))
         var current: Event? = null
-        for (item in group) {
+        for ((day, dayItems) in monthItems.groupBy { it.day }) {
             // An event inside a longer one (a city on a long trip) is the more specific one to show.
-            val event = events.mostSpecific(item.day)
-            if (event != null && event != current) entries += GridEntry.EventStart(month, event, item.id)
+            val event = events.mostSpecific(day)
+            if (event != null && event != current) entries += GridEntry.EventStart(month, event, dayItems.first().id)
             current = event
-            entries += GridEntry.Photo(month, item, event)
+            if (byDay) entries += GridEntry.DayHeader(month, day, dayItems)
+            dayItems.mapTo(entries) { GridEntry.Photo(month, it, event) }
         }
         entries
     }
@@ -293,13 +303,27 @@ private fun MediaGrid(
     vm: GalleryViewModel,
     header: @Composable () -> Unit,
     onClick: (MediaItem) -> Unit,
-    onLongClick: (MediaItem) -> Unit,
+    onSelect: (Set<Long>) -> Unit,
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
     val columns = if (LocalSaver.current) 5 else 4
     val thumbPx = gridThumbPx()
     val events by vm.prefs.events.collectAsStateWithLifecycle()
-    val entries = remember(items, events) { buildEntries(items, events) }
+    val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
+    val entries = remember(items, events, byDay) { buildEntries(items, events, byDay) }
+    val photoOrder = remember(entries) {
+        entries.filterIsInstance<GridEntry.Photo>().map { it.item.id }.withIndex().associate { it.value to it.index }
+    }
+    val currentSelection by rememberUpdatedState(selected)
+    val autoScroll = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(autoScroll.floatValue) {
+        if (autoScroll.floatValue != 0f) {
+            while (true) {
+                state.scrollBy(autoScroll.floatValue)
+                delay(10)
+            }
+        }
+    }
     // Grid position 0 is the header, so entry i sits at position i + 1.
     val current by remember(entries) { derivedStateOf { entries.photoAt(state.firstVisibleItemIndex - 1) } }
     val scrolling = rememberRecentlyScrolled(state)
@@ -317,6 +341,7 @@ private fun MediaGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = state,
+            modifier = Modifier.dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -329,6 +354,7 @@ private fun MediaGrid(
                         is GridEntry.Photo -> it.item.id
                         is GridEntry.EventStart -> "event ${it.event.id} ${it.firstId}"
                         is GridEntry.Header -> "month ${it.month}"
+                        is GridEntry.DayHeader -> "day ${it.day}"
                     }
                 },
                 span = { GridItemSpan(if (it is GridEntry.Photo) 1 else maxLineSpan) },
@@ -340,13 +366,23 @@ private fun MediaGrid(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 16.dp, 12.dp, 8.dp),
                     )
+                    is GridEntry.DayHeader -> Text(
+                        formatDayHeader(entry.day),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 10.dp, 12.dp, 6.dp),
+                    )
                     is GridEntry.EventStart -> EventRow(entry.event) { vm.editingEvent = entry.event }
                     is GridEntry.Photo -> {
                         val item = entry.item
                         Box(
                             Modifier
                                 .aspectRatio(1f)
-                                .combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }),
+                                .combinedClickable(
+                                    onClick = { onClick(item) },
+                                    // Starts selecting; dragging on from here is handled by dragToSelect.
+                                    onLongClick = { onSelect(currentSelection + item.id) },
+                                ),
                         ) {
                             Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
                             entry.event?.let {
@@ -367,6 +403,72 @@ private fun MediaGrid(
             ContextPill(it, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
         }
         if (entries.size > 60) FastScroller(state, current, Modifier.padding(bottom = bottomPadding))
+    }
+}
+
+/**
+ * Hold a photo and drag over others to select them, like in Google Photos. Near the top or bottom
+ * edge the grid scrolls on its own.
+ */
+private fun Modifier.dragToSelect(
+    state: LazyGridState,
+    order: Map<Long, Int>,
+    selected: () -> Set<Long>,
+    onSelect: (Set<Long>) -> Unit,
+    autoScroll: MutableFloatState,
+) = pointerInput(order) {
+    val edge = 64.dp.toPx()
+    val ids = order.keys.toList()
+    var last: Long? = null
+    var before = emptySet<Long>()
+
+    fun photoAt(offset: Offset): Long? = state.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+        offset.x.toInt() in item.offset.x until item.offset.x + item.size.width &&
+            offset.y.toInt() in item.offset.y until item.offset.y + item.size.height
+    }?.key as? Long
+
+    fun range(a: Long, b: Long): Set<Long> {
+        val from = order[a] ?: return emptySet()
+        val to = order[b] ?: return emptySet()
+        return ids.subList(minOf(from, to), maxOf(from, to) + 1).toSet()
+    }
+
+    // Watches touches before the photos and the scrolling do, so after a long press the drag selects.
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // Lifted (a tap) or moved (a scroll) before the long press: not ours.
+        val endedEarly = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            var early = false
+            while (!early) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                early = change == null || !change.pressed ||
+                    (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+            }
+            early
+        }
+        if (endedEarly != null) return@awaitEachGesture
+
+        val start = photoAt(down.position) ?: return@awaitEachGesture
+        last = start
+        before = selected() - start
+        onSelect(before + start)
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            change.consume()
+            if (!change.pressed) break
+            val y = change.position.y
+            val height = state.layoutInfo.viewportSize.height
+            autoScroll.floatValue = when {
+                y > height - edge -> (y - (height - edge)) / 4
+                y < edge -> -(edge - y) / 4
+                else -> 0f
+            }
+            photoAt(change.position)?.takeIf { it != last }?.let {
+                last = it
+                onSelect(before + range(start, it))
+            }
+        }
+        autoScroll.floatValue = 0f
     }
 }
 
