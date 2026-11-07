@@ -37,7 +37,7 @@ data class QueueItem(
 
     companion object {
         fun of(item: MediaItem, account: String, album: String?, eventId: String? = null) = QueueItem(
-            item.key, item.uri.toString(), item.name, item.mime, account, album?.ifBlank { null }, eventId, item.day,
+            item.key, item.uri.toString(), item.name, item.mime, account, album?.trim()?.ifBlank { null }, eventId, item.day,
         )
     }
 }

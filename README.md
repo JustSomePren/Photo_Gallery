@@ -21,7 +21,7 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Výběr více fotek** – dlouhý stisk na fotku, pak klepáním přidáváš další.
   Klepnutím na měsíc vybereš celý měsíc, ikonou v albu celé album.
 - **Poslat do cloudu** – vybrané fotky pošle do zvoleného cíle (např. „Osobní – Fotky“,
-  „Společný – Disk“). Cíle si nastavíš v *Nastavení → Kam posílat fotky*.
+  „Společný – Disk“). Cíle si nastavíš v *Odesílání → Poslat ručně přes aplikaci*.
 - **Upravit / Hledat** – otevře Google Fotky.
 - **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
