@@ -28,6 +28,17 @@ class LoginMessageTest {
     }
 
     @Test
+    fun accountMissingOnThePhoneSaysWhereToAddIt() {
+        assertTrue(message(CommonStatusCodes.INVALID_ACCOUNT).contains("Nastavení telefonu"))
+    }
+
+    @Test
+    fun playServicesProblemsPointToTheStore() {
+        assertTrue(message(CommonStatusCodes.SERVICE_VERSION_UPDATE_REQUIRED).contains("Play Store"))
+        assertTrue(message(CommonStatusCodes.SERVICE_MISSING).contains("Play Store"))
+    }
+
+    @Test
     fun appMissingInGoogleCloudSaysSo() {
         val error = ApiException(Status(CommonStatusCodes.INTERNAL_ERROR, "Unknown error [status=UNREGISTERED_ON_API_CONSOLE]."))
         assertTrue(GoogleAuth.problem(error).contains("není zaregistrovaná v Google Cloud"))

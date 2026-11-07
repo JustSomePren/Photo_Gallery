@@ -26,6 +26,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Scope
@@ -63,6 +65,19 @@ object GoogleAuth {
         .apply { if (email != null) setAccount(Account(email, "com.google")) }
         .build()
 
+    /**
+     * Null when Play Services on the phone can authorize; otherwise what the user should fix.
+     * On a Pixel with broken or outdated Play Services every authorize() call fails.
+     */
+    fun playServicesProblem(context: Context): String? {
+        val availability = GoogleApiAvailability.getInstance()
+        val code = availability.isGooglePlayServicesAvailable(context)
+        return if (code == ConnectionResult.SUCCESS) null
+        else "Google Play Services na telefonu nefunguje" +
+            (availability.getErrorString(code)?.let { " ($it)" } ?: "") +
+            ". Aktualizuj je v Play Store a zkus to znovu."
+    }
+
     private val TRANSIENT = setOf(
         CommonStatusCodes.NETWORK_ERROR,
         CommonStatusCodes.INTERNAL_ERROR,
@@ -82,6 +97,10 @@ object GoogleAuth {
     private fun problemByCode(e: Throwable): String = when ((e as? ApiException)?.statusCode) {
         CommonStatusCodes.DEVELOPER_ERROR ->
             "Google tuhle aplikaci nezná. Zkontroluj v Google Cloud balíček a SHA-1 klienta (README, krok 5)."
+        CommonStatusCodes.SERVICE_MISSING, CommonStatusCodes.SERVICE_DISABLED, CommonStatusCodes.SERVICE_VERSION_UPDATE_REQUIRED ->
+            "Google Play Services na telefonu chybí nebo je zastaralé – aktualizuj je v Play Store a zkus to znovu."
+        CommonStatusCodes.INVALID_ACCOUNT ->
+            "Tenhle účet už v telefonu není. Přidej ho v Nastavení telefonu (Hesla a účty → Google) a zkus to znovu."
         CommonStatusCodes.NETWORK_ERROR, CommonStatusCodes.TIMEOUT -> "Není připojení k internetu, zkus to znovu."
         CommonStatusCodes.CANCELED -> "Přihlášení bylo zrušeno."
         else -> "Google přihlášení odmítl (${e.message}). Zkontroluj nastavení Google Cloud podle README, " +
@@ -96,6 +115,8 @@ object GoogleAuth {
         val result = try {
             Identity.getAuthorizationClient(context).authorize(request(email, scope)).await()
         } catch (e: ApiException) {
+            // An account that is no longer on the phone cannot authorize silently; let Google pick one
+            if (e.statusCode == CommonStatusCodes.INVALID_ACCOUNT) return silentPick(context, scope)
             if (e.statusCode in TRANSIENT) throw IOException(e)
             return null
         } catch (e: IOException) {
@@ -104,6 +125,18 @@ object GoogleAuth {
             throw IOException(e)
         }
         return result.takeIf { !it.hasResolution() }?.accessToken
+    }
+
+    /** Same without a pinned account; that usually needs a dialog, so it then returns null. */
+    private suspend fun silentPick(context: Context, scope: String): String? = try {
+        Identity.getAuthorizationClient(context).authorize(request(null, scope)).await().takeIf { !it.hasResolution() }?.accessToken
+    } catch (e: ApiException) {
+        if (e.statusCode in TRANSIENT) throw IOException(e)
+        null
+    } catch (e: IOException) {
+        throw e
+    } catch (e: Exception) {
+        throw IOException(e)
     }
 }
 

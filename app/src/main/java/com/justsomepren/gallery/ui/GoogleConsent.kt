@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GoogleAuth
 import kotlinx.coroutines.launch
@@ -46,17 +47,46 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
         { email: String?, scopeUrl: String ->
             vm.pendingAccount = email
             scope.launch {
-                try {
-                    val result = Identity.getAuthorizationClient(context).authorize(GoogleAuth.request(email, scopeUrl)).await()
-                    val pending = result.pendingIntent
-                    if (result.hasResolution() && pending != null) {
-                        consent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
-                    } else {
-                        val account = email ?: result.toGoogleSignInAccount()?.email
-                        if (account != null) granted(account) else failed("Google nevrátil účet, zkus to prosím znovu.")
+                // A phone with broken Play Services fails every authorize() call; say so before trying
+                GoogleAuth.playServicesProblem(context)?.let { failed(it); return@launch }
+                var pinned = email
+                while (true) {
+                    try {
+                        val result = Identity.getAuthorizationClient(context).authorize(GoogleAuth.request(pinned, scopeUrl)).await()
+                        val pending = result.pendingIntent
+                        when {
+                            result.hasResolution() && pending != null -> {
+                                consent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                                return@launch
+                            }
+                            // The pinned account cannot open the dialog (e.g. it left the phone): let Google pick one
+                            result.hasResolution() && pinned != null -> {
+                                vm.pendingAccount = null
+                                pinned = null
+                            }
+                            result.hasResolution() -> {
+                                failed("Google chce přihlášení potvrdit, ale neposlal dialog – zkus to prosím znovu.")
+                                return@launch
+                            }
+                            else -> {
+                                val account = vm.pendingAccount ?: result.toGoogleSignInAccount()?.email
+                                if (account != null) granted(account) else failed("Google nevrátil účet, zkus to prosím znovu.")
+                                return@launch
+                            }
+                        }
+                    } catch (e: ApiException) {
+                        // An account that is no longer on the phone: retry once with Google's account picker
+                        if (pinned != null && e.statusCode == CommonStatusCodes.INVALID_ACCOUNT) {
+                            vm.pendingAccount = null
+                            pinned = null
+                        } else {
+                            failed(GoogleAuth.problem(e))
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        failed(GoogleAuth.problem(e))
+                        return@launch
                     }
-                } catch (e: Exception) {
-                    failed(GoogleAuth.problem(e))
                 }
             }
         }

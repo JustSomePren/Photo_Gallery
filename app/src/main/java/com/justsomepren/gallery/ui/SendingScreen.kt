@@ -2,7 +2,9 @@ package com.justsomepren.gallery.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -160,6 +162,11 @@ fun SendingScreen(vm: GalleryViewModel) {
                     },
                 )
             }
+            TextButton(onClick = {
+                val intent = Intent(Settings.ACTION_ADD_ACCOUNT).putExtra(Settings.EXTRA_ACCOUNT_TYPES, arrayOf("com.google"))
+                if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+                else toast(context, "Přidej Google účet v Nastavení telefonu → Hesla a účty.")
+            }) { Text("Přidat Google účet do telefonu") }
             loginError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             HorizontalDivider()
