@@ -43,6 +43,10 @@ object GooglePhotos {
     fun showOnMap(context: Context, lat: Double, lon: Double) =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon")))
 
+    /** A web link (e.g. the Google Photos picker); opens in the Photos app when it handles it. */
+    fun openLink(context: Context, url: String) =
+        start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
     fun openApp(context: Context) =
         start(context, context.packageManager.getLaunchIntentForPackage(PACKAGE))
 

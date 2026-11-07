@@ -86,6 +86,7 @@ class Prefs(context: Context) {
 
     /** Photos grouped by day (like most galleries) or only by month. */
     val groupByDay = MutableStateFlow(sp.getBoolean("groupByDay", true))
+    val showCloud = MutableStateFlow(sp.getBoolean("showCloud", true))
 
     /** "Odeslat hned" was tapped and its run has not finished yet. */
     val sendNowPending get() = sp.getBoolean("sendNowPending", false)
@@ -114,6 +115,8 @@ class Prefs(context: Context) {
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
     fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)
+
+    fun setShowCloud(value: Boolean) = setBoolean(showCloud, "showCloud", value)
 
     // ---- Albums ----
 

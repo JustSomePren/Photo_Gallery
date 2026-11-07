@@ -19,12 +19,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.justsomepren.gallery.data.CloudLibrary
+import com.justsomepren.gallery.data.CloudPhoto
 import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.MediaRepository
+import com.justsomepren.gallery.data.NotOnWifi
+import com.justsomepren.gallery.data.PickerApi
+import com.justsomepren.gallery.data.onWifi
 import com.justsomepren.gallery.data.PhotosApi
 import com.justsomepren.gallery.data.Places
 import com.justsomepren.gallery.data.SpotCache
@@ -44,6 +49,9 @@ import com.justsomepren.gallery.ui.ImageCache
 import com.justsomepren.gallery.ui.OpenDialogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -139,12 +147,17 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
-            val items = withContext(Dispatchers.IO) { loadMedia() }
+            val local = withContext(Dispatchers.IO) { loadMedia() }
+            val items = if (prefs.showCloud.value) {
+                (local + withContext(Dispatchers.IO) { cloud.asMediaItems(local) }).sortedByDescending { it.date }
+            } else {
+                local
+            }
             val before = _media.value?.associateBy { it.id }.orEmpty()
             ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items
-            prefs.migrateKeys(items)
-            if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())
+            prefs.migrateKeys(local)
+            if (prefs.collectAuto(local) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false
         }
     }
@@ -357,6 +370,99 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
             if (withAlbums) prefs.createAlbum(trip.name, camera.filter { it.day in trip.startDay..trip.endDay })
         }
         prefs.removeTrips(ids)
+    }
+
+    val cloud by lazy { CloudLibrary(getApplication()) }
+
+    /** Where the Google Photos sync is: picking, downloading previews, done or stopped by a problem. */
+    data class CloudSync(
+        val account: String,
+        val round: Int = 1,
+        val added: Int = 0,
+        val downloading: Int = 0,
+        val done: Boolean = false,
+        val error: String? = null,
+    )
+
+    val cloudSync = MutableStateFlow<CloudSync?>(null)
+    private var cloudJob: Job? = null
+
+    @VisibleForTesting
+    var cloudToken: suspend (String) -> String? = { GoogleAuth.silentToken(getApplication(), it, GoogleAuth.PICKER) }
+
+    @VisibleForTesting
+    var openPicker: (String) -> Unit = { uri ->
+        GooglePhotos.openLink(getApplication(), uri)
+    }
+
+    /**
+     * Picks photos in Google Photos again and again: each round keeps the new ones and opens the picker
+     * once more, until a round brings nothing new. Google cannot hide what was picked before, so the
+     * app skips those itself. Wi-Fi only; on paid data it stops and nothing is downloaded.
+     */
+    fun startCloudSync(account: String) {
+        if (cloudJob?.isActive == true) return
+        cloudSync.value = CloudSync(account)
+        cloudJob = viewModelScope.launch(Dispatchers.IO) {
+            var session: String? = null
+            val api = try {
+                PickerApi(cloudToken(account) ?: throw java.io.IOException("Google nepovolil přístup"))
+            } catch (e: java.io.IOException) {
+                cloudSync.value = cloudSync.value?.copy(error = e.message)
+                return@launch
+            }
+            try {
+                while (true) {
+                    if (!onWifi(getApplication())) throw NotOnWifi()
+                    val picking = api.create().also { session = it.id }
+                    withContext(Dispatchers.Main) { openPicker(picking.uri + "/autoclose") }
+                    val until = System.currentTimeMillis() + picking.timeoutMillis
+                    while (!api.isPicked(picking.id)) {
+                        if (System.currentTimeMillis() > until) throw java.io.IOException("Výběr vypršel")
+                        delay(picking.pollMillis)
+                    }
+                    val fresh = api.items(picking.id).filterNot { cloud.has(it.id) }.distinctBy { it.id }
+                    cloudSync.value = cloudSync.value?.copy(downloading = fresh.size)
+                    download(api, fresh)
+                    api.delete(picking.id)
+                    session = null
+                    refresh()
+                    val state = cloudSync.value ?: return@launch
+                    if (fresh.isEmpty()) {
+                        cloudSync.value = state.copy(done = true, downloading = 0)
+                        return@launch
+                    }
+                    cloudSync.value = state.copy(round = state.round + 1, added = state.added + fresh.size, downloading = 0)
+                }
+            } catch (e: java.io.IOException) {
+                cloudSync.value = cloudSync.value?.copy(error = e.message?.take(120), downloading = 0)
+            } finally {
+                session?.let(api::delete)
+                refresh()
+            }
+        }
+    }
+
+    /** Previews are fetched a few at a time; each is saved at once, so a stopped sync keeps what it got. */
+    private suspend fun download(api: PickerApi, photos: List<PickerApi.Picked>) = coroutineScope {
+        photos.chunked(8).forEach { chunk ->
+            if (!onWifi(getApplication())) throw NotOnWifi()
+            chunk.map { picked ->
+                async { picked to CloudLibrary.shrink(api.preview(picked)) }
+            }.awaitAll().forEach { (picked, preview) ->
+                cloud.add(CloudPhoto(picked.id, picked.created, picked.name, picked.mime), preview)
+            }
+        }
+    }
+
+    fun stopCloudSync() {
+        cloudJob?.cancel()
+        cloudSync.value = null
+    }
+
+    fun setShowCloud(show: Boolean) {
+        prefs.setShowCloud(show)
+        refresh()
     }
 
     /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */

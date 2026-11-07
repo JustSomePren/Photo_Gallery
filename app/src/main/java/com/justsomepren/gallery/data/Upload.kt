@@ -51,6 +51,9 @@ object GoogleAuth {
     /** Read only what this app uploaded, to check a photo is in the cloud before freeing space. */
     const val READ = "https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"
 
+    /** Read what the user picks in Google Photos (Picker). */
+    const val PICKER = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
+
     fun request(email: String, scope: String = UPLOAD): AuthorizationRequest = AuthorizationRequest.builder()
         .setRequestedScopes(listOf(Scope(scope)))
         .setAccount(Account(email, "com.google"))

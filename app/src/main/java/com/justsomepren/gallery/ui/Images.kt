@@ -71,7 +71,14 @@ object ImageCache {
     fun cachedThumbnail(uri: Uri, size: Int): Bitmap? = thumbs.get("$uri@$size")
 
     suspend fun thumbnail(resolver: ContentResolver, uri: Uri, size: Int) =
-        load(thumbs, "$uri@$size") { fake?.invoke(uri) ?: resolver.loadThumbnail(uri, Size(size, size), null) }
+        load(thumbs, "$uri@$size") {
+            fake?.invoke(uri) ?: if (uri.scheme == "file") {
+                // A cloud preview: already small, kept in the app's own folder.
+                android.graphics.BitmapFactory.decodeFile(uri.path) ?: error("no preview")
+            } else {
+                resolver.loadThumbnail(uri, Size(size, size), null)
+            }
+        }
 
     suspend fun fullImage(resolver: ContentResolver, uri: Uri, maxSide: Int) =
         load(full, "$uri#$maxSide") {

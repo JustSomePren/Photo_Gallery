@@ -30,6 +30,8 @@ data class MediaItem(
     val relativePath: String,
     /** Changes when the file is edited, so pictures are loaded again. */
     val modified: Long = 0,
+    /** Only in Google Photos; shown from a small preview, never sent, moved or deleted. */
+    val cloud: Boolean = false,
 ) {
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"

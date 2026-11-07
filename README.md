@@ -54,6 +54,23 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Obnovení** – stáhni seznam dolů.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
 
+### Staré fotky z Google Fotek
+
+*Nastavení → Fotky z Google Fotek → Načíst z účtu.* Otevře se výběr v Google Fotkách
+(Google dovolí najednou max **2 000** fotek a aplikaci nepustí do celé knihovny sám).
+
+1. Vyber fotky (nejrychleji podržet první a táhnout) → *Hotovo*.
+2. Aplikace stáhne malé náhledy (cca 10–20 kB na fotku) a výběr **otevře znovu sám**.
+   V Nastavení vidíš, od kterého data pokračovat do minulosti.
+3. Už stažené fotky můžeš vybrat znovu, přeskočí se. Když kolo nic nového nepřinese,
+   načítání skončí (nebo *Ukončit načítání*).
+
+- Jen přes **Wi-Fi**, na mobilních datech se nic nestáhne.
+- Náhledy jsou pak vidět i offline v mřížce a kalendáři, s ikonou mráčku. Fotky, které máš
+  i v telefonu, se neukážou dvakrát.
+- Náhledy nejdou vybrat, poslat ani smazat. Plnou kvalitu otevřeš v Google Fotkách.
+- Vypnout zobrazení: *Ukazovat v galerii*.
+
 ### Moje alba
 
 Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky.
@@ -104,6 +121,7 @@ Google vyžaduje, aby si aplikaci, která nahrává do Google Fotek, zaregistrov
 
 1. Otevři [console.cloud.google.com](https://console.cloud.google.com) a vytvoř nový projekt (např. „Galerie“).
 2. *APIs & Services → Library* → vyhledej **Photos Library API** → **Enable**.
+   Pro načtení starých fotek z cloudu povol stejně i **Photos Picker API**.
 3. *APIs & Services → OAuth consent screen* (Google Auth Platform):
    typ **External**, vyplň název a svůj e-mail, ulož.
 4. V části **Audience / Test users** přidej **všechny účty**, do kterých chceš posílat

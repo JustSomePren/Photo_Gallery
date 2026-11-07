@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
@@ -142,8 +143,9 @@ fun MediaBrowser(
     }
 
     BackHandler(selected.isNotEmpty()) { done() }
-    LaunchedEffect(items) {
-        val present = items.map { it.id }.toSet()
+    // Cloud previews cannot be selected: there is nothing on the phone to send, move or delete.
+    LaunchedEffect(items, selected) {
+        val present = items.filterNot { it.cloud }.map { it.id }.toSet()
         if (!present.containsAll(selected)) selected = selected intersect present
     }
 
@@ -390,6 +392,7 @@ private fun MediaGrid(
                             }
                             if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
                             if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
+                            if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
                             if (item.id in selected) {
                                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
                                 CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)

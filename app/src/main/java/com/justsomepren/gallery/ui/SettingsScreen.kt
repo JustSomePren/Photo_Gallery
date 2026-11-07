@@ -47,6 +47,9 @@ import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
 import kotlinx.coroutines.launch
+import com.justsomepren.gallery.data.onWifi
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +128,9 @@ fun SettingsScreen(vm: GalleryViewModel) {
                 Switch(groupByDay, onCheckedChange = vm.prefs::setGroupByDay)
             }
             Hint("Vypnuto: jen po měsících, víc fotek na obrazovce.")
+
+            HorizontalDivider()
+            CloudSection(vm)
 
             HorizontalDivider()
             Section("Výlety")
@@ -281,3 +287,51 @@ fun Hint(text: String) =
 @Composable
 fun SettingsButton(text: String, onClick: () -> Unit) =
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(text) }
+
+/** Old photos that are only in Google Photos, shown in the gallery and calendar from small previews. */
+@Composable
+private fun CloudSection(vm: GalleryViewModel) {
+    val context = LocalContext.current
+    val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
+    val show by vm.prefs.showCloud.collectAsStateWithLifecycle()
+    val sync by vm.cloudSync.collectAsStateWithLifecycle()
+    val start = rememberGoogleConsent(vm, onGranted = vm::startCloudSync, onError = { toast(context, it) })
+
+    Section("Fotky z Google Fotek")
+    Hint(
+        "Stáhne malé náhledy fotek, které máš jen v Google Fotkách, aby byly vidět v mřížce i v kalendáři. " +
+            "Jen přes Wi-Fi, nikdy přes data. Originály zůstávají v cloudu, nic se neodesílá ani nemaže."
+    )
+    Hint("Staženo: ${vm.cloud.count} náhledů (${Formatter.formatShortFileSize(context, vm.cloud.sizeBytes())})")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Ukazovat v galerii", Modifier.weight(1f))
+        Switch(show, onCheckedChange = vm::setShowCloud)
+    }
+    val state = sync
+    when {
+        state == null || state.done || state.error != null -> {
+            state?.error?.let { Text("Zastaveno: $it", color = MaterialTheme.colorScheme.error) }
+            if (state?.done == true) Text("Hotovo, přibylo ${state.added} fotek.")
+            if (accounts.isEmpty()) Hint("Nejdřív přidej Google účet v záložce Odesílání.")
+            accounts.forEach { email ->
+                SettingsButton("Načíst z $email") {
+                    if (onWifi(context)) start(email, GoogleAuth.PICKER) else toast(context, "Připoj se k Wi-Fi")
+                }
+            }
+        }
+        state.downloading > 0 -> Text("Kolo ${state.round}: stahuji ${state.downloading} náhledů…")
+        else -> {
+            Text("Kolo ${state.round}: vyber fotky v Google Fotkách (max 2 000)", style = MaterialTheme.typography.titleSmall)
+            vm.cloud.oldest()?.let {
+                Hint(
+                    "Zatím ${state.added} nových. Pokračuj fotkami staršími než " +
+                        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) +
+                        ". Už stažené klidně vyber znovu, přeskočí se. Když nic nového nepřibude, načítání skončí."
+                )
+            }
+        }
+    }
+    if (state != null && !state.done && state.error == null) {
+        SettingsButton("Ukončit načítání") { vm.stopCloudSync() }
+    }
+}
