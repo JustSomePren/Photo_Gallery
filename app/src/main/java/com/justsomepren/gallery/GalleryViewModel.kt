@@ -22,6 +22,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CalendarLink
+import com.justsomepren.gallery.data.CloudWorker
 import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
@@ -128,6 +129,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         if (!prefs.hasTargets) prefs.addTargets(GooglePhotos.defaultTargets(app))
         WarmupWorker.schedule(app, prefs.warmup.value)
         UploadWorker.schedule(app)
+        CloudWorker.schedule(app)
     }
 
     fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
@@ -313,6 +315,11 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
 
     /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */
     private fun sendSoon() = UploadWorker.schedule(getApplication(), restart = prefs.uploading.value == null)
+
+    fun setShowCloud(enabled: Boolean) {
+        prefs.setShowCloud(enabled)
+        CloudWorker.schedule(getApplication())
+    }
 
     fun setWarmup(enabled: Boolean) {
         prefs.setWarmup(enabled)

@@ -53,6 +53,7 @@ import kotlin.math.roundToInt
 fun SettingsScreen(vm: GalleryViewModel) {
     val context = LocalContext.current
     val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
+    val showCloud by vm.prefs.showCloud.collectAsStateWithLifecycle()
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
     val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
@@ -171,6 +172,15 @@ fun SettingsScreen(vm: GalleryViewModel) {
             Hint(
                 "Úpravy a hledání řeší Google Fotky. Aby na výletě nežraly baterku, " +
                     "nastav jim v Info o aplikaci → Baterie → Omezeno. Zálohu pak spustí, až je otevřeš."
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("V kalendáři i fotky jen z Google Fotek", Modifier.weight(1f))
+                Switch(showCloud, onCheckedChange = vm::setShowCloud)
+            }
+            Hint(
+                "Fotky, které tahle Galerie poslala do Google Fotek a v telefonu už nejsou (např. po Uvolnit místo). " +
+                    "Jiné fotky z Google Fotek Google aplikacím číst nedovolí. Náhledy se stahují jen na Wi-Fi " +
+                    "a nad $threshold % baterie (nebo při nabíjení), pak se ukazují i offline.",
             )
             SettingsButton("Omezit Google Fotky na pozadí") { GooglePhotos.appSettings(context) }
             SettingsButton("Systémový spořič baterie") { GooglePhotos.batterySaverSettings(context) }

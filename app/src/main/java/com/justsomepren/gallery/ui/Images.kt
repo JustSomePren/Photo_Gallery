@@ -71,16 +71,19 @@ object ImageCache {
     fun cachedThumbnail(uri: Uri, size: Int): Bitmap? = thumbs.get("$uri@$size")
 
     suspend fun thumbnail(resolver: ContentResolver, uri: Uri, size: Int) =
-        load(thumbs, "$uri@$size") { fake?.invoke(uri) ?: resolver.loadThumbnail(uri, Size(size, size), null) }
+        load(thumbs, "$uri@$size") {
+            fake?.invoke(uri) ?: if (uri.scheme == "file") decode(resolver, uri, size) else resolver.loadThumbnail(uri, Size(size, size), null)
+        }
 
     suspend fun fullImage(resolver: ContentResolver, uri: Uri, maxSide: Int) =
-        load(full, "$uri#$maxSide") {
-            fake?.let { return@load it(uri) }
-            ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
-                val scale = min(1f, maxSide.toFloat() / max(info.size.width, info.size.height))
-                if (scale < 1f) {
-                    decoder.setTargetSize((info.size.width * scale).toInt(), (info.size.height * scale).toInt())
-                }
+        load(full, "$uri#$maxSide") { fake?.invoke(uri) ?: decode(resolver, uri, maxSide) }
+
+    /** Also reads a downloaded preview of a photo that is only in Google Photos (a file, not in MediaStore). */
+    private fun decode(resolver: ContentResolver, uri: Uri, maxSide: Int): Bitmap =
+        ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
+            val scale = min(1f, maxSide.toFloat() / max(info.size.width, info.size.height))
+            if (scale < 1f) {
+                decoder.setTargetSize((info.size.width * scale).toInt(), (info.size.height * scale).toInt())
             }
         }
 

@@ -14,6 +14,15 @@ data class BatteryState(val level: Int, val charging: Boolean, val powerSave: Bo
     fun saver(threshold: Int) = powerSave || (!charging && level < threshold)
 }
 
+/** Below the threshold and not charging: background work should wait. */
+fun Context.belowBatteryThreshold(threshold: Int): Boolean {
+    val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return false
+    val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, 100) * 100 /
+        battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+    val charging = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+    return !charging && level < threshold
+}
+
 /** Only listens while someone collects it, i.e. while the app is on screen. */
 fun Context.batteryFlow(): Flow<BatteryState> = callbackFlow {
     val power = getSystemService(PowerManager::class.java)

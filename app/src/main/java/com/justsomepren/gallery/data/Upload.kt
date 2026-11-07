@@ -6,12 +6,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
-import android.os.BatteryManager
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
@@ -42,13 +40,18 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 object GoogleAuth {
     private const val SCOPE = "https://www.googleapis.com/auth/photoslibrary.appendonly"
 
+    // Reads back only what this app uploaded; Google allows nothing more since March 2025.
+    private const val READ_OWN = "https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"
+
     fun request(email: String): AuthorizationRequest = AuthorizationRequest.builder()
-        .setRequestedScopes(listOf(Scope(SCOPE)))
+        .setRequestedScopes(listOf(Scope(SCOPE), Scope(READ_OWN)))
         .setAccount(Account(email, "com.google"))
         .build()
 
@@ -199,6 +202,25 @@ class PhotosApi(private val context: Context, private val token: String) {
     fun createAlbum(title: String): String {
         val body = JSONObject().put("album", JSONObject().put("title", title))
         return JSONObject(post("$baseUrl/albums", body)).getString("id")
+    }
+
+    /** One page of the photos this app uploaded, with the token of the next page. */
+    fun listOwn(pageToken: String?): JSONObject {
+        val page = pageToken?.let { "&pageToken=" + URLEncoder.encode(it, "UTF-8") }.orEmpty()
+        val connection = open("https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100$page").apply {
+            requestMethod = "GET"
+            doOutput = false
+        }
+        return JSONObject(read(connection))
+    }
+
+    fun download(url: String, file: File) {
+        val connection = open(url).apply {
+            requestMethod = "GET"
+            doOutput = false
+        }
+        if (connection.responseCode !in 200..299) throw HttpException(connection.responseCode, "download")
+        connection.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
     }
 
     private fun post(url: String, body: JSONObject): String {
@@ -429,14 +451,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private fun seesAllPhotos() =
         applicationContext.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
 
-    private fun lowBattery(): Boolean {
-        val battery = applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            ?: return false
-        val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, 100) * 100 /
-            battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
-        val charging = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
-        return !charging && level < prefs.threshold.value
-    }
+    private fun lowBattery() = applicationContext.belowBatteryThreshold(prefs.threshold.value)
 
     private fun foregroundInfo(done: Int, total: Int): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)

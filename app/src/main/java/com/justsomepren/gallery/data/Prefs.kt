@@ -71,6 +71,9 @@ class Prefs(context: Context) {
     val tripSearch = MutableStateFlow<Pair<Int, Int>?>(null)
 
     val threshold = MutableStateFlow(sp.getInt("threshold", 70))
+
+    /** Calendar and events also show photos this app sent to Google Photos and that left the phone. */
+    val showCloud = MutableStateFlow(sp.getBoolean("showCloud", true))
     val warmup = MutableStateFlow(sp.getBoolean("warmup", true))
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
@@ -101,6 +104,7 @@ class Prefs(context: Context) {
     val hasTargets get() = sp.contains("targets")
 
     fun setThreshold(value: Int) = setInt(threshold, "threshold", value)
+    fun setShowCloud(value: Boolean) = setBoolean(showCloud, "showCloud", value)
     fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)

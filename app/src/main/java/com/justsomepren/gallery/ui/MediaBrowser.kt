@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
@@ -77,6 +78,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -97,6 +99,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.formatDayHeader
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.rememberUpdatedState
@@ -126,12 +129,14 @@ fun MediaBrowser(
     header: @Composable () -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {},
 ) {
+    val context = LocalContext.current
     var selected by vm.selection(stateKey)
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
     val album = source as? Source.Album
-    val picked = items.filter { it.id in selected }
+    // Photos only in Google Photos can't be moved, shared or deleted from here
+    val picked = items.filter { it.id in selected && !it.isCloud }
 
     fun toggle(ids: List<Long>) {
         selected = if (selected.containsAll(ids)) selected - ids.toSet() else selected + ids
@@ -156,7 +161,7 @@ fun MediaBrowser(
                         IconButton(onClick = ::done) { Icon(Icons.Default.Close, "Zrušit výběr") }
                     },
                     actions = {
-                        IconButton(onClick = { selected = items.map { it.id }.toSet() }) {
+                        IconButton(onClick = { selected = items.filterNot { it.isCloud }.map { it.id }.toSet() }) {
                             Icon(Icons.Default.SelectAll, "Vybrat vše")
                         }
                         FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
@@ -188,7 +193,7 @@ fun MediaBrowser(
                     actions = {
                         extraActions()
                         if (onBack != null && items.isNotEmpty()) {
-                            IconButton(onClick = { selected = items.map { it.id }.toSet() }) {
+                            IconButton(onClick = { selected = items.filterNot { it.isCloud }.map { it.id }.toSet() }) {
                                 Icon(Icons.Default.SelectAll, "Vybrat celé album")
                             }
                         }
@@ -228,7 +233,13 @@ fun MediaBrowser(
                     bottomPadding = padding.calculateBottomPadding(),
                     vm = vm,
                     header = header,
-                    onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
+                    onClick = {
+                        when {
+                            it.isCloud -> GooglePhotos.openLink(context, it.cloudUrl!!)
+                            selected.isEmpty() -> onOpen(it)
+                            else -> toggle(listOf(it.id))
+                        }
+                    },
                     onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
@@ -381,7 +392,7 @@ private fun MediaGrid(
                                 .combinedClickable(
                                     onClick = { onClick(item) },
                                     // Starts selecting; dragging on from here is handled by dragToSelect.
-                                    onLongClick = { onSelect(currentSelection + item.id) },
+                                    onLongClick = { if (!item.isCloud) onSelect(currentSelection + item.id) },
                                 ),
                         ) {
                             Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
@@ -390,6 +401,7 @@ private fun MediaGrid(
                             }
                             if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
                             if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
+                            if (item.isCloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
                             if (item.id in selected) {
                                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
                                 CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)

@@ -167,7 +167,7 @@ class LinkProvider : ContentProvider() {
                 }
                 // "from-to,from-to,...": one count per window, the photos are read only once
                 "counts" -> MatrixCursor(arrayOf("count")).apply {
-                    val media = MediaRepository(context).loadAll()
+                    val media = CloudPhotos.withCloud(context, MediaRepository(context).loadAll())
                     uri.getQueryParameter("windows").orEmpty().split(",").filter { it.isNotBlank() }.forEach { window ->
                         val (from, to) = window.split("-").map { it.toLong() }
                         addRow(arrayOf(media.filterBy(Source.Span("", from, to), emptyList()).size))
@@ -177,7 +177,7 @@ class LinkProvider : ContentProvider() {
                 "covers" -> MatrixCursor(arrayOf("day", "id")).apply {
                     val from = uri.getQueryParameter("from")!!.toLong()
                     val to = uri.getQueryParameter("to")!!.toLong()
-                    MediaRepository(context).loadAll().filter { it.isCameraShot && it.day in from..to }
+                    CloudPhotos.withCloud(context, MediaRepository(context).loadAll()).filter { it.isCameraShot && it.day in from..to }
                         .groupBy { it.day }
                         .forEach { (day, items) -> addRow(arrayOf(day, items.cover()!!.id)) }
                 }
@@ -192,7 +192,8 @@ class LinkProvider : ContentProvider() {
     private fun photos(context: Context, uri: Uri): List<MediaItem> {
         val from = uri.getQueryParameter("from")?.toLongOrNull() ?: return emptyList()
         val to = uri.getQueryParameter("to")?.toLongOrNull() ?: return emptyList()
-        return MediaRepository(context).loadAll().filterBy(Source.Span("", from, to), emptyList()).sortedBy { it.date }
+        val media = CloudPhotos.withCloud(context, MediaRepository(context).loadAll())
+        return media.filterBy(Source.Span("", from, to), emptyList()).sortedBy { it.date }
     }
 
     /** Reads the GPS of at most 20 photos spread over the event; most photos have none. */
@@ -217,6 +218,8 @@ class LinkProvider : ContentProvider() {
         val context = context ?: return null
         if (!CalendarLink.isCalendar(context, callingPackage)) return null
         val id = uri.lastPathSegment?.toLongOrNull() ?: return null
+        // A photo only in Google Photos already has its small preview
+        if (id < 0) return CloudPhotos.previewFile(context, id)?.let { ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_ONLY) }
         val file = File(context.cacheDir, "link/$id.jpg")
         if (!file.exists()) {
             val bitmap = listOf(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)

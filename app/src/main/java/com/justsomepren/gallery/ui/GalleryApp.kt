@@ -69,6 +69,7 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.Screen
 import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CalendarLink
+import com.justsomepren.gallery.data.CloudPhotos
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
@@ -128,6 +129,10 @@ private fun Main(vm: GalleryViewModel) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    val showCloud by vm.prefs.showCloud.collectAsStateWithLifecycle()
+    val cloudVersion by CloudPhotos.version.collectAsStateWithLifecycle()
+    // The calendar, days and events also show photos this app sent to Google Photos that left the phone
+    val dated = remember(all, showCloud, cloudVersion) { CloudPhotos.withCloud(context, all) }
 
     val stack = vm.stack
     val back: () -> Unit = { stack.removeAt(stack.lastIndex) }
@@ -150,7 +155,10 @@ private fun Main(vm: GalleryViewModel) {
         MediaBrowser(
             source = source,
             stateKey = stateKey.toString(),
-            items = remember(all, albums, source) { all.filterBy(source, albums) },
+            // Dates also show photos that are only in Google Photos
+            items = remember(all, dated, albums, source) {
+                (if (source is Source.Period || source is Source.Span) dated else all).filterBy(source, albums)
+            },
             vm = vm,
             gridState = vm.gridState(stateKey),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
@@ -191,7 +199,7 @@ private fun Main(vm: GalleryViewModel) {
             browser(
                 top.source,
                 back,
-                header = { if (day != null) DayEvents(day, calendarItems, all) { stack.add(Screen.Grid(it)) } },
+                header = { if (day != null) DayEvents(day, calendarItems, dated) { stack.add(Screen.Grid(it)) } },
             ) {
                 if (linked != null) {
                     IconButton(onClick = { CalendarLink.openEvent(context, linked.id, linked.begin) }) {
@@ -229,7 +237,7 @@ private fun Main(vm: GalleryViewModel) {
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
                 when (vm.tab) {
                     0 -> if (calendar) {
-                        CalendarScreen(all, events, calendarItems, vm, openSending, actions = { photoActions() }) { stack.add(it) }
+                        CalendarScreen(dated, events, calendarItems, vm, openSending, actions = { photoActions() }) { stack.add(it) }
                     } else {
                         browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }

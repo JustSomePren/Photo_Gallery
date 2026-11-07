@@ -62,6 +62,18 @@ Když je nainstalovaný i **Kalendář** (repozitář Calendar), propojí se sam
 
 Změnu v Kalendáři Galerie zachytí hned, jinak při otevření a při odesílání na pozadí.
 
+### Fotky, které už jsou jen v Google Fotkách
+
+Když fotku, kterou Galerie poslala do Google Fotek, z telefonu smažeš (třeba přes *Uvolnit místo*),
+kalendář, dny a události ji ukazují dál, s ikonkou mráčku. Klepnutím se otevře v Google Fotkách.
+
+- Jde to **jen u fotek, které poslala tahle Galerie**. Ostatní fotky z Google Fotek Google
+  aplikacím od 31. 3. 2025 číst nedovolí.
+- Stahuje se jen malý náhled (asi 50 kB), jen na **Wi-Fi** a jen nad hranicí baterie z nastavení
+  (nebo při nabíjení), zhruba dvakrát denně a při otevření aplikace. Pak se ukazuje i offline.
+- Vypnout: *Nastavení → Google Fotky → V kalendáři i fotky jen z Google Fotek*.
+- Účty přidané před touto verzí je potřeba jednou znovu přihlásit (v Odesílání se objeví „Přihlásit“).
+
 ### Moje alba
 
 Alba si pamatují fotky podle jména souboru a data, takže přežijí i přesun fotky i nový telefon (viz Záloha).
