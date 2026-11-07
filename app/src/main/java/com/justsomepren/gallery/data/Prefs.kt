@@ -220,8 +220,11 @@ class Prefs(context: Context) {
     fun collectAuto(media: List<MediaItem>): Int {
         val rules = events.value.filter { it.autoSend && it.account in accounts.value }
         if (rules.isEmpty()) return 0
+        // Per account the most specific event decides the album, the same one the grid shows.
         val wanted = media.filter { it.isCameraShot }.flatMap { item ->
-            rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album, it.id) }
+            rules.groupBy { it.account!! }.mapNotNull { (account, events) ->
+                events.mostSpecific(item.day)?.let { QueueItem.of(item, account, it.album, it.id) }
+            }
         }
         // Refused there before: list them as failed again, so "Zkusit znovu" can reach them.
         val listed = failed.value.map { it.sentKey }.toSet()
@@ -246,6 +249,9 @@ class Prefs(context: Context) {
         val id = item.eventId ?: return item
         val event = events.value.firstOrNull { it.id == id } ?: return null
         if (!event.autoSend || event.account == null || !event.covers(item.day)) return null
+        // A newer event inside this one takes these photos over.
+        val sending = events.value.filter { it.autoSend && it.account == event.account }
+        if (sending.mostSpecific(item.day) != event) return null
         return item.copy(account = event.account, album = event.album)
     }
 

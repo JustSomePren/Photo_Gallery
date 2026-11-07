@@ -31,6 +31,9 @@ data class Event(
     val source get() = Source.Period(name, startDay, endDay)
 }
 
+/** Of the events covering a day, the shortest: a city on a long trip rather than the whole trip. */
+fun List<Event>.mostSpecific(day: Long): Event? = filter { it.covers(day) }.minByOrNull { it.endDay - it.startDay }
+
 val EVENT_COLORS = listOf(
     0xFFE53935, 0xFFFB8C00, 0xFFFDD835, 0xFF43A047,
     0xFF00ACC1, 0xFF1E88E5, 0xFF8E24AA, 0xFFD81B60,

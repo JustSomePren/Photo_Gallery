@@ -102,6 +102,7 @@ import com.justsomepren.gallery.data.formatWeekday
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.month
 import com.justsomepren.gallery.data.monthTitle
+import com.justsomepren.gallery.data.mostSpecific
 import com.justsomepren.gallery.data.title
 
 /** One screen for all photos, favorites and every album. */
@@ -273,7 +274,7 @@ private fun buildEntries(items: List<MediaItem>, events: List<Event>): List<Grid
         var current: Event? = null
         for (item in group) {
             // An event inside a longer one (a city on a long trip) is the more specific one to show.
-            val event = events.filter { it.covers(item.day) }.minByOrNull { it.endDay - it.startDay }
+            val event = events.mostSpecific(item.day)
             if (event != null && event != current) entries += GridEntry.EventStart(month, event, item.id)
             current = event
             entries += GridEntry.Photo(month, item, event)

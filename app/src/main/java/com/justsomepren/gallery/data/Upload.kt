@@ -227,7 +227,14 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private val prefs = Prefs.get(context)
 
     // The periodic and the one-time run share the queue; only one may send at a time.
-    override suspend fun doWork(): Result = sending.withLock { withContext(Dispatchers.IO) { sendQueue() } }
+    override suspend fun doWork(): Result = sending.withLock {
+        withContext(Dispatchers.IO) { sendQueue() }.also { result ->
+            // A finished "send now" run ends it, also when there turned out to be nothing to send.
+            if (result == Result.success() && (inputData.getBoolean(NOW, false) || prefs.queue.value.isEmpty())) {
+                prefs.setSendNowPending(false)
+            }
+        }
+    }
 
     private suspend fun sendQueue(): Result {
         if (!inputData.getBoolean(NOW, false) && lowBattery()) {
@@ -274,11 +281,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
         // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
         val waiting = prefs.queue.value.filter { it.key in camera && it.account !in prefs.accountProblems.value }
-        if (waiting.isEmpty()) {
-            prefs.setSendNowPending(false)
-            return Result.success()
-        }
-        return Result.retry()
+        return if (waiting.isEmpty()) Result.success() else Result.retry()
     }
 
     /**
