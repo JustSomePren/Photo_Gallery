@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,6 +84,14 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     val calendarState = LazyListState()
 
     val dialogs = OpenDialogs()
+
+    /**
+     * Selected photos per screen. Kept here rather than in the saved screen state: selecting all of a big
+     * library would be too large for Android to save when the app goes to the background.
+     */
+    private val selections = mutableMapOf<String, MutableState<Set<Long>>>()
+
+    fun selection(key: String) = selections.getOrPut(key) { mutableStateOf(emptySet()) }
 
     /** The photos each open viewer started with; kept here so turning the phone shows the same photo. */
     private val viewerPhotos = mutableMapOf<Screen.Viewer, List<Long>>()

@@ -67,7 +67,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
@@ -119,7 +118,7 @@ fun MediaBrowser(
     header: @Composable () -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {},
 ) {
-    var selected by rememberSaveable(stateKey, stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
+    var selected by vm.selection(stateKey)
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
@@ -256,8 +255,6 @@ fun FavoriteButton(items: List<MediaItem>, onClick: () -> Unit) {
         )
     }
 }
-
-private val SelectionSaver = Saver<Set<Long>, LongArray>({ it.toLongArray() }, { it.toSet() })
 
 private sealed interface GridEntry {
     val month: String
