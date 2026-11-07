@@ -132,6 +132,16 @@ class QueueTest {
     }
 
     @Test
+    fun queuedPhotoFollowsItsFileAfterReindex() {
+        val photo = photoOn(LocalDate.of(2026, 11, 10), 1)
+        prefs.enqueue(listOf(QueueItem.of(photo, "me@gmail.com", null)))
+        // After a reindex the same photo has a new id; the old id now belongs to something else.
+        val reindexed = photo.copy(id = 77, uri = Uri.parse("content://media/external/images/media/77"))
+        prefs.followFiles(mapOf(reindexed.key to reindexed))
+        assertEquals("content://media/external/images/media/77", prefs.queue.value.single().uri)
+    }
+
+    @Test
     fun eventsAndQueueSurviveRestart() {
         prefs.saveEvent(trip)
         prefs.saveEvent(trip.copy(name = "Přejmenováno"))

@@ -168,8 +168,10 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
         val media = MediaRepository(applicationContext).loadAll()
         // Last check of the owner's rule: only photos and videos taken with the camera ever leave the phone.
-        val cameraKeys = media.filter { it.isCameraShot }.map { it.key }.toSet()
-        prefs.removeFromQueue(prefs.queue.value.filter { it.key !in cameraKeys })
+        val camera = media.filter { it.isCameraShot }.associateBy { it.key }
+        prefs.removeFromQueue(prefs.queue.value.filter { it.key !in camera })
+        // The stored link may point to another file after a reindex; send the camera photo with that key.
+        prefs.followFiles(camera)
         prefs.collectAuto(media)
         val total = prefs.queue.value.size
         if (total == 0) return Result.success()

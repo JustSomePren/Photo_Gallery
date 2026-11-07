@@ -241,6 +241,16 @@ class Prefs(context: Context) {
         return item.copy(account = event.account, album = event.album)
     }
 
+    /** Points queued and failed photos at the current file with the same key (ids change on a reindex). */
+    @Synchronized
+    fun followFiles(byKey: Map<String, MediaItem>) {
+        val follow = { item: QueueItem ->
+            byKey[item.key]?.let { item.copy(uri = it.uri.toString(), name = it.name, mime = it.mime) } ?: item
+        }
+        queueList.update { it.map(follow) }
+        failedList.update { it.map(follow) }
+    }
+
     @Synchronized
     fun markSent(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }
