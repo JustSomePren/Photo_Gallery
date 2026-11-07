@@ -43,12 +43,9 @@ object GooglePhotos {
     fun showOnMap(context: Context, lat: Double, lon: Double) =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon")))
 
-    /** A photo that is only in Google Photos, opened there (or in the browser). */
-    fun openLink(context: Context, url: String) = start(
-        context,
-        Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(PACKAGE),
-        fallback = Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-    )
+    /** A web link (e.g. the Google Photos picker); opens in the Photos app when it handles it. */
+    fun openLink(context: Context, url: String) =
+        start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
     fun openApp(context: Context) =
         start(context, context.packageManager.getLaunchIntentForPackage(PACKAGE))
@@ -89,7 +86,14 @@ object GooglePhotos {
     }
 
     fun share(context: Context, items: List<MediaItem>) =
-        start(context, Intent.createChooser(shareIntent(items), "Sdílet"))
+        start(context, Intent.createChooser(if (items.size == 1) shareOne(items.single()) else shareIntent(items), "Sdílet"))
+
+    /** One photo as one photo: apps like Instagram offer "Příběh" (Story) only for a single picture or video. */
+    fun shareOne(item: MediaItem): Intent = Intent(Intent.ACTION_SEND)
+        .setType(item.mime)
+        .putExtra(Intent.EXTRA_STREAM, item.uri)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .apply { clipData = ClipData.newRawUri(null, item.uri) }
 
     fun send(context: Context, target: UploadTarget, items: List<MediaItem>) = start(
         context,

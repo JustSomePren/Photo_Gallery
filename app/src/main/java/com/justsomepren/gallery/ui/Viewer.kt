@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -86,7 +87,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
             beyondViewportPageCount = if (saver) 0 else 1,
         ) { page ->
             val item = items[page]
-            if (item.isVideo) {
+            if (item.isVideo && !item.cloud) {
                 VideoPage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
             } else {
                 ZoomableImage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
@@ -108,6 +109,12 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zpět") }
                 },
                 actions = {
+                    if (current.cloud) {
+                        TextButton(onClick = { GooglePhotos.openApp(context) }) {
+                            Text("Jen náhled · otevřít Google Fotky", color = Color.White)
+                        }
+                        return@TopAppBar
+                    }
                     FavoriteButton(listOf(current)) { actions.toggleFavorite(listOf(current)) }
                     IconButton(onClick = { GooglePhotos.edit(context, current) }) {
                         Icon(Icons.Default.Edit, "Upravit v Google Fotkách")

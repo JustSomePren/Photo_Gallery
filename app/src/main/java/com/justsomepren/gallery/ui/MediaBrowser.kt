@@ -136,7 +136,7 @@ fun MediaBrowser(
     val actions = rememberMediaActions(vm)
     val album = source as? Source.Album
     // Photos only in Google Photos can't be moved, shared or deleted from here
-    val picked = items.filter { it.id in selected && !it.isCloud }
+    val picked = items.filter { it.id in selected && !it.cloud }
 
     fun toggle(ids: List<Long>) {
         selected = if (selected.containsAll(ids)) selected - ids.toSet() else selected + ids
@@ -147,8 +147,9 @@ fun MediaBrowser(
     }
 
     BackHandler(selected.isNotEmpty()) { done() }
-    LaunchedEffect(items) {
-        val present = items.map { it.id }.toSet()
+    // Cloud previews cannot be selected: there is nothing on the phone to send, move or delete.
+    LaunchedEffect(items, selected) {
+        val present = items.filterNot { it.cloud }.map { it.id }.toSet()
         if (!present.containsAll(selected)) selected = selected intersect present
     }
 
@@ -161,7 +162,7 @@ fun MediaBrowser(
                         IconButton(onClick = ::done) { Icon(Icons.Default.Close, "Zrušit výběr") }
                     },
                     actions = {
-                        IconButton(onClick = { selected = items.filterNot { it.isCloud }.map { it.id }.toSet() }) {
+                        IconButton(onClick = { selected = items.filterNot { it.cloud }.map { it.id }.toSet() }) {
                             Icon(Icons.Default.SelectAll, "Vybrat vše")
                         }
                         FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
@@ -193,7 +194,7 @@ fun MediaBrowser(
                     actions = {
                         extraActions()
                         if (onBack != null && items.isNotEmpty()) {
-                            IconButton(onClick = { selected = items.filterNot { it.isCloud }.map { it.id }.toSet() }) {
+                            IconButton(onClick = { selected = items.filterNot { it.cloud }.map { it.id }.toSet() }) {
                                 Icon(Icons.Default.SelectAll, "Vybrat celé album")
                             }
                         }
@@ -233,13 +234,7 @@ fun MediaBrowser(
                     bottomPadding = padding.calculateBottomPadding(),
                     vm = vm,
                     header = header,
-                    onClick = {
-                        when {
-                            it.isCloud -> GooglePhotos.openLink(context, it.cloudUrl!!)
-                            selected.isEmpty() -> onOpen(it)
-                            else -> toggle(listOf(it.id))
-                        }
-                    },
+                    onClick = { if (selected.isEmpty()) onOpen(it) else if (!it.cloud) toggle(listOf(it.id)) },
                     onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
@@ -317,8 +312,9 @@ private fun MediaGrid(
     onSelect: (Set<Long>) -> Unit,
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
-    val columns = if (LocalSaver.current) 5 else 4
-    val thumbPx = gridThumbPx()
+    val chosen by vm.prefs.gridColumns.collectAsStateWithLifecycle()
+    val columns = if (LocalSaver.current) (chosen + 1).coerceAtMost(7) else chosen
+    val thumbPx = gridThumbPx(columns)
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     val entries = remember(items, events, byDay) { buildEntries(items, events, byDay) }
@@ -352,7 +348,9 @@ private fun MediaGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = state,
-            modifier = Modifier.dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
+            modifier = Modifier
+                .pinchToZoom { vm.prefs.setGridColumns(chosen - it) }
+                .dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -392,7 +390,7 @@ private fun MediaGrid(
                                 .combinedClickable(
                                     onClick = { onClick(item) },
                                     // Starts selecting; dragging on from here is handled by dragToSelect.
-                                    onLongClick = { if (!item.isCloud) onSelect(currentSelection + item.id) },
+                                    onLongClick = { if (!item.cloud) onSelect(currentSelection + item.id) },
                                 ),
                         ) {
                             Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
@@ -401,7 +399,7 @@ private fun MediaGrid(
                             }
                             if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
                             if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
-                            if (item.isCloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                            if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
                             if (item.id in selected) {
                                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
                                 CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)
@@ -620,7 +618,7 @@ private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifi
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.CornerIcon(
+internal fun androidx.compose.foundation.layout.BoxScope.CornerIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     alignment: Alignment,
     tint: Color = Color.White,

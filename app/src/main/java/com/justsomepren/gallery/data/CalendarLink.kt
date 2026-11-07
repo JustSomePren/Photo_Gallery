@@ -177,7 +177,7 @@ class LinkProvider : ContentProvider() {
                 "covers" -> MatrixCursor(arrayOf("day", "id")).apply {
                     val from = uri.getQueryParameter("from")!!.toLong()
                     val to = uri.getQueryParameter("to")!!.toLong()
-                    CloudPhotos.withCloud(context, MediaRepository(context).loadAll()).filter { it.isCameraShot && it.day in from..to }
+                    CloudPhotos.withCloud(context, MediaRepository(context).loadAll()).filter { it.inCalendar && it.day in from..to }
                         .groupBy { it.day }
                         .forEach { (day, items) -> addRow(arrayOf(day, items.cover()!!.id)) }
                 }

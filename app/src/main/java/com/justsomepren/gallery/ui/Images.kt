@@ -72,7 +72,12 @@ object ImageCache {
 
     suspend fun thumbnail(resolver: ContentResolver, uri: Uri, size: Int) =
         load(thumbs, "$uri@$size") {
-            fake?.invoke(uri) ?: if (uri.scheme == "file") decode(resolver, uri, size) else resolver.loadThumbnail(uri, Size(size, size), null)
+            fake?.invoke(uri) ?: if (uri.scheme == "file") {
+                // A cloud preview: already small, kept in the app's own folder.
+                android.graphics.BitmapFactory.decodeFile(uri.path) ?: error("no preview")
+            } else {
+                resolver.loadThumbnail(uri, Size(size, size), null)
+            }
         }
 
     suspend fun fullImage(resolver: ContentResolver, uri: Uri, maxSide: Int) =
@@ -120,6 +125,6 @@ fun <T : Any> rememberLoaded(vararg keys: Any, initial: T? = null, load: suspend
     return value
 }
 
-/** One thumbnail size for the grid and the calendar, so they share the cache. */
+/** Thumbnail size for a grid of [columns]; the same size is shared by the grid and the calendar. */
 @Composable
-fun gridThumbPx(): Int = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / 4).roundToPx() }
+fun gridThumbPx(columns: Int = 4): Int = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / columns).roundToPx() }

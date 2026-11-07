@@ -37,7 +37,8 @@ class CloudPhotosTest {
     fun setUp() {
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         Prefs.reset()
-        val dir = File(context.filesDir, "cloud").apply { mkdirs() }
+        File(context.filesDir, "cloud").deleteRecursively()
+        val dir = File(context.filesDir, "cloud-sent").apply { mkdirs() }
         File(dir, "index.json").writeText(
             JSONArray(listOf(googleItem("a", "PXL_1.jpg", "2026-08-10T10:00:00Z"), googleItem("b", "PXL_2.jpg", "2026-08-11T12:30:00Z"))).toString(),
         )
@@ -47,13 +48,25 @@ class CloudPhotosTest {
     @Test
     fun onlyPhotosThatLeftThePhoneAreAdded() {
         val all = CloudPhotos.withCloud(context, listOf(inPhone))
-        assertEquals(listOf("PXL_1.jpg", "PXL_2.jpg"), all.map { it.name })
+        assertEquals(listOf("PXL_2.jpg", "PXL_1.jpg"), all.map { it.name })
 
-        val cloud = all.last()
-        assertTrue(cloud.isCloud && cloud.isCameraShot && cloud.id < 0)
+        val cloud = all.first()
+        assertTrue(cloud.cloud && cloud.inCalendar && cloud.id < 0)
         assertEquals(Instant.parse("2026-08-11T12:30:00Z").toEpochMilli(), cloud.date)
-        assertEquals("https://photos.google.com/lr/photo/b", cloud.cloudUrl)
         assertEquals(cloud, CloudPhotos.items(context).find { it.id == cloud.id })
+    }
+
+    @Test
+    fun pickedAndSentPreviewsShowTogetherOnce() {
+        val library = CloudLibrary(context)
+        val time = Instant.parse("2026-08-11T12:30:00Z").toEpochMilli()
+        // The same photo picked by hand and sent by the app, plus an old one from another phone
+        library.add(CloudPhoto("x", time, "PXL_2.jpg", "image/jpeg"), ByteArray(1))
+        library.add(CloudPhoto("y", time - 86_400_000L * 400, "IMG_old.jpg", "image/jpeg"), ByteArray(1))
+
+        val all = CloudPhotos.withCloud(context, listOf(inPhone), library)
+        assertEquals(listOf("PXL_2.jpg", "IMG_old.jpg", "PXL_1.jpg"), all.map { it.name })
+        assertTrue(all.filter { it.cloud }.all { it.inCalendar })
     }
 
     @Test

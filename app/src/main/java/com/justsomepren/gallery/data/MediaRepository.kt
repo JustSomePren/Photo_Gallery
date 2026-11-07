@@ -30,10 +30,9 @@ data class MediaItem(
     val relativePath: String,
     /** Changes when the file is edited, so pictures are loaded again. */
     val modified: Long = 0,
-    /** Set for a photo that is only in Google Photos; opens it there. */
-    val cloudUrl: String? = null,
+    /** Only in Google Photos; shown from a small preview, never sent, moved or deleted. */
+    val cloud: Boolean = false,
 ) {
-    val isCloud get() = cloudUrl != null
 
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
@@ -41,13 +40,19 @@ data class MediaItem(
     /** Taken with the phone's camera; screenshots, downloads and chat photos are never sent to the cloud. */
     val isCameraShot get() = relativePath.startsWith("DCIM/Camera/", ignoreCase = true)
 
+    /** Shown in the calendar and with events: camera photos and previews of photos in Google Photos. */
+    val inCalendar get() = isCameraShot || cloud
+
     /** Sharp, detailed photos compress worse, so more bytes per pixel usually means a better shot. */
     val detail get() = if (width > 0 && height > 0) size.toDouble() / (width.toLong() * height) else 0.0
 }
 
-/** The photo to show for a day or an event: a favorite first, then the most detailed photo, videos last. */
-fun List<MediaItem>.cover(): MediaItem? =
-    maxWithOrNull(compareBy<MediaItem>({ it.isFavorite }, { !it.isVideo }, { it.detail }))
+/** The best photos first: favorites, then photos before videos, then the most detailed. */
+fun List<MediaItem>.bestFirst(): List<MediaItem> =
+    sortedWith(compareByDescending<MediaItem> { it.isFavorite }.thenByDescending { !it.isVideo }.thenByDescending { it.detail })
+
+/** The photo to show for a day or an event. */
+fun List<MediaItem>.cover(): MediaItem? = bestFirst().firstOrNull()
 
 data class MediaDetails(val rows: List<Pair<String, String>>, val location: DoubleArray?)
 
@@ -88,7 +93,7 @@ class MediaRepository(private val context: Context) {
                     uri = ContentUris.withAppendedId(collection, id),
                     mime = c.getString(1) ?: if (isVideo) "video/*" else "image/*",
                     isVideo = isVideo,
-                    date = if (taken > 0) taken else c.getLong(3) * 1000,
+                    date = bestDate(taken, c.getString(7).orEmpty(), c.getString(11).orEmpty(), c.getLong(3), c.getLong(12)),
                     dateTaken = taken,
                     bucketId = c.getLong(4),
                     bucketName = c.getString(5) ?: "Bez názvu",
@@ -180,6 +185,46 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
             val keys = albums.find { it.id == source.id }?.refs.orEmpty().map { it.key }.toSet()
             filter { it.key in keys }
         }
-        is Source.Period -> filter { it.day in source.start..source.end && (!source.cameraOnly || it.isCameraShot) }
-        is Source.Span -> filter { it.date >= source.from && it.date < source.to && it.isCameraShot }
+        is Source.Period -> filter { it.day in source.start..source.end && (!source.cameraOnly || it.inCalendar) }
+        is Source.Span -> filter { it.date >= source.from && it.date < source.to && it.inCalendar }
     }
+
+/**
+ * The capture date for camera photos. Other files (WhatsApp, downloads) often have none, or one set when
+ * they arrived on this phone; a date in their name is more reliable then.
+ */
+internal fun bestDate(taken: Long, name: String, relativePath: String, addedSeconds: Long, modifiedSeconds: Long): Long {
+    val camera = relativePath.startsWith("DCIM/Camera/", ignoreCase = true)
+    val fromName = if (camera) null else dateFromName(name)
+    return when {
+        taken > 0 && (fromName == null || kotlin.math.abs(fromName - taken) < 86_400_000L) -> taken
+        fromName != null -> fromName
+        else -> fallbackDate(name, addedSeconds, modifiedSeconds)
+    }
+}
+
+/**
+ * For files without a capture date (WhatsApp, downloads): the date in the file name, else the older of
+ * modified and added. "Added" alone would put a whole history on the day the phone was set up.
+ */
+internal fun fallbackDate(name: String, addedSeconds: Long, modifiedSeconds: Long): Long =
+    dateFromName(name) ?: listOf(addedSeconds, modifiedSeconds).filter { it > 0 }.minOrNull()?.times(1000) ?: 0
+
+private val datePattern = Regex(
+    """(?<!\d)((?:19|20)\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])""" +
+        """(?:[-_. ]?([01]\d|2[0-3])[-_.]?([0-5]\d)[-_.]?([0-5]\d))?""",
+)
+
+/** "IMG-20230514-WA0003.jpg", "Screenshot_20230514-101010.png", "PXL_20230514_101010123.jpg" → that moment. */
+internal fun dateFromName(name: String): Long? {
+    val m = datePattern.find(name) ?: return null
+    val (y, mo, d, h, mi, se) = m.destructured
+    val time = runCatching {
+        java.time.LocalDateTime.of(
+            y.toInt(), mo.toInt(), d.toInt(),
+            h.toIntOrNull() ?: 12, mi.toIntOrNull() ?: 0, se.toIntOrNull() ?: 0,
+        ).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }.getOrNull() ?: return null
+    // A number that only looks like a date must not move a photo into the future.
+    return time.takeIf { it <= System.currentTimeMillis() + 86_400_000L }
+}

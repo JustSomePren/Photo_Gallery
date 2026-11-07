@@ -2,6 +2,7 @@ package com.justsomepren.gallery.ui
 
 import android.content.Context
 import android.content.Intent
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,10 +43,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
 import kotlinx.coroutines.launch
+import com.justsomepren.gallery.data.onWifi
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,13 +58,22 @@ import kotlin.math.roundToInt
 fun SettingsScreen(vm: GalleryViewModel) {
     val context = LocalContext.current
     val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
-    val showCloud by vm.prefs.showCloud.collectAsStateWithLifecycle()
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
     val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     val trips by vm.prefs.trips.collectAsStateWithLifecycle()
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
+    var keepFavorites by rememberSaveable { mutableStateOf(true) }
+    var choosingFreeUp by rememberSaveable { mutableStateOf(false) }
+    val freeUp by vm.freeUp.collectAsStateWithLifecycle()
+    val freeUpChecking by vm.freeUpChecking.collectAsStateWithLifecycle()
+    val freeUpError by vm.freeUpError.collectAsStateWithLifecycle()
+    val allowCheck = rememberGoogleConsent(
+        vm,
+        onGranted = { vm.checkFreeUp(keepFavorites) },
+        onError = { toast(context, it) },
+    )
     val scope = rememberCoroutineScope()
     val timelineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -124,6 +138,9 @@ fun SettingsScreen(vm: GalleryViewModel) {
             Hint("Vypnuto: jen po měsících, víc fotek na obrazovce.")
 
             HorizontalDivider()
+            CloudSection(vm)
+
+            HorizontalDivider()
             Section("Výlety")
             Hint(
                 "Projde, kde byly fotky z fotoaparátu pořízené, a navrhne výlety – i ty staré. " +
@@ -143,6 +160,45 @@ fun SettingsScreen(vm: GalleryViewModel) {
                     "(Nastavení → Poloha → Časová osa → Exportovat) a načti ji sem. Poloha se doplní podle času fotky."
             )
             SettingsButton("Načíst Časovou osu (Timeline.json)") { timelineLauncher.launch(arrayOf("application/json", "*/*")) }
+
+            HorizontalDivider()
+            Section("Uvolnit místo")
+            Hint(
+                "Smaže z telefonu jen fotky a videa, které tahle aplikace nahrála do Google Fotek a které tam " +
+                    "teď ověřeně jsou: Google potvrdí, že tam položka je, se stejným názvem, a soubor v telefonu se " +
+                    "od nahrání nezměnil. Potřebuje internet. Fotky zálohované samotnými Google Fotkami ověřit " +
+                    "nejde – na ty použij Uvolnit místo přímo v Google Fotkách."
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ponechat oblíbené", Modifier.weight(1f))
+                Switch(keepFavorites, onCheckedChange = { keepFavorites = it })
+            }
+            if (freeUpChecking) {
+                Text("Ověřuji u Googlu…")
+            } else {
+                SettingsButton("Zkontrolovat, co je bezpečně v cloudu") { vm.checkFreeUp(keepFavorites) }
+            }
+            freeUpError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            freeUp?.let { result ->
+                Text(
+                    "${result.photos.size} fotek a videí (${Formatter.formatShortFileSize(context, result.bytes)}) " +
+                        "je ověřeně v Google Fotkách",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                result.perAccount.forEach { (account, count) -> Hint("$account: $count") }
+                if (result.unsure > 0) {
+                    Hint("${result.unsure} odeslaných nejde ověřit (soubor se od nahrání změnil) – zůstanou v telefonu.")
+                }
+                result.needsLogin.forEach { account ->
+                    SettingsButton("Povolit ověření pro $account") { allowCheck(account, GoogleAuth.READ) }
+                }
+                if (result.photos.isNotEmpty()) {
+                    SettingsButton("Vybrat, co smazat z telefonu") {
+                        vm.selection("free-up").value = result.photos.map { it.id }.toSet()
+                        choosingFreeUp = true
+                    }
+                }
+            }
 
             HorizontalDivider()
             Section("Baterie")
@@ -173,15 +229,6 @@ fun SettingsScreen(vm: GalleryViewModel) {
                 "Úpravy a hledání řeší Google Fotky. Aby na výletě nežraly baterku, " +
                     "nastav jim v Info o aplikaci → Baterie → Omezeno. Zálohu pak spustí, až je otevřeš."
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("V kalendáři i fotky jen z Google Fotek", Modifier.weight(1f))
-                Switch(showCloud, onCheckedChange = vm::setShowCloud)
-            }
-            Hint(
-                "Fotky, které tahle Galerie poslala do Google Fotek a v telefonu už nejsou (např. po Uvolnit místo). " +
-                    "Jiné fotky z Google Fotek Google aplikacím číst nedovolí. Náhledy se stahují jen na Wi-Fi " +
-                    "a nad $threshold % baterie (nebo při nabíjení), pak se ukazují i offline.",
-            )
             SettingsButton("Omezit Google Fotky na pozadí") { GooglePhotos.appSettings(context) }
             SettingsButton("Systémový spořič baterie") { GooglePhotos.batterySaverSettings(context) }
             if (!canManageMedia) {
@@ -202,6 +249,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
 
 
     if (showingTrips) TripsDialog(vm) { showingTrips = false }
+    if (choosingFreeUp) freeUp?.let { FreeUpDialog(it.photos, vm) { choosingFreeUp = false } }
 }
 
 @Composable
@@ -234,7 +282,10 @@ fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     }
 }
 
-fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+/** Shows a short message; safe to call from any thread. */
+fun toast(context: Context, text: String) {
+    android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+}
 
 /** Starts the app again, so every screen and the upload worker read the restored data. */
 private fun restartApp(context: Context) {
@@ -254,3 +305,55 @@ fun Hint(text: String) =
 @Composable
 fun SettingsButton(text: String, onClick: () -> Unit) =
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(text) }
+
+/** Old photos that are only in Google Photos, shown in the gallery and calendar from small previews. */
+@Composable
+private fun CloudSection(vm: GalleryViewModel) {
+    val context = LocalContext.current
+    val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
+    val show by vm.prefs.showCloud.collectAsStateWithLifecycle()
+    val sync by vm.cloudSync.collectAsStateWithLifecycle()
+    val start = rememberGoogleConsent(vm, onGranted = vm::startCloudSync, onError = { toast(context, it) })
+
+    Section("Fotky z Google Fotek")
+    Hint(
+        "Stáhne malé náhledy fotek, které máš jen v Google Fotkách, aby byly vidět v mřížce i v kalendáři. " +
+            "Jen přes Wi-Fi, nikdy přes data. Originály zůstávají v cloudu, nic se neodesílá ani nemaže."
+    )
+    Hint(
+        "Fotky, které poslala tahle Galerie a v telefonu už nejsou, se doplní samy: jen na Wi-Fi " +
+            "a nad hranicí baterie (nebo při nabíjení)."
+    )
+    Hint("Staženo: ${vm.cloud.count} náhledů (${Formatter.formatShortFileSize(context, vm.cloud.sizeBytes())})")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Ukazovat v galerii", Modifier.weight(1f))
+        Switch(show, onCheckedChange = vm::setShowCloud)
+    }
+    val state = sync
+    when {
+        state == null || state.done || state.error != null -> {
+            state?.error?.let { Text("Zastaveno: $it", color = MaterialTheme.colorScheme.error) }
+            if (state?.done == true) Text("Hotovo, přibylo ${state.added} fotek.")
+            if (accounts.isEmpty()) Hint("Nejdřív přidej Google účet v záložce Odesílání.")
+            accounts.forEach { email ->
+                SettingsButton("Načíst z $email") {
+                    if (onWifi(context)) start(email, GoogleAuth.PICKER) else toast(context, "Připoj se k Wi-Fi")
+                }
+            }
+        }
+        state.downloading > 0 -> Text("Kolo ${state.round}: stahuji ${state.downloading} náhledů…")
+        else -> {
+            Text("Kolo ${state.round}: vyber fotky v Google Fotkách (max 2 000)", style = MaterialTheme.typography.titleSmall)
+            vm.cloud.oldest()?.let {
+                Hint(
+                    "Zatím ${state.added} nových. Pokračuj fotkami staršími než " +
+                        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) +
+                        ". Už stažené klidně vyber znovu, přeskočí se. Když nic nového nepřibude, načítání skončí."
+                )
+            }
+        }
+    }
+    if (state != null && !state.done && state.error == null) {
+        SettingsButton("Ukončit načítání") { vm.stopCloudSync() }
+    }
+}

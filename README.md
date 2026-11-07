@@ -27,6 +27,15 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
   fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
   proč, např. „podle polohy · 5× víc fotek než obvykle“.
+- **Uvolnit místo** – *Nastavení → Uvolnit místo*. Smaže z telefonu jen fotky a videa, které tahle
+  aplikace nahrála do Google Fotek a které tam jsou ověřeně: Google při kontrole potvrdí, že položka
+  v účtu je se stejným názvem, a soubor v telefonu má stejnou velikost jako při nahrání. Bez internetu
+  se nic nesmaže a oblíbené lze ponechat. Ověřené fotky vidíš v mřížce a sám vybereš, které smazat;
+  videa jen ta, která Google už plně zpracoval. Pak potvrdíš v aplikaci (vždy, i se „správou médií“)
+  a těsně před smazáním se každá vybraná fotka znovu ověří u Googlu – co neprojde, zůstane.
+  Nakonec ještě dialog Androidu (ten se „správou médií“ vynechá). Jinde aplikace nic nemaže. Fotky zálohované
+  samotnými Google Fotkami ověřit nejde (Google je jiným aplikacím neukáže) – na ty je Uvolnit místo
+  v Google Fotkách. Ověření potřebuje jednou povolit čtení „jen toho, co nahrála tahle aplikace“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
@@ -41,6 +50,10 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
 - **Přesunout do složky** – mezi složkami v DCIM/ a Pictures/ nebo do nové složky.
+- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (2–7 sloupců).
+- **Kalendář fotek** – tři úrovně (tlačítka nahoře nebo roztažení prstů):
+  **Rok** (12 malých měsíců, klepnutím na měsíc se přiblíží), **Měsíc** (kalendář, rušné dny
+  ukazují 4 fotky) a **Dny** (každý den s fotkami jako řada velkých náhledů, klepnutím fotku otevřeš).
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
@@ -57,22 +70,37 @@ Když je nainstalovaný i **Kalendář** (repozitář Calendar), propojí se sam
   klepnutím uvidíš jen fotky z té doby (15 min před až 30 min po konci).
 - Kalendář si od Galerie bere náhledy fotek, seznam Google účtů a polohu fotek (pokud ji mají).
 - Kalendář (v obou aplikacích) i události z Kalendáře berou **jen fotky a videa z fotoaparátu**
-  (složka DCIM), ne snímky obrazovky, stažené ani přijaté obrázky.
+  (složka DCIM/Camera) a náhledy z Google Fotek, ne snímky obrazovky, stažené ani přijaté obrázky.
 - Fotka dne v kalendáři: přednost má oblíbená, jinak nejostřejší (ostré fotky mají víc dat na pixel).
 
 Změnu v Kalendáři Galerie zachytí hned, jinak při otevření a při odesílání na pozadí.
 
 ### Fotky, které už jsou jen v Google Fotkách
 
-Když fotku, kterou Galerie poslala do Google Fotek, z telefonu smažeš (třeba přes *Uvolnit místo*),
-kalendář, dny a události ji ukazují dál, s ikonkou mráčku. Klepnutím se otevře v Google Fotkách.
+Když fotku, kterou Galerie poslala do Google Fotek, z telefonu smažeš přes *Uvolnit místo*,
+mřížka, kalendář i Kalendář ji ukazují dál z malého náhledu, s ikonkou mráčku.
 
-- Jde to **jen u fotek, které poslala tahle Galerie**. Ostatní fotky z Google Fotek Google
-  aplikacím od 31. 3. 2025 číst nedovolí.
-- Stahuje se jen malý náhled (asi 50 kB), jen na **Wi-Fi** a jen nad hranicí baterie z nastavení
-  (nebo při nabíjení), zhruba dvakrát denně a při otevření aplikace. Pak se ukazuje i offline.
-- Vypnout: *Nastavení → Google Fotky → V kalendáři i fotky jen z Google Fotek*.
-- Účty přidané před touto verzí je potřeba jednou znovu přihlásit (v Odesílání se objeví „Přihlásit“).
+- Stahuje se sama, jen na **Wi-Fi** a nad hranicí baterie z nastavení (nebo při nabíjení),
+  zhruba dvakrát denně a při otevření aplikace. Pak se ukazuje i offline.
+- Funguje s oprávněním, které Galerie dostane při *Uvolnit místo*; jinak není co ukazovat.
+- Vypíná se spolu se starými fotkami níže: *Ukazovat v galerii*.
+
+### Staré fotky z Google Fotek
+
+*Nastavení → Fotky z Google Fotek → Načíst z účtu.* Otevře se výběr v Google Fotkách
+(Google dovolí najednou max **2 000** fotek a aplikaci nepustí do celé knihovny sám).
+
+1. Vyber fotky (nejrychleji podržet první a táhnout) → *Hotovo*.
+2. Aplikace stáhne malé náhledy (cca 10–20 kB na fotku) a výběr **otevře znovu sám**.
+   V Nastavení vidíš, od kterého data pokračovat do minulosti.
+3. Už stažené fotky můžeš vybrat znovu, přeskočí se. Když kolo nic nového nepřinese,
+   načítání skončí (nebo *Ukončit načítání*).
+
+- Jen přes **Wi-Fi**, na mobilních datech se nic nestáhne.
+- Náhledy jsou pak vidět i offline v mřížce a kalendáři, s ikonou mráčku. Fotky, které máš
+  i v telefonu, se neukážou dvakrát.
+- Náhledy nejdou vybrat, poslat ani smazat. Plnou kvalitu otevřeš v Google Fotkách.
+- Vypnout zobrazení: *Ukazovat v galerii*.
 
 ### Moje alba
 
@@ -157,6 +185,7 @@ Google vyžaduje, aby si aplikaci, která nahrává do Google Fotek, zaregistrov
 
 1. Otevři [console.cloud.google.com](https://console.cloud.google.com) a vytvoř nový projekt (např. „Galerie“).
 2. *APIs & Services → Library* → vyhledej **Photos Library API** → **Enable**.
+   Pro načtení starých fotek z cloudu povol stejně i **Photos Picker API**.
 3. *APIs & Services → OAuth consent screen* (Google Auth Platform):
    typ **External**, vyplň název a svůj e-mail, ulož.
 4. V části **Audience / Test users** přidej **všechny účty**, do kterých chceš posílat

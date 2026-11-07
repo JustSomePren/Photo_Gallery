@@ -26,8 +26,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Photos this app sent to Google Photos. Google lets the app read back only those.
- * A small preview of each is kept in the phone, so the calendar shows them even offline,
- * e.g. after "Free up space" removed the original from the phone.
+ * A small preview of each is kept in the phone, so they still show after "Free up space"
+ * removed the original. Old photos picked by hand are in [CloudLibrary].
  */
 object CloudPhotos {
     private const val PREVIEW = "=w512-h512"
@@ -38,7 +38,8 @@ object CloudPhotos {
     /** Grows after each download, so the screens show the new photos. */
     val version = MutableStateFlow(0)
 
-    private fun dir(context: Context) = File(context.filesDir, "cloud").apply { mkdirs() }
+    // Not the folder of CloudLibrary: each side cleans only its own previews
+    private fun dir(context: Context) = File(context.filesDir, "cloud-sent").apply { mkdirs() }
 
     private fun index(context: Context) = File(dir(context), "index.json")
 
@@ -51,15 +52,25 @@ object CloudPhotos {
         cached = null
     }
 
-    /** The phone's photos plus those only in the cloud; a photo still in the phone shows once. */
-    fun withCloud(context: Context, local: List<MediaItem>): List<MediaItem> {
-        if (!Prefs.get(context).showCloud.value) return local
+    /** Sent photos that are no longer in the phone. */
+    fun missing(context: Context, local: List<MediaItem>): List<MediaItem> {
         val inPhone = local.map { it.name }.toHashSet()
-        val extra = items(context).filter { it.name !in inPhone }
-        return if (extra.isEmpty()) local else local + extra
+        return items(context).filter { it.name !in inPhone }
     }
 
-    fun previewFile(context: Context, id: Long): File? = items(context).find { it.id == id }?.uri?.path?.let(::File)
+    /**
+     * The phone's photos plus previews of both kinds, each photo once; the order of [local] stays.
+     * Used by the screens and by the Kalendář app, so both show the same.
+     */
+    fun withCloud(context: Context, local: List<MediaItem>, library: CloudLibrary = CloudLibrary(context)): List<MediaItem> {
+        if (!Prefs.get(context).showCloud.value) return local
+        val extra = (library.asMediaItems(local) + missing(context, local)).distinctBy { it.name to it.date / 60_000 }
+        return if (extra.isEmpty()) local else (local + extra).sortedByDescending { it.date }
+    }
+
+    /** The preview of either kind, for the Kalendář app. */
+    fun previewFile(context: Context, id: Long): File? =
+        (items(context) + CloudLibrary(context).asMediaItems(emptyList())).find { it.id == id }?.uri?.path?.let(::File)
 
     /** Reads the list from every connected account and downloads previews that are missing. */
     suspend fun refresh(context: Context) = withContext(Dispatchers.IO) {
@@ -68,9 +79,8 @@ object CloudPhotos {
         // An account whose login lapsed keeps its previews until it can be read again
         var complete = true
         for (account in prefs.accounts.value) {
-            val token = GoogleAuth.silentToken(context, account)
-            // Shown in Odesílání with a "Přihlásit" button, also when nothing is being sent
-            prefs.setAccountProblem(account, token == null)
+            // Granted when freeing space; without it there is nothing to show yet
+            val token = GoogleAuth.silentToken(context, account, GoogleAuth.READ)
             if (token == null) {
                 complete = false
                 continue
@@ -133,7 +143,7 @@ object CloudPhotos {
             size = 0,
             // Only camera photos are ever sent, so they count like them
             relativePath = "DCIM/Camera/",
-            cloudUrl = json.optString("productUrl"),
+            cloud = true,
         )
     }
 }

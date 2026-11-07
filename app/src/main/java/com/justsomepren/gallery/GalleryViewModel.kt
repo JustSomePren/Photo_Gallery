@@ -22,18 +22,28 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CalendarLink
+import com.justsomepren.gallery.data.CloudLibrary
+import com.justsomepren.gallery.data.CloudPhoto
+import com.justsomepren.gallery.data.CloudPhotos
 import com.justsomepren.gallery.data.CloudWorker
 import com.justsomepren.gallery.data.EVENT_COLORS
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.MediaRepository
+import com.justsomepren.gallery.data.NotOnWifi
+import com.justsomepren.gallery.data.PickerApi
+import com.justsomepren.gallery.data.onWifi
+import com.justsomepren.gallery.data.PhotosApi
 import com.justsomepren.gallery.data.Places
 import com.justsomepren.gallery.data.SpotCache
 import com.justsomepren.gallery.data.Timeline
 import com.justsomepren.gallery.data.TripProposal
 import com.justsomepren.gallery.data.TripFinder
+import com.justsomepren.gallery.data.confirmedInCloud
 import com.justsomepren.gallery.data.day
+import com.justsomepren.gallery.data.freeUpCandidates
 import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
@@ -45,8 +55,12 @@ import com.justsomepren.gallery.ui.ImageCache
 import com.justsomepren.gallery.ui.OpenDialogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -130,6 +144,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         WarmupWorker.schedule(app, prefs.warmup.value)
         UploadWorker.schedule(app)
         CloudWorker.schedule(app)
+        viewModelScope.launch { CloudPhotos.version.drop(1).collect { refresh() } }
     }
 
     fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
@@ -144,23 +159,23 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
-            // Photos and the Kalendář events in one background step
+            // Photos, previews from Google Photos and the Kalendář events in one background step
             var from = 0L
             val to = today() + 400
-            val (items, calendar) = withContext(Dispatchers.IO) {
+            val (local, items, calendar) = withContext(Dispatchers.IO) {
                 val media = loadMedia()
                 from = minOf(media.minOfOrNull { it.day } ?: today(), today() - 400)
-                media to CalendarLink.events(getApplication(), from, to)
+                Triple(media, CloudPhotos.withCloud(getApplication(), media, cloud), CalendarLink.events(getApplication(), from, to))
             }
             val before = _media.value?.associateBy { it.id }.orEmpty()
             ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items
-            prefs.migrateKeys(items)
+            prefs.migrateKeys(local)
             calendar?.let {
                 calendarItems.value = it
                 CalendarLink.store(getApplication(), from, to, it)
             }
-            if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())
+            if (prefs.collectAuto(local) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false
         }
     }
@@ -302,6 +317,78 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         filled
     }
 
+    /** Photos that can go from the phone because they are, checked just now, in Google Photos. */
+    data class FreeUp(
+        val photos: List<MediaItem>,
+        val bytes: Long,
+        val perAccount: Map<String, Int>,
+        /** Accounts that first have to allow the check. */
+        val needsLogin: List<String>,
+        /** Sent, but not provably the same file (changed since, or sent by an older version). */
+        val unsure: Int,
+    )
+
+    val freeUp = MutableStateFlow<FreeUp?>(null)
+    val freeUpChecking = MutableStateFlow(false)
+    val freeUpError = MutableStateFlow<String?>(null)
+
+    /**
+     * Only photos this app uploaded qualify: same file size as when sent, and Google confirms right now
+     * that the item is still in the account under the same file name. Anything unsure stays on the phone.
+     */
+    fun checkFreeUp(keepFavorites: Boolean) {
+        if (freeUpChecking.value) return
+        freeUpChecking.value = true
+        freeUpError.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>()
+                val camera = loadMedia().filter { it.isCameraShot && !(keepFavorites && it.isFavorite) }
+                val candidates = freeUpCandidates(camera, prefs, keepFavorites)
+                val verified = mutableListOf<Pair<MediaItem, String>>()
+                val needsLogin = mutableListOf<String>()
+                for ((account, group) in candidates.groupBy { it.second.account }) {
+                    val token = GoogleAuth.silentToken(app, account, GoogleAuth.READ)
+                    if (token == null) {
+                        needsLogin += account
+                        continue
+                    }
+                    val there = PhotosApi(app, token).existing(group.map { it.second.mediaItemId })
+                    verified += confirmedInCloud(group, there).map { it to account }
+                }
+                val photos = verified.map { it.first }.distinctBy { it.id }
+                freeUp.value = FreeUp(
+                    photos = photos,
+                    bytes = photos.sumOf { it.size },
+                    perAccount = verified.groupingBy { it.second }.eachCount(),
+                    needsLogin = needsLogin,
+                    unsure = camera.count { prefs.wasSent(it.key) } - candidates.map { it.first.id }.distinct().size,
+                )
+            } catch (e: java.io.IOException) {
+                freeUpError.value = "Ověření u Googlu se nepovedlo (${e.message?.take(80)}). Bez internetu se nic nesmaže."
+            } finally {
+                freeUpChecking.value = false
+            }
+        }
+    }
+
+    /**
+     * Asks Google again, right before deleting, which of these photos are in the cloud now.
+     * Only those may go; throws when Google cannot be asked (then nothing is deleted).
+     */
+    suspend fun confirmNow(photos: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        freeUpCandidates(photos, prefs, keepFavorites = false).groupBy { it.second.account }.flatMap { (account, group) ->
+            val token = GoogleAuth.silentToken(app, account, GoogleAuth.READ) ?: return@flatMap emptyList()
+            confirmedInCloud(group, PhotosApi(app, token).existing(group.map { it.second.mediaItemId }))
+        }
+    }
+
+    fun onFreed() {
+        freeUp.value = null
+        refresh()
+    }
+
     /** Confirmed trips become events, and if wanted albums in the app (links only, nothing is uploaded). */
     fun createTrips(ids: Set<String>, withAlbums: Boolean) {
         val camera = media.value.orEmpty().filter { it.isCameraShot }
@@ -313,13 +400,102 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         prefs.removeTrips(ids)
     }
 
+    val cloud by lazy { CloudLibrary(getApplication()) }
+
+    /** Where the Google Photos sync is: picking, downloading previews, done or stopped by a problem. */
+    data class CloudSync(
+        val account: String,
+        val round: Int = 1,
+        val added: Int = 0,
+        val downloading: Int = 0,
+        val done: Boolean = false,
+        val error: String? = null,
+    )
+
+    val cloudSync = MutableStateFlow<CloudSync?>(null)
+    private var cloudJob: Job? = null
+
+    @VisibleForTesting
+    var cloudToken: suspend (String) -> String? = { GoogleAuth.silentToken(getApplication(), it, GoogleAuth.PICKER) }
+
+    @VisibleForTesting
+    var openPicker: (String) -> Unit = { uri ->
+        GooglePhotos.openLink(getApplication(), uri)
+    }
+
+    /**
+     * Picks photos in Google Photos again and again: each round keeps the new ones and opens the picker
+     * once more, until a round brings nothing new. Google cannot hide what was picked before, so the
+     * app skips those itself. Wi-Fi only; on paid data it stops and nothing is downloaded.
+     */
+    fun startCloudSync(account: String) {
+        if (cloudJob?.isActive == true) return
+        cloudSync.value = CloudSync(account)
+        cloudJob = viewModelScope.launch(Dispatchers.IO) {
+            var session: String? = null
+            val api = try {
+                PickerApi(cloudToken(account) ?: throw java.io.IOException("Google nepovolil přístup"))
+            } catch (e: java.io.IOException) {
+                cloudSync.value = cloudSync.value?.copy(error = e.message)
+                return@launch
+            }
+            try {
+                while (true) {
+                    if (!onWifi(getApplication())) throw NotOnWifi()
+                    val picking = api.create().also { session = it.id }
+                    withContext(Dispatchers.Main) { openPicker(picking.uri + "/autoclose") }
+                    val until = System.currentTimeMillis() + picking.timeoutMillis
+                    while (!api.isPicked(picking.id)) {
+                        if (System.currentTimeMillis() > until) throw java.io.IOException("Výběr vypršel")
+                        delay(picking.pollMillis)
+                    }
+                    val fresh = api.items(picking.id).filterNot { cloud.has(it.id) }.distinctBy { it.id }
+                    cloudSync.value = cloudSync.value?.copy(downloading = fresh.size)
+                    download(api, fresh)
+                    api.delete(picking.id)
+                    session = null
+                    refresh()
+                    val state = cloudSync.value ?: return@launch
+                    if (fresh.isEmpty()) {
+                        cloudSync.value = state.copy(done = true, downloading = 0)
+                        return@launch
+                    }
+                    cloudSync.value = state.copy(round = state.round + 1, added = state.added + fresh.size, downloading = 0)
+                }
+            } catch (e: java.io.IOException) {
+                cloudSync.value = cloudSync.value?.copy(error = e.message?.take(120), downloading = 0)
+            } finally {
+                session?.let(api::delete)
+                refresh()
+            }
+        }
+    }
+
+    /** Previews are fetched a few at a time; each is saved at once, so a stopped sync keeps what it got. */
+    private suspend fun download(api: PickerApi, photos: List<PickerApi.Picked>) = coroutineScope {
+        photos.chunked(8).forEach { chunk ->
+            if (!onWifi(getApplication())) throw NotOnWifi()
+            chunk.map { picked ->
+                async { picked to CloudLibrary.shrink(api.preview(picked)) }
+            }.awaitAll().forEach { (picked, preview) ->
+                cloud.add(CloudPhoto(picked.id, picked.created, picked.name, picked.mime), preview)
+            }
+        }
+    }
+
+    fun stopCloudSync() {
+        cloudJob?.cancel()
+        cloudSync.value = null
+    }
+
+    fun setShowCloud(show: Boolean) {
+        prefs.setShowCloud(show)
+        CloudWorker.schedule(getApplication())
+        refresh()
+    }
+
     /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */
     private fun sendSoon() = UploadWorker.schedule(getApplication(), restart = prefs.uploading.value == null)
-
-    fun setShowCloud(enabled: Boolean) {
-        prefs.setShowCloud(enabled)
-        CloudWorker.schedule(getApplication())
-    }
 
     fun setWarmup(enabled: Boolean) {
         prefs.setWarmup(enabled)

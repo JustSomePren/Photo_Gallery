@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.lifecycle.ViewModelProvider
@@ -147,7 +148,7 @@ class Pass3WalkthroughTest {
         shot("p3_09_saver_grid")
         compose.onNodeWithText("Nastavení").performClick(); compose.waitForIdle()
         shot("p3_10_saver_settings")
-        compose.onNodeWithText("Úsporný režim je zapnutý").assertIsDisplayed()
+        compose.onNodeWithText("Úsporný režim je zapnutý").performScrollTo().assertIsDisplayed()
         vm.stack.add(Screen.Viewer(Source.All, photos[3].id))
         compose.waitForIdle()
         shot("p3_11_saver_viewer")
