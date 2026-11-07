@@ -41,7 +41,8 @@ import kotlinx.coroutines.withContext
 
 sealed interface Screen {
     data class Grid(val source: Source) : Screen
-    data class Viewer(val source: Source, val startId: Long) : Screen
+    /** [opened] makes every opening its own screen, so opening the same photo again starts from the current photos. */
+    data class Viewer(val source: Source, val startId: Long, val opened: Long = System.nanoTime()) : Screen
 
     /** Photos of an event; found by id, so editing the event updates the open screen. */
     data class EventPhotos(val eventId: String) : Screen

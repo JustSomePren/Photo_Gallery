@@ -291,10 +291,11 @@ class Prefs(context: Context) {
     }
 
     /** Where an unfinished upload can continue, per photo and account. */
-    fun uploadSession(sentKey: String): String? = sp.getString("upload|$sentKey", null)
+    fun uploadSession(sentKey: String, size: Long): String? =
+        sp.getString("upload|$sentKey", null)?.split('\n')?.takeIf { it.getOrNull(1) == size.toString() }?.first()
 
-    fun setUploadSession(sentKey: String, url: String?) =
-        sp.edit { if (url == null) remove("upload|$sentKey") else putString("upload|$sentKey", url) }
+    fun setUploadSession(sentKey: String, url: String?, size: Long) =
+        sp.edit { if (url == null) remove("upload|$sentKey") else putString("upload|$sentKey", "$url\n$size") }
 
     /** Google Photos album ids the app created, per account and title. */
     fun albumId(account: String, title: String): String? = sp.getString("albumId|$account|$title", null)

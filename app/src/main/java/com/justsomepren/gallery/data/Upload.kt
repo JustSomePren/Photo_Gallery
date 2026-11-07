@@ -94,12 +94,13 @@ class PhotosApi(private val context: Context, private val token: String) {
         val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1
         val prefs = Prefs.get(context)
 
-        var url = prefs.uploadSession(item.sentKey)
+        // A session started for a file of another size belongs to an older version of the file.
+        var url = prefs.uploadSession(item.sentKey, size)
         var offset = url?.let(::receivedSoFar)
         if (url == null || offset == null) {
             url = startSession(item, size)
             offset = 0L
-            prefs.setUploadSession(item.sentKey, url)
+            prefs.setUploadSession(item.sentKey, url, size)
         }
 
         context.contentResolver.openInputStream(uri)!!.use { input ->
@@ -121,7 +122,7 @@ class PhotosApi(private val context: Context, private val token: String) {
                 val body = read(connection)
                 offset += read
                 if (last) {
-                    prefs.setUploadSession(item.sentKey, null)
+                    prefs.setUploadSession(item.sentKey, null, size)
                     return body
                 }
             }

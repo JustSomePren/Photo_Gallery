@@ -87,6 +87,20 @@ class ResumableUploadTest {
     }
 
     @Test
+    fun fileChangedMeanwhileStartsOver() {
+        val api = PhotosApi(context, "t")
+        failPiece = 2
+        assertTrue(runCatching { api.upload(item) }.isFailure)
+
+        // Edited between two runs: the old session must not be continued with new bytes.
+        java.io.File(Uri.parse(item.uri).path!!).appendBytes(ByteArray(10))
+        received.reset()
+        assertEquals("TOKEN", api.upload(item))
+        assertEquals(2, starts)
+        assertEquals(video.size + 10, received.size())
+    }
+
+    @Test
     fun continuesWhereItStoppedInTheNextRun() {
         val api = PhotosApi(context, "t")
         failPiece = 2
@@ -97,6 +111,6 @@ class ResumableUploadTest {
         assertEquals("TOKEN", api.upload(item))
         assertEquals(1, starts)
         assertArrayEquals(video, received.toByteArray())
-        assertEquals(null, Prefs.get(context).uploadSession(item.sentKey))
+        assertEquals(null, Prefs.get(context).uploadSession(item.sentKey, video.size.toLong()))
     }
 }
