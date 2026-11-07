@@ -5,9 +5,10 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 
 ## Co umí
 
-- **Kalendář** (výchozí) – celý měsíc na obrazovce, víkendy vpravo, v každém dni první fotka
-  a počet. Klepnutí na den otevře jeho fotky, **dlouhý stisk na den založí událost**.
-  Ikonou nahoře přepneš na klasickou mřížku.
+- **Mřížka fotek** (výchozí) – fotky po měsících; kde začíná událost, je barevný řádek
+  s jejím názvem, pod fotkami z události barevný proužek a při posouvání plave nahoře datum a událost.
+- **Kalendář** – ikonou nahoře; celý měsíc na obrazovce, víkendy vpravo. Klepnutí na den otevře
+  jeho fotky, **dlouhý stisk na den založí událost**.
 - **Události** – barevná období v kalendáři (třeba „Dovča Praha“). Klepnutím na událost
   uvidíš všechny její fotky.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album

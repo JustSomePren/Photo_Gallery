@@ -180,13 +180,18 @@ class Prefs(context: Context) {
      */
     @Synchronized
     fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
-        val queued = queue.value.map { it.sentKey }.toSet()
+        val queued = queue.value.associateBy { it.sentKey }
         // A photo listed as failed for an account counts as refused there too (it may have moved with its event).
         val failedKeys = failed.value.map { it.sentKey }.toSet()
         val connected = accounts.value.toSet()
         val new = items.distinctBy { it.sentKey }.filter {
-            it.account in connected && it.sentKey !in queued && !isSent(it) &&
-                (byHand || (it.sentKey !in refused && it.sentKey !in failedKeys && it.sentKey !in dismissed))
+            val waiting = queued[it.sentKey]
+            it.account in connected && !isSent(it) && if (byHand) {
+                // Picked by hand wins over an event's copy: it stays even if the event stops, in the chosen album.
+                waiting != it
+            } else {
+                waiting == null && it.sentKey !in refused && it.sentKey !in failedKeys && it.sentKey !in dismissed
+            }
         }
         if (new.isEmpty()) return 0
         if (byHand) {
@@ -199,7 +204,8 @@ class Prefs(context: Context) {
                 putStringSet("refused", refused.toSet())
             }
         }
-        queueList.update { it + new }
+        val newKeys = new.map { it.sentKey }.toSet()
+        queueList.update { list -> list.filterNot { it.sentKey in newKeys } + new }
         return new.size
     }
 

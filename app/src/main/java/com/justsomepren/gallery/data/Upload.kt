@@ -96,18 +96,27 @@ class PhotosApi(private val context: Context, private val token: String) {
         return read(connection)
     }
 
-    /** Returns the upload tokens Google Photos accepted. */
-    fun create(uploads: List<Pair<String, QueueItem>>, albumId: String?): Set<String> {
+    /** Which upload tokens Google Photos accepted, and which hit a passing error worth another try. */
+    data class Created(val accepted: Set<String>, val tryLater: Set<String>)
+
+    fun create(uploads: List<Pair<String, QueueItem>>, albumId: String?): Created {
         val body = JSONObject().put("newMediaItems", JSONArray(uploads.map { (token, item) ->
             JSONObject().put("simpleMediaItem", JSONObject().put("uploadToken", token).put("fileName", item.name))
         }))
         if (albumId != null) body.put("albumId", albumId)
         val results = JSONObject(post("https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate", body))
             .optJSONArray("newMediaItemResults") ?: JSONArray()
-        return (0 until results.length()).map { results.getJSONObject(it) }
-            .filter { it.has("mediaItem") }
-            .map { it.getString("uploadToken") }
-            .toSet()
+        val all = (0 until results.length()).map { results.getJSONObject(it) }
+        return Created(
+            accepted = all.filter { it.has("mediaItem") }.map { it.getString("uploadToken") }.toSet(),
+            tryLater = all.filter { it.optJSONObject("status")?.optInt("code") in PASSING_ERRORS }
+                .map { it.getString("uploadToken") }.toSet(),
+        )
+    }
+
+    companion object {
+        // gRPC codes Google asks to retry: deadline exceeded, resource exhausted, internal, unavailable.
+        private val PASSING_ERRORS = setOf(4, 8, 13, 14)
     }
 
     fun createAlbum(title: String): String {
@@ -219,15 +228,20 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         // Uploading can take minutes; add only what is still wanted, with its current album.
         val wanted = uploads.mapNotNull { (token, item) -> current(item)?.let { token to it } }
         for ((album, group) in wanted.groupBy { it.second.album }) {
-            val accepted = createInAlbum(api, account, album, group)
-            val (ok, failed) = group.partition { it.first in accepted }
-            prefs.markSent(ok.map { it.second })
-            prefs.markFailed(failed.map { it.second })
+            val created = createInAlbum(api, account, album, group)
+            prefs.markSent(group.filter { it.first in created.accepted }.map { it.second })
+            // Passing errors stay in the queue for the next run; only real refusals count as failed.
+            prefs.markFailed(group.filter { it.first !in created.accepted && it.first !in created.tryLater }.map { it.second })
         }
     }
 
-    /** Returns the accepted upload tokens; a lasting refusal accepts none, so the group is marked failed. */
-    private fun createInAlbum(api: PhotosApi, account: String, album: String?, group: List<Pair<String, QueueItem>>): Set<String> {
+    /** A lasting refusal accepts none, so the group is marked failed. */
+    private fun createInAlbum(
+        api: PhotosApi,
+        account: String,
+        album: String?,
+        group: List<Pair<String, QueueItem>>,
+    ): PhotosApi.Created {
         val stored = album?.let { prefs.albumId(account, it) }
         return try {
             val albumId = stored ?: album?.let { api.createAlbum(it).also { id -> prefs.setAlbumId(account, album, id) } }
@@ -239,7 +253,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.setAlbumId(account, album, null)
                 throw e
             }
-            emptySet()
+            PhotosApi.Created(emptySet(), emptySet())
         }
     }
 
