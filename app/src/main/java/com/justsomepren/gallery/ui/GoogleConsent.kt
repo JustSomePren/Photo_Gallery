@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GoogleAuth
 import kotlinx.coroutines.launch
@@ -28,17 +29,19 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
     val failed by rememberUpdatedState(onError)
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val email = vm.pendingAccount
+        // Google puts the reason into the result also when its dialog ends without success
         val login = runCatching {
             Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data).accessToken
         }
-        // A cancelled or refused login says why instead of doing nothing
+        val error = login.exceptionOrNull()
         when {
             email == null -> failed("Přihlášení se nepodařilo dokončit, zkus to prosím znovu.")
-            result.resultCode != Activity.RESULT_OK -> failed("Přihlášení bylo zrušeno.")
-            login.getOrNull() == null -> failed(
-                login.exceptionOrNull()?.let(GoogleAuth::problem) ?: "Google přihlášení nedokončil, zkus to prosím znovu.",
+            result.resultCode == Activity.RESULT_OK && login.getOrNull() != null -> granted(email)
+            error is ApiException -> failed(GoogleAuth.problem(error))
+            else -> failed(
+                "Přihlášení neprošlo. Jestli jsi ho nezrušil sám, Google tuhle aplikaci nejspíš ještě nezná: " +
+                    "je potřeba jednou nastavit Google Cloud (README, Automatické odesílání – nastavení).",
             )
-            else -> granted(email)
         }
     }
     return remember {

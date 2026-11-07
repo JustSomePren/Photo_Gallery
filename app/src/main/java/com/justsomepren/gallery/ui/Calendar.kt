@@ -106,9 +106,12 @@ fun CalendarView(
     val rows = remember(months, byDay, zoom) {
         when (zoom) {
             CalendarZoom.YEAR -> months.map { it.year }.distinct().map { CalendarRow.Year(it) }
-            CalendarZoom.DAYS -> months.flatMap { month ->
-                listOf(CalendarRow.Month(month)) + byDay.keys.filter { YearMonth.from(it.toDate()) == month }
-                    .sortedDescending().map { CalendarRow.Day(it) }
+            CalendarZoom.DAYS -> {
+                // Days grouped by month once, not every month checking every day
+                val daysByMonth = byDay.keys.groupBy { YearMonth.from(it.toDate()) }
+                months.flatMap { month ->
+                    listOf(CalendarRow.Month(month)) + daysByMonth[month].orEmpty().sortedDescending().map { CalendarRow.Day(it) }
+                }
             }
             else -> months.map { CalendarRow.Month(it) }
         }

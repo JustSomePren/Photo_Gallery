@@ -145,6 +145,10 @@ fun SendingScreen(vm: GalleryViewModel) {
             HorizontalDivider()
             SectionWithAdd("Google účty") { notifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
             Hint("Do těchto účtů se fotky z fronty nahrávají do Google Fotek automaticky.")
+            // Google lets an app log in to Photos only after its owner registered it once
+            if (accounts.isEmpty()) {
+                Hint("Před prvním účtem je potřeba jednou nastavit Google Cloud (README, Automatické odesílání – nastavení), jinak Google přihlášení nepustí.")
+            }
             accounts.forEach { email ->
                 ListItem(
                     headlineContent = { Text(email) },
