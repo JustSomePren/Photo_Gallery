@@ -28,6 +28,8 @@ data class MediaItem(
     val height: Int,
     val size: Long,
     val relativePath: String,
+    /** Changes when the file is edited, so pictures are loaded again. */
+    val modified: Long = 0,
 ) {
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
@@ -63,6 +65,7 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.HEIGHT,
             MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DATE_MODIFIED,
         )
         val result = mutableListOf<MediaItem>()
         context.contentResolver.query(collection, projection, null, null, null)?.use { c ->
@@ -84,6 +87,7 @@ class MediaRepository(private val context: Context) {
                     height = c.getInt(9),
                     size = c.getLong(10),
                     relativePath = c.getString(11) ?: "",
+                    modified = c.getLong(12),
                 )
             }
         }

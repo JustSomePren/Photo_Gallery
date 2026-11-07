@@ -128,7 +128,7 @@ class Pass11WalkthroughTest {
         }
         compose.waitForIdle()
         shot("p11_07_fast_scroller_after_event_edit")
-        val state = vm.gridState(prefs.events.value.single().source)
+        val state = vm.eventGridState(prefs.events.value.single())
         val visible = state.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
         assertTrue("fast scroller did not move the event grid", many.takeLast(8).any { it.id in visible })
     }

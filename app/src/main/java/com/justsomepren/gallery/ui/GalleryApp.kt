@@ -138,14 +138,17 @@ private fun Main(vm: GalleryViewModel) {
     fun browser(
         source: Source,
         onBack: (() -> Unit)?,
+        // Scroll position and selection belong to this key; an event keeps its own while it is edited.
+        stateKey: Source = source,
         header: @Composable () -> Unit = {},
         extraActions: @Composable RowScope.() -> Unit = {},
     ) {
         MediaBrowser(
             source = source,
+            stateKey = stateKey.toString(),
             items = remember(all, albums, source) { all.filterBy(source, albums) },
             vm = vm,
-            gridState = vm.gridState(source),
+            gridState = vm.gridState(stateKey),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
             onBack = onBack,
             header = header,
@@ -178,7 +181,7 @@ private fun Main(vm: GalleryViewModel) {
                 // Deleted in the editor.
                 LaunchedEffect(Unit) { back() }
             } else {
-                browser(event.source, back) {
+                browser(event.source, back, stateKey = vm.eventStateKey(event)) {
                     IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
                 }
             }

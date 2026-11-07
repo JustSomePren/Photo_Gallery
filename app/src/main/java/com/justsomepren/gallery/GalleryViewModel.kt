@@ -29,6 +29,7 @@ import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.WarmupWorker
 import com.justsomepren.gallery.data.today
+import com.justsomepren.gallery.ui.ImageCache
 import com.justsomepren.gallery.ui.OpenDialogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,12 +101,19 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
 
     fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
 
+    /** An event's photo screen keeps its place by the event's id, so editing the event does not reset it. */
+    fun eventStateKey(event: Event): Source = Source.Album("event:${event.id}", event.id)
+
+    fun eventGridState(event: Event) = gridState(eventStateKey(event))
+
     fun refresh(delayMs: Long = 0, manual: Boolean = false) {
         if (manual) refreshing.value = true
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
             val items = withContext(Dispatchers.IO) { loadMedia() }
+            val before = _media.value?.associateBy { it.id }.orEmpty()
+            ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items
             prefs.migrateKeys(items)
             if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())

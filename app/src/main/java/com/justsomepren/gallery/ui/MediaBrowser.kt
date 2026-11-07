@@ -112,12 +112,13 @@ fun MediaBrowser(
     items: List<MediaItem>,
     vm: GalleryViewModel,
     gridState: LazyGridState,
+    stateKey: String = source.toString(),
     onOpen: (MediaItem) -> Unit,
     onBack: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {},
 ) {
-    var selected by rememberSaveable(source.toString(), stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
+    var selected by rememberSaveable(stateKey, stateSaver = SelectionSaver) { mutableStateOf(emptySet<Long>()) }
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
@@ -447,7 +448,7 @@ private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifi
     val thumbPx = with(density) { thumbHeight.roundToPx() }
     val exclusionPad = with(density) { 70.dp.toPx() }
     val track = (height - thumbPx).coerceAtLeast(1)
-    val progress by remember {
+    val progress by remember(state) {
         derivedStateOf {
             val info = state.layoutInfo
             val range = info.totalItemsCount - info.visibleItemsInfo.size

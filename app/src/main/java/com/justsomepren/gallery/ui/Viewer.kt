@@ -170,10 +170,10 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
     }
 
     // Screen size is enough until the user really zooms in; then a sharper copy (not on low battery).
-    val normal = rememberLoaded(item.uri, screen) { ImageCache.fullImage(context.contentResolver, item.uri, screen) }
+    val normal = rememberLoaded(item.uri, screen, ImageCache.version) { ImageCache.fullImage(context.contentResolver, item.uri, screen) }
     val sharpSize = minOf(screen * 2, 4096)
     val sharp = if (wantSharp && !saver) {
-        rememberLoaded(item.uri, sharpSize) { ImageCache.fullImage(context.contentResolver, item.uri, sharpSize) }
+        rememberLoaded(item.uri, sharpSize, ImageCache.version) { ImageCache.fullImage(context.contentResolver, item.uri, sharpSize) }
     } else {
         null
     }
