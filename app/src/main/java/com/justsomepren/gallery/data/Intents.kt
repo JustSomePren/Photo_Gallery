@@ -82,7 +82,14 @@ object GooglePhotos {
     }
 
     fun share(context: Context, items: List<MediaItem>) =
-        start(context, Intent.createChooser(shareIntent(items), "Sdílet"))
+        start(context, Intent.createChooser(if (items.size == 1) shareOne(items.single()) else shareIntent(items), "Sdílet"))
+
+    /** One photo as one photo: apps like Instagram offer "Příběh" (Story) only for a single picture or video. */
+    fun shareOne(item: MediaItem): Intent = Intent(Intent.ACTION_SEND)
+        .setType(item.mime)
+        .putExtra(Intent.EXTRA_STREAM, item.uri)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .apply { clipData = ClipData.newRawUri(null, item.uri) }
 
     fun send(context: Context, target: UploadTarget, items: List<MediaItem>) = start(
         context,
