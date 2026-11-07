@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +44,7 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +58,14 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val trips by vm.prefs.trips.collectAsStateWithLifecycle()
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val timelineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val filled = runCatching { vm.importTimeline(uri) }.getOrNull()
+            toast(context, if (filled != null) "Poloha doplněna u $filled fotek, hledám výlety…" else "Soubor se nepodařilo přečíst")
+        }
+    }
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
     var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
@@ -119,6 +129,11 @@ fun SettingsScreen(vm: GalleryViewModel) {
             if (trips.isNotEmpty() && search == null) {
                 SettingsButton("Návrhy výletů: ${trips.size}") { showingTrips = true }
             }
+            Hint(
+                "Fotky bez polohy? Pokud máš zapnutou Časovou osu Google, exportuj ji v telefonu " +
+                    "(Nastavení → Poloha → Časová osa → Exportovat) a načti ji sem. Poloha se doplní podle času fotky."
+            )
+            SettingsButton("Načíst Časovou osu (Timeline.json)") { timelineLauncher.launch(arrayOf("application/json", "*/*")) }
 
             HorizontalDivider()
             Section("Baterie")

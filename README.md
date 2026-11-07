@@ -17,6 +17,11 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   50 km od něj jsou výlet. Název podle země, doma podle města (např. „Tchaj-wan – říjen 2025“).
   Návrhy potvrdíš a vzniknou z nich události, případně alba v aplikaci. Vše jen v telefonu;
   polohy se čtou jednou a pamatují, další hledání čte jen nové fotky.
+  **Fotky bez polohy** (vypnutá poloha ve fotoaparátu):
+  - *Načíst Časovou osu* – export Časové osy Google z telefonu (Timeline.json) doplní fotkám polohu
+    podle času pořízení; nejpřesnější, pokud byla Časová osa zapnutá.
+  - Časové pásmo ve fotce – pozná cestu do zahraničí („Výlet UTC+8“), pokud ho telefon zapsal.
+  - Dny s mnohem víc fotkami než obvykle – návrh „Možná výlet“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).

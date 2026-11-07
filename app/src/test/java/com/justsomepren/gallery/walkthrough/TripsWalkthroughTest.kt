@@ -43,9 +43,30 @@ class TripsWalkthroughTest {
         val newest = camera.maxOf { it.day }
         val lines = camera.joinToString("") { item: MediaItem ->
             val (lat, lon) = if (item.day > newest - 9) 25.05 to 121.53 else 49.195 to 16.608
-            "${item.key}\t$lat\t$lon\n"
+            "${item.key}\t$lat\t$lon\t-\n"
         }
         File(setup.app.filesDir, "locations.tsv").writeText(lines)
+    }
+
+    /** Location was off: no places in the photos, but a Timeline export knows where the phone was. */
+    @Test
+    fun photosWithoutGpsGetPlacesFromTimeline() {
+        val newest = camera.maxOf { it.day }
+        File(setup.app.filesDir, "locations.tsv").writeText(camera.joinToString("") { "${it.key}\t-\t-\t-\n" })
+        val points = camera.joinToString(",") { item ->
+            val place = if (item.day > newest - 9) "25.05°, 121.53°" else "49.195°, 16.608°"
+            val time = java.time.Instant.ofEpochMilli(item.date).toString()
+            "{\"point\": \"$place\", \"time\": \"$time\"}"
+        }
+        val file = File(setup.app.cacheDir, "Timeline.json").apply {
+            writeText("{\"semanticSegments\": [{\"timelinePath\": [$points]}]}")
+        }
+        start()
+
+        val filled = kotlinx.coroutines.runBlocking { vm.importTimeline(android.net.Uri.fromFile(file)) }
+        assertEquals(camera.size, filled)
+        compose.waitUntil(30_000) { idleMain(); prefs.tripSearch.value == null && prefs.trips.value.isNotEmpty() }
+        assertTrue(prefs.trips.value.single().name.startsWith("Tchaj-wan"))
     }
 
     private fun start() {

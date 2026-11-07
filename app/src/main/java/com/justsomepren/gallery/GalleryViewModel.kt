@@ -26,6 +26,8 @@ import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.MediaRepository
 import com.justsomepren.gallery.data.Places
 import com.justsomepren.gallery.data.SpotCache
+import com.justsomepren.gallery.data.Timeline
+import com.justsomepren.gallery.data.TripProposal
 import com.justsomepren.gallery.data.TripFinder
 import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.Prefs
@@ -228,15 +230,41 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
                 val camera = loadMedia().filter { it.isCameraShot }
                 val cache = SpotCache(app)
                 cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
-                val events = prefs.events.value
-                val found = TripFinder.find(camera.mapNotNull(cache::spot), Places.get(app))
-                    .filter { trip -> events.none { it.overlaps(trip.startDay, trip.endDay) } }
-                    .map { trip -> trip.copy(photos = camera.count { it.day in trip.startDay..trip.endDay }) }
-                prefs.setTrips(found)
+                prefs.setTrips(proposeTrips(camera, cache))
             } finally {
                 prefs.tripSearch.value = null
             }
         }
+    }
+
+    /**
+     * Best source first: places (from the photos or the Timeline), then time zones,
+     * then days with unusually many photos. Days already in a trip or an event are not proposed again.
+     */
+    private fun proposeTrips(camera: List<MediaItem>, cache: SpotCache): List<TripProposal> {
+        val byPlace = TripFinder.find(camera.mapNotNull(cache::spot), Places.get(getApplication()))
+        val covered = { trips: List<TripProposal> -> trips.flatMap { (it.startDay..it.endDay).toList() }.toSet() }
+        val eventDays = prefs.events.value.flatMap { (it.startDay..it.endDay).toList() }.toSet()
+
+        val zones = camera.mapNotNull { item -> cache.offset(item)?.let { item.day to it } }.toMap()
+        val byZone = TripFinder.byTimeZone(zones, covered(byPlace))
+        val perDay = camera.groupingBy { it.day }.eachCount()
+        val byBurst = TripFinder.byBursts(perDay, covered(byPlace + byZone))
+
+        return (byPlace + byZone + byBurst)
+            .filter { trip -> prefs.events.value.none { it.overlaps(trip.startDay, trip.endDay) } }
+            .filter { trip -> (trip.startDay..trip.endDay).none { it in eventDays } }
+            .map { trip -> trip.copy(photos = camera.count { it.day in trip.startDay..trip.endDay }) }
+            .sortedByDescending { it.startDay }
+    }
+
+    /** Fills places of photos without GPS from a Timeline export, then searches again. Returns how many got one. */
+    suspend fun importTimeline(uri: android.net.Uri): Int = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val timeline = app.contentResolver.openInputStream(uri)!!.bufferedReader().use(Timeline::read)
+        val filled = SpotCache(app).fillFrom(timeline, loadMedia().filter { it.isCameraShot })
+        findTrips()
+        filled
     }
 
     /** Confirmed trips become events, and if wanted albums in the app (links only, nothing is uploaded). */
