@@ -4,9 +4,14 @@ on:
   push:
   workflow_dispatch:
 
+# Two builds at once would fight over the release
+concurrency: build-apk
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,10 +32,15 @@ jobs:
       - run: ./gradlew testDebugUnitTest assembleRelease
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: galerie-apk
-          path: app/build/outputs/apk/release/app-release.apk
+      # A fixed download link for the phone, no ZIP: releases/download/nejnovejsi/galerie.apk
+      - name: APK ke stažení
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk galerie.apk
+          gh release delete nejnovejsi --yes --cleanup-tag || true
+          gh release create nejnovejsi galerie.apk --title "Galerie – nejnovější verze" --target "$GITHUB_SHA" \
+            --notes "Sestaveno z větve $GITHUB_REF_NAME, commit ${GITHUB_SHA::7}."
       - uses: actions/upload-artifact@v4
         if: always()
         with:

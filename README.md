@@ -58,6 +58,7 @@ díky tomu se navzájem poznají a nová verze se vždy nainstaluje přes starou
 3. **New repository secret**, název `SIGNING_KEY_PASSWORD`, hodnota = obsah `SIGNING_KEY_PASSWORD.txt`.
 4. Totéž udělej v druhém repozitáři (Calendar i Photo_Gallery).
 5. V **Actions** spusť znovu poslední běh **Build APK** (bez klíče skončí chybou „Chybí secret SIGNING_KEY“).
+   Hotové APK se objeví v **Releases** pod odkazem z části Instalace.
 
 Soubor `podpisovy-klic.p12` a heslo si **schovej** (správce hesel nebo soukromý Disk).
 Bez nich nepůjde vydat novou verzi, která se nainstaluje přes starou, a Google záloha se nevrátí.
@@ -82,11 +83,12 @@ Fotky samotné se neodinstalují, jsou v telefonu.
 
 ## Instalace na telefon (krok za krokem)
 
-1. Na GitHubu otevři záložku **Actions** → poslední běh **Build APK**.
-2. Dole v sekci *Artifacts* stáhni `galerie-apk` a rozbal ZIP.
-3. Soubor `app-release.apk` pošli do telefonu a otevři ho.
-4. Povol instalaci z neznámých zdrojů, když se telefon zeptá.
-5. Při prvním spuštění povol přístup k fotkám a videím.
+1. V telefonu otevři odkaz https://github.com/JustSomePren/Photo_Gallery/releases/download/nejnovejsi/galerie.apk
+2. Stažený soubor otevři (v oznámení o stažení) a klepni na **Instalovat**.
+3. Povol instalaci z neznámých zdrojů, když se telefon zeptá (jen poprvé).
+4. Při prvním spuštění povol přístup k fotkám a videím.
+
+Odkaz vede vždy na nejnovější verzi.
 
 Nová verze se nainstaluje přes starou, alba a nastavení zůstanou (APK je vždy podepsané stejným klíčem, viz Podpisový klíč).
 
