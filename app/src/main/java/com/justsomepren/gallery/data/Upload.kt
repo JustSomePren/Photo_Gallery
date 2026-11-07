@@ -62,6 +62,16 @@ object GoogleAuth {
         CommonStatusCodes.INTERRUPTED,
     )
 
+    /** What went wrong with a login, in words the user can act on. */
+    fun problem(e: Throwable): String = when ((e as? ApiException)?.statusCode) {
+        CommonStatusCodes.DEVELOPER_ERROR ->
+            "Google tuhle aplikaci nezná. Zkontroluj v Google Cloud balíček a SHA-1 klienta (README, krok 5)."
+        CommonStatusCodes.NETWORK_ERROR, CommonStatusCodes.TIMEOUT -> "Není připojení k internetu, zkus to znovu."
+        CommonStatusCodes.CANCELED -> "Přihlášení bylo zrušeno."
+        else -> "Google přihlášení odmítl (${e.message}). Zkontroluj nastavení Google Cloud podle README, " +
+            "hlavně že je účet mezi testovacími uživateli (krok 4)."
+    }
+
     /**
      * A token without any dialog, or null when the user has to confirm the login again.
      * A passing network problem throws IOException, so the upload is simply retried later.

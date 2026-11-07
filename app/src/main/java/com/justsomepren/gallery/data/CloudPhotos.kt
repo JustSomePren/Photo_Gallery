@@ -69,6 +69,8 @@ object CloudPhotos {
         var complete = true
         for (account in prefs.accounts.value) {
             val token = GoogleAuth.silentToken(context, account)
+            // Shown in Odesílání with a "Přihlásit" button, also when nothing is being sent
+            prefs.setAccountProblem(account, token == null)
             if (token == null) {
                 complete = false
                 continue

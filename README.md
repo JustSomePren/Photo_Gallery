@@ -165,9 +165,20 @@ Google vyžaduje, aby si aplikaci, která nahrává do Google Fotek, zaregistrov
    - Package name: `com.justsomepren.gallery`
    - SHA-1: `BF:C5:D1:98:01:55:77:D6:95:C5:7C:89:7E:39:10:0A:46:07:29:DE`
 6. V aplikaci: *Odesílání → Google účty → +* → vyber účet → potvrď.
+   Google se zeptá na dvě oprávnění: **nahrávat do Google Fotek** a **číst fotky, které nahrála
+   tahle aplikace** (kvůli fotkám, které už jsou jen v cloudu).
 
-Pokud Google po týdnu chce přihlášení znovu (u projektů v testovacím režimu se to může stát),
-v Odesílání se u účtu objeví „Přihlásit“.
+Když se přihlášení nepovede, Odesílání napíše proč. Nejčastěji:
+
+- „Google tuhle aplikaci nezná“: v kroku 5 nesedí balíček nebo SHA-1.
+- „Google přihlášení odmítl“: účet chybí v testovacích uživatelích (krok 4).
+
+**Přihlášení jednou za týden:** projekt v testovacím režimu (*Audience → Testing*) má přihlášení
+platné 7 dní, pak se v Odesílání u účtu objeví „Přihlásit“. Jde to obejít přepnutím na
+*Audience → Publish app* (In production). Google pak při přihlášení ukáže varování „aplikace není
+ověřená“ (*Advanced → Go to …* jej přeskočí) a přihlášení vydrží. Neověřená aplikace smí mít
+nejvýš 100 uživatelů, pro sebe a rodinu to stačí. Ověřeno v listopadu 2026; Google tato pravidla
+občas mění, a pokud by po přepnutí přihlášení stejně vypršelo, pomůže vytvořit v kroku 5 nového klienta.
 
 ### Jak se odesílá
 

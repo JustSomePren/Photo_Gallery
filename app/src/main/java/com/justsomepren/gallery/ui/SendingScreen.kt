@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.auth.api.identity.Identity
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.Event
+import com.justsomepren.gallery.data.CloudWorker
 import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.formatRange
@@ -83,13 +84,21 @@ fun SendingScreen(vm: GalleryViewModel) {
     val scope = rememberCoroutineScope()
 
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val email = vm.pendingAccount ?: return@rememberLauncherForActivityResult
-        val token = runCatching {
+        val email = vm.pendingAccount
+        val login = runCatching {
             Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data).accessToken
-        }.getOrNull()
-        if (result.resultCode == Activity.RESULT_OK && token != null) {
-            prefs.addAccount(email)
-            UploadWorker.schedule(context, restart = true)
+        }
+        when {
+            email == null -> loginError = "Přihlášení se nepodařilo dokončit, zkus to prosím znovu."
+            result.resultCode != Activity.RESULT_OK -> loginError = "Přihlášení bylo zrušeno, účet se nepřidal."
+            login.getOrNull() == null -> loginError = login.exceptionOrNull()?.let(GoogleAuth::problem)
+                ?: "Google přihlášení nedokončil, zkus to prosím znovu."
+            else -> {
+                prefs.addAccount(email)
+                loginError = null
+                UploadWorker.schedule(context, restart = true)
+                CloudWorker.schedule(context)
+            }
         }
     }
 
@@ -104,10 +113,11 @@ fun SendingScreen(vm: GalleryViewModel) {
                 } else {
                     prefs.addAccount(email)
                     UploadWorker.schedule(context, restart = true)
+                    CloudWorker.schedule(context)
                 }
                 loginError = null
             } catch (e: Exception) {
-                loginError = "Google přihlášení odmítl (${e.message}). Zkontroluj nastavení Google Cloud podle README."
+                loginError = GoogleAuth.problem(e)
             }
         }
     }
