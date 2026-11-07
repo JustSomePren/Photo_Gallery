@@ -43,6 +43,12 @@ object ImageCache {
     }
     private val full = LruCache<String, Bitmap>(3)
 
+    @VisibleForTesting
+    fun clear() {
+        thumbs.evictAll()
+        full.evictAll()
+    }
+
     /** Lets screenshot tests show pictures without real files. */
     @VisibleForTesting
     var fake: ((Uri) -> Bitmap)? = null

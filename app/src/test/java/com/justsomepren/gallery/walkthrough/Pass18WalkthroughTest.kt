@@ -34,6 +34,7 @@ class Pass18WalkthroughTest {
     private val loads = mutableMapOf<Uri, Int>()
     private val setup = AppSetupRule { prefs ->
         prefs.addAccount("shared@gmail.com")
+        ImageCache.clear()
         ImageCache.fake = { uri -> loads[uri] = (loads[uri] ?: 0) + 1; fakePhoto(uri) }
         // The cache lives as long as the test JVM; start without pictures of earlier tests.
         ImageCache.forget(photos.map { it.uri })

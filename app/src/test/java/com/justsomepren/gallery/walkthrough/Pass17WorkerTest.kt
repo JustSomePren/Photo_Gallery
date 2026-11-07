@@ -130,7 +130,9 @@ class Pass17WorkerTest {
     fun interruptedUploadContinuesNextRun() {
         val photo = queued("PXL_big.jpg", 3000)
         failNextChunk = true
-        assertTrue(run(listOf(photo)) is java.io.IOException)
+        // A passing error on one file no longer ends the run; the file waits in the queue for the next run.
+        assertTrue(run(listOf(photo)) == null)
+        assertTrue(!prefs.isSent(photo) && prefs.queue.value.isNotEmpty())
         assertTrue(run(prefs.queue.value) == null)
         assertTrue(prefs.isSent(photo))
         assertTrue("restarted instead of continuing", sessions == 1)

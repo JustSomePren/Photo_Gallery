@@ -80,6 +80,9 @@ object GoogleAuth {
 /** The photo is no longer wanted (queue cleared, account removed); the rest of the queue goes on. */
 class UploadCancelled : Exception()
 
+/** The battery dropped below the threshold during a normal run; it continues on the charger. */
+class LowBattery : Exception()
+
 class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message") {
     /** Google said no for good; unlike login, timeouts or rate limits, retrying will not help. */
     val isRefusal get() = code in 400..499 && code !in setOf(401, 408, 429)
@@ -236,8 +239,15 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
     }
 
+    /** "Odeslat hned" ignores the battery. */
+    private val now get() = inputData.getBoolean(NOW, false)
+    private val batteryStop get() = !now && lowBattery()
+
+    /** A photo hit a passing error this run and waits in the queue for the next one. */
+    private var needsRetry = false
+
     private suspend fun sendQueue(): Result {
-        if (!inputData.getBoolean(NOW, false) && lowBattery()) {
+        if (batteryStop) {
             // Waiting for the charger instead of retrying, so it starts right after plugging in.
             waitForCharger(applicationContext)
             return Result.success()
@@ -268,7 +278,14 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 for (chunk in items.chunked(BATCH)) {
                     if (isStopped) return Result.retry()
                     val batch = chunk.mapNotNull(::current)
-                    if (batch.isNotEmpty()) send(api, account, batch)
+                    if (batch.isNotEmpty()) {
+                        try {
+                            send(api, account, batch)
+                        } catch (e: LowBattery) {
+                            waitForCharger(applicationContext)
+                            return Result.success()
+                        }
+                    }
                     done += chunk.size
                     prefs.uploading.value = done to total
                     runCatching { setForeground(foregroundInfo(done, total)) }
@@ -281,7 +298,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
         // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
         val waiting = prefs.queue.value.filter { it.key in camera && it.account !in prefs.accountProblems.value }
-        return if (waiting.isEmpty()) Result.success() else Result.retry()
+        return if (waiting.isEmpty() && !needsRetry) Result.success() else Result.retry()
     }
 
     /**
@@ -293,11 +310,25 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun send(api: PhotosApi, account: String, batch: List<QueueItem>) {
         val uploads = mutableListOf<Pair<String, QueueItem>>()
+        try {
+            uploadEach(api, account, batch, uploads)
+        } catch (e: Exception) {
+            // Whatever ended the run, photos already uploaded are still added, so they are not sent again.
+            runCatching { create(api, account, uploads) }
+            throw e
+        }
+        create(api, account, uploads)
+    }
+
+    private fun uploadEach(api: PhotosApi, account: String, batch: List<QueueItem>, uploads: MutableList<Pair<String, QueueItem>>) {
+        var failuresInRow = 0
         for (queued in batch) {
+            if (batteryStop) throw LowBattery()
             val item = current(queued) ?: continue
             val token = try {
-                api.upload(item) { !isStopped && current(item) != null }
+                api.upload(item) { !isStopped && current(item) != null && !batteryStop }
             } catch (e: UploadCancelled) {
+                if (batteryStop) throw LowBattery()
                 null
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
@@ -308,10 +339,19 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.markFailed(listOf(item))
                 null
             } catch (e: HttpException) {
-                // Google refused this one file; network and login problems still retry the whole run.
-                if (e.isRefusal) prefs.markFailed(listOf(item)) else throw e
+                when {
+                    // Google refused this one file.
+                    e.isRefusal -> prefs.markFailed(listOf(item))
+                    // The login expired: the whole run waits for a new token.
+                    e.code == 401 -> throw e
+                    else -> skipForNow(++failuresInRow, e)
+                }
+                null
+            } catch (e: IOException) {
+                skipForNow(++failuresInRow, e)
                 null
             } ?: continue
+            failuresInRow = 0
             uploads += token to item
             // A video took long to upload; add it right away rather than risk the run ending first.
             // Outside the catch above: a refused album is not a refused video.
@@ -320,7 +360,12 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 uploads.clear()
             }
         }
-        create(api, account, uploads)
+    }
+
+    /** One file had a passing error: try the others now and it next time. Several in a row mean the network is down. */
+    private fun skipForNow(failuresInRow: Int, error: IOException) {
+        needsRetry = true
+        if (failuresInRow >= 3) throw error
     }
 
     private fun create(api: PhotosApi, account: String, uploads: List<Pair<String, QueueItem>>) {

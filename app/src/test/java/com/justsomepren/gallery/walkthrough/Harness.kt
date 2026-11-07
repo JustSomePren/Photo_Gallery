@@ -32,6 +32,7 @@ class AppSetupRule(private val prepare: (Prefs) -> Unit = {}) : ExternalResource
         app.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         File(app.filesDir, "sent.txt").delete()
         Prefs.reset()
+        ImageCache.clear()
         ImageCache.fake = ::fakePhoto
         prepare(Prefs.get(app))
     }
