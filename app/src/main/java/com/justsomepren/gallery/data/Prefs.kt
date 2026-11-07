@@ -17,7 +17,9 @@ data class CustomAlbum(val id: String, val name: String, val refs: List<AlbumRef
 private fun MediaItem.ref() = AlbumRef(id, key)
 
 /** A named shortcut to an app that uploads photos, e.g. "Shared cloud – Drive". */
-data class UploadTarget(val name: String, val packageName: String, val activityName: String)
+data class UploadTarget(val name: String, val packageName: String, val activityName: String) {
+    val appId get() = "$packageName/$activityName"
+}
 
 /** A photo waiting to be uploaded to a Google account, optionally into an album. */
 data class QueueItem(
@@ -27,12 +29,16 @@ data class QueueItem(
     val mime: String,
     val account: String,
     val album: String?,
+    /** Set when an auto-send event added it, so it can be taken back when the event changes. */
+    val eventId: String? = null,
+    val day: Long = 0,
 ) {
     val sentKey get() = "$account|$key"
 
     companion object {
-        fun of(item: MediaItem, account: String, album: String?) =
-            QueueItem(item.key, item.uri.toString(), item.name, item.mime, account, album?.ifBlank { null })
+        fun of(item: MediaItem, account: String, album: String?, eventId: String? = null) = QueueItem(
+            item.key, item.uri.toString(), item.name, item.mime, account, album?.trim()?.ifBlank { null }, eventId, item.day,
+        )
     }
 }
 
@@ -49,6 +55,7 @@ class Prefs(context: Context) {
     private val accountList = Stored("accounts", { JSONObject().put("email", it) }, { it.getString("email") })
     private val queueList = Stored("queue", ::queueToJson, ::queueFromJson)
     private val failedList = Stored("failed", ::queueToJson, ::queueFromJson)
+    private val tripList = Stored("trips", ::tripToJson, ::tripFromJson)
 
     val albums = albumList.flow
     val targets = targetList.flow
@@ -57,13 +64,36 @@ class Prefs(context: Context) {
     val queue = queueList.flow
     val failed = failedList.flow
 
+    /** Trips found by "Najít výlety", waiting to be confirmed. */
+    val trips = tripList.flow
+
+    /** Places read / to read while searching for trips, otherwise null. */
+    val tripSearch = MutableStateFlow<Pair<Int, Int>?>(null)
+
     val threshold = MutableStateFlow(sp.getInt("threshold", 70))
     val warmup = MutableStateFlow(sp.getBoolean("warmup", true))
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
 
-    /** Accounts whose Google login has to be confirmed again. */
-    val accountProblems = MutableStateFlow(emptySet<String>())
+    /** Photos grouped by day (like most galleries) or only by month. */
+    val groupByDay = MutableStateFlow(sp.getBoolean("groupByDay", true))
+
+    /** "Odeslat hned" was tapped and its run has not finished yet. */
+    val sendNowPending get() = sp.getBoolean("sendNowPending", false)
+
+    fun setSendNowPending(value: Boolean) = sp.edit { putBoolean("sendNowPending", value) }
+
+    /** Accounts whose Google login has to be confirmed again; saved, as the worker finds out while the app is closed. */
+    val accountProblems = MutableStateFlow(sp.getStringSet("accountProblems", null).orEmpty().toSet())
+
+    /** Photos the user removed from the queue; events do not add them again. */
+    private val dismissed = sp.getStringSet("dismissed", null).orEmpty().toMutableSet()
+
+    /**
+     * Photos Google refused, per account (account|key); events never send them there again on their own,
+     * only "Zkusit znovu" or picking them by hand does. Older entries without an account are dropped.
+     */
+    private val refused = sp.getStringSet("refused", null).orEmpty().filter { '@' in it }.toMutableSet()
 
     /** Done / total while the upload is running, otherwise null. */
     val uploading = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -74,6 +104,7 @@ class Prefs(context: Context) {
     fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
+    fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)
 
     // ---- Albums ----
 
@@ -134,6 +165,12 @@ class Prefs(context: Context) {
         list.map { if (it.id == id) it.copy(refs = change(it.refs)) else it }
     }
 
+    // ---- Trips ----
+
+    fun setTrips(found: List<TripProposal>) = tripList.update { found }
+
+    fun removeTrips(ids: Set<String>) = tripList.update { list -> list.filterNot { it.id in ids } }
+
     // ---- Share targets ----
 
     fun addTargets(new: List<UploadTarget>) = targetList.update { it + new }
@@ -159,35 +196,116 @@ class Prefs(context: Context) {
 
     fun addAccount(email: String) {
         accountList.update { (it + email).distinct() }
-        accountProblems.value -= email
+        setAccountProblem(email, false)
     }
 
+    @Synchronized
     fun removeAccount(email: String) {
         accountList.update { it - email }
         queueList.update { list -> list.filterNot { it.account == email } }
+        failedList.update { list -> list.filterNot { it.account == email } }
+        setAccountProblem(email, false)
+        // Events stop sending there too, otherwise the next refresh would queue everything again.
+        eventList.update { list ->
+            list.map { if (it.account == email) it.copy(autoSend = false, account = null, album = null) else it }
+        }
+    }
+
+    fun setAccountProblem(email: String, problem: Boolean) {
+        accountProblems.value = if (problem) accountProblems.value + email else accountProblems.value - email
+        sp.edit { putStringSet("accountProblems", accountProblems.value) }
     }
 
     // ---- Upload queue ----
 
     fun isSent(item: QueueItem) = item.sentKey in sent
 
-    /** Adds what is not queued or sent yet; returns how many were added. */
-    fun enqueue(items: List<QueueItem>): Int {
-        val queued = queue.value.map { it.sentKey }.toSet()
-        val new = items.distinctBy { it.sentKey }.filter { it.sentKey !in queued && !isSent(it) }
-        if (new.isNotEmpty()) queueList.update { it + new }
+    /**
+     * Adds what is not queued or sent yet; returns how many were added.
+     * Photos that failed or that the user removed come back only when chosen by hand.
+     */
+    @Synchronized
+    fun enqueue(items: List<QueueItem>, byHand: Boolean = true): Int {
+        val queued = queue.value.associateBy { it.sentKey }
+        // A photo listed as failed for an account counts as refused there too (it may have moved with its event).
+        val failedKeys = failed.value.map { it.sentKey }.toSet()
+        val connected = accounts.value.toSet()
+        val new = items.distinctBy { it.sentKey }.filter {
+            val waiting = queued[it.sentKey]
+            it.account in connected && !isSent(it) && if (byHand) {
+                // Picked by hand wins over an event's copy: it stays even if the event stops, in the chosen album.
+                waiting != it
+            } else {
+                waiting == null && it.sentKey !in refused && it.sentKey !in failedKeys && it.sentKey !in dismissed
+            }
+        }
+        if (new.isEmpty()) return 0
+        if (byHand) {
+            val keys = new.map { it.sentKey }.toSet()
+            failedList.update { list -> list.filterNot { it.sentKey in keys } }
+            dismissed.removeAll(keys)
+            refused.removeAll(keys)
+            sp.edit {
+                putStringSet("dismissed", dismissed.toSet())
+                putStringSet("refused", refused.toSet())
+            }
+        }
+        val newKeys = new.map { it.sentKey }.toSet()
+        queueList.update { list -> list.filterNot { it.sentKey in newKeys } + new }
         return new.size
     }
 
     /** Queues photos of active auto-send events, from their first to their last day. */
+    @Synchronized
     fun collectAuto(media: List<MediaItem>): Int {
-        val rules = events.value.filter { it.autoSend && it.account != null }
+        val rules = events.value.filter { it.autoSend && it.account in accounts.value }
         if (rules.isEmpty()) return 0
-        return enqueue(media.flatMap { item ->
-            rules.filter { it.covers(item.day) && (!it.isLinked || item.isCamera) }.map { QueueItem.of(item, it.account!!, it.album) }
-        })
+        // Per account the most specific event decides the album, the same one the grid shows.
+        val wanted = media.filter { it.isCameraShot }.flatMap { item ->
+            rules.groupBy { it.account!! }.mapNotNull { (account, events) ->
+                events.mostSpecific(item.day)?.let { QueueItem.of(item, account, it.album, it.id) }
+            }
+        }
+        // Refused there before: list them as failed again, so "Zkusit znovu" can reach them.
+        val listed = failed.value.map { it.sentKey }.toSet()
+        val refusedAgain = wanted.filter { it.sentKey in refused && it.sentKey !in listed && !isSent(it) }
+        if (refusedAgain.isNotEmpty()) failedList.update { (it + refusedAgain).distinctBy { item -> item.sentKey } }
+        return enqueue(wanted, byHand = false)
     }
 
+    /** Takes back photos an event added that it no longer sends (turned off, deleted, shortened, other account). */
+    @Synchronized
+    fun pruneAuto() {
+        queueList.update { list -> list.filter { followEvent(it) == it } }
+        // Failed photos follow the event's current account and album, or go when it no longer wants them.
+        // A failed photo follows a new album, but not a new account: that account never refused it.
+        failedList.update { list ->
+            list.mapNotNull { item -> followEvent(item)?.takeIf { it.account == item.account } }.distinctBy { it.sentKey }
+        }
+    }
+
+    /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */
+    private fun followEvent(item: QueueItem): QueueItem? {
+        val id = item.eventId ?: return item
+        val event = events.value.firstOrNull { it.id == id } ?: return null
+        if (!event.autoSend || event.account == null || !event.covers(item.day)) return null
+        // A newer event inside this one takes these photos over.
+        val sending = events.value.filter { it.autoSend && it.account == event.account }
+        if (sending.mostSpecific(item.day) != event) return null
+        return item.copy(account = event.account, album = event.album)
+    }
+
+    /** Points queued and failed photos at the current file with the same key (ids change on a reindex). */
+    @Synchronized
+    fun followFiles(byKey: Map<String, MediaItem>) {
+        val follow = { item: QueueItem ->
+            byKey[item.key]?.let { item.copy(uri = it.uri.toString(), name = it.name, mime = it.mime) } ?: item
+        }
+        queueList.update { it.map(follow) }
+        failedList.update { it.map(follow) }
+    }
+
+    @Synchronized
     fun markSent(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }
         sent += keys
@@ -195,23 +313,40 @@ class Prefs(context: Context) {
         removeFromQueue(items)
     }
 
+    @Synchronized
     fun markFailed(items: List<QueueItem>) {
+        refused += items.map { it.sentKey }
+        sp.edit { putStringSet("refused", refused.toSet()) }
         failedList.update { (it + items).distinctBy { item -> item.sentKey } }
         removeFromQueue(items)
     }
 
+    @Synchronized
     fun retryFailed() {
-        val items = failed.value
+        val items = failed.value.mapNotNull(::followEvent)
         failedList.update { emptyList() }
         enqueue(items)
     }
 
-    fun clearQueue() = queueList.update { emptyList() }
+    @Synchronized
+    fun clearQueue() {
+        dismissed += queue.value.map { it.sentKey }
+        sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+        queueList.update { emptyList() }
+    }
 
+    @Synchronized
     fun removeFromQueue(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }.toSet()
         queueList.update { list -> list.filterNot { it.sentKey in keys } }
     }
+
+    /** Where an unfinished upload can continue, per photo and account. */
+    fun uploadSession(sentKey: String, size: Long): String? =
+        sp.getString("upload|$sentKey", null)?.split('\n')?.takeIf { it.getOrNull(1) == size.toString() }?.first()
+
+    fun setUploadSession(sentKey: String, url: String?, size: Long) =
+        sp.edit { if (url == null) remove("upload|$sentKey") else putString("upload|$sentKey", "$url\n$size") }
 
     /** Google Photos album ids the app created, per account and title. */
     fun albumId(account: String, title: String): String? = sp.getString("albumId|$account|$title", null)
@@ -290,9 +425,17 @@ class Prefs(context: Context) {
         linkedBegin = if (o.has("linkedBegin")) o.getLong("linkedBegin") else null,
     )
 
+    private fun tripToJson(t: TripProposal) = JSONObject()
+        .put("id", t.id).put("name", t.name).put("start", t.startDay).put("end", t.endDay).put("photos", t.photos)
+        .put("note", t.note)
+
+    private fun tripFromJson(o: JSONObject) =
+        TripProposal(o.getString("id"), o.getString("name"), o.getLong("start"), o.getLong("end"), o.getInt("photos"), o.optString("note"))
+
     private fun queueToJson(q: QueueItem) = JSONObject()
         .put("key", q.key).put("uri", q.uri).put("name", q.name).put("mime", q.mime)
         .put("account", q.account).put("album", q.album ?: "")
+        .put("event", q.eventId ?: "").put("day", q.day)
 
     private fun queueFromJson(o: JSONObject) = QueueItem(
         key = o.getString("key"),
@@ -301,6 +444,8 @@ class Prefs(context: Context) {
         mime = o.getString("mime"),
         account = o.getString("account"),
         album = o.getString("album").ifBlank { null },
+        eventId = o.optString("event").ifBlank { null },
+        day = o.optLong("day"),
     )
 
     companion object {

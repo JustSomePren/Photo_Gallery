@@ -28,19 +28,14 @@ data class MediaItem(
     val height: Int,
     val size: Long,
     val relativePath: String,
+    /** Changes when the file is edited, so pictures are loaded again. */
+    val modified: Long = 0,
 ) {
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */
     val key get() = if (dateTaken > 0) "$name|$dateTaken" else "$name|$size"
 
-    /** Screenshots and screen recordings; some phones keep them in DCIM too. */
-    val isScreenshot get() = relativePath.contains("Screenshot", ignoreCase = true) ||
-        relativePath.contains("Screen record", ignoreCase = true)
-
-    /**
-     * Really taken with the camera: camera apps save to DCIM. Leaves out screenshots,
-     * downloads and pictures received in chat apps. Used for the calendar and its events.
-     */
-    val isCamera get() = relativePath.startsWith("DCIM/", ignoreCase = true) && !isScreenshot
+    /** Taken with the phone's camera; screenshots, downloads and chat photos are never sent to the cloud. */
+    val isCameraShot get() = relativePath.startsWith("DCIM/Camera/", ignoreCase = true)
 
     /** Sharp, detailed photos compress worse, so more bytes per pixel usually means a better shot. */
     val detail get() = if (width > 0 && height > 0) size.toDouble() / (width.toLong() * height) else 0.0
@@ -77,6 +72,7 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.HEIGHT,
             MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DATE_MODIFIED,
         )
         val result = mutableListOf<MediaItem>()
         context.contentResolver.query(collection, projection, null, null, null)?.use { c ->
@@ -98,6 +94,7 @@ class MediaRepository(private val context: Context) {
                     height = c.getInt(9),
                     size = c.getLong(10),
                     relativePath = c.getString(11) ?: "",
+                    modified = c.getLong(12),
                 )
             }
         }
@@ -136,13 +133,15 @@ class MediaRepository(private val context: Context) {
     fun location(item: MediaItem): DoubleArray? =
         if (item.isVideo) null else runCatching { readExif(item.uri).latLong }.getOrNull()?.takeIf { it[0] != 0.0 || it[1] != 0.0 }
 
-    /** Without the original file Android hides the GPS position. */
-    private fun readExif(uri: Uri): ExifInterface {
-        val canSeeLocation = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val source = if (canSeeLocation) MediaStore.setRequireOriginal(uri) else uri
-        return context.contentResolver.openInputStream(source)!!.use { ExifInterface(it) }
-    }
+    private fun readExif(uri: Uri): ExifInterface =
+        context.contentResolver.openInputStream(originalUri(context, uri))!!.use { ExifInterface(it) }
+}
+
+/** Without the original file Android hides the GPS position, in the info and in uploaded photos. */
+fun originalUri(context: Context, uri: Uri): Uri {
+    val canSeeLocation = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
+    return if (canSeeLocation) MediaStore.setRequireOriginal(uri) else uri
 }
 
 sealed interface Source {
@@ -177,6 +176,6 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
             val keys = albums.find { it.id == source.id }?.refs.orEmpty().map { it.key }.toSet()
             filter { it.key in keys }
         }
-        is Source.Period -> filter { it.day in source.start..source.end && (!source.cameraOnly || it.isCamera) }
-        is Source.Span -> filter { it.date >= source.from && it.date < source.to && it.isCamera }
+        is Source.Period -> filter { it.day in source.start..source.end && (!source.cameraOnly || it.isCameraShot) }
+        is Source.Span -> filter { it.date >= source.from && it.date < source.to && it.isCameraShot }
     }

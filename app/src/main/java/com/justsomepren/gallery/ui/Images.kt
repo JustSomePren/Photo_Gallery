@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -42,9 +43,30 @@ object ImageCache {
     }
     private val full = LruCache<String, Bitmap>(3)
 
+    @VisibleForTesting
+    fun clear() {
+        thumbs.evictAll()
+        full.evictAll()
+    }
+
     /** Lets screenshot tests show pictures without real files. */
     @VisibleForTesting
     var fake: ((Uri) -> Bitmap)? = null
+
+    /** Bumped when files change, so screens holding a picture load it again. */
+    var version by mutableIntStateOf(0)
+        private set
+
+    /** Drops cached pictures of edited files. */
+    fun forget(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val prefixes = uris.map { it.toString() }
+        for (cache in listOf(thumbs, full)) {
+            cache.snapshot().keys.filter { key -> prefixes.any { key.startsWith("$it@") || key.startsWith("$it#") } }
+                .forEach(cache::remove)
+        }
+        version++
+    }
 
     fun cachedThumbnail(uri: Uri, size: Int): Bitmap? = thumbs.get("$uri@$size")
 
@@ -74,7 +96,7 @@ fun Thumbnail(
     contentScale: ContentScale = ContentScale.Crop,
 ) {
     val resolver = LocalContext.current.contentResolver
-    val bitmap = rememberLoaded(uri, sizePx, initial = ImageCache.cachedThumbnail(uri, sizePx)) {
+    val bitmap = rememberLoaded(uri, sizePx, ImageCache.version, initial = ImageCache.cachedThumbnail(uri, sizePx)) {
         ImageCache.thumbnail(resolver, uri, sizePx)
     }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {

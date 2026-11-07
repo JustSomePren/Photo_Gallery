@@ -106,9 +106,14 @@ object CalendarLink {
     /** Brings the vacations into the events, so they show in the calendar and send automatically. */
     fun sync(context: Context, from: Long = today() - 400, to: Long = today() + 400): List<CalendarItem>? {
         val items = events(context, from, to) ?: return null
+        store(context, from, to, items)
+        return items
+    }
+
+    /** Keeps the vacations among [items], read between [from] and [to], as events of this app. */
+    fun store(context: Context, from: Long, to: Long, items: List<CalendarItem>) {
         val prefs = Prefs.get(context)
         prefs.syncLinked(from, to, items.filter { it.vacation }.map { it.toEvent(prefs.accounts.value) })
-        return items
     }
 
     /** The Kalendář app says a vacation changed. */
@@ -172,7 +177,7 @@ class LinkProvider : ContentProvider() {
                 "covers" -> MatrixCursor(arrayOf("day", "id")).apply {
                     val from = uri.getQueryParameter("from")!!.toLong()
                     val to = uri.getQueryParameter("to")!!.toLong()
-                    MediaRepository(context).loadAll().filter { it.isCamera && it.day in from..to }
+                    MediaRepository(context).loadAll().filter { it.isCameraShot && it.day in from..to }
                         .groupBy { it.day }
                         .forEach { (day, items) -> addRow(arrayOf(day, items.cover()!!.id)) }
                 }

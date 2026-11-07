@@ -11,12 +11,14 @@ import android.widget.Toast
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CalendarLink
@@ -25,6 +27,12 @@ import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.MediaRepository
+import com.justsomepren.gallery.data.Places
+import com.justsomepren.gallery.data.SpotCache
+import com.justsomepren.gallery.data.Timeline
+import com.justsomepren.gallery.data.TripProposal
+import com.justsomepren.gallery.data.TripFinder
+import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
@@ -32,6 +40,8 @@ import com.justsomepren.gallery.data.UploadWorker
 import com.justsomepren.gallery.data.WarmupWorker
 import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.today
+import com.justsomepren.gallery.ui.ImageCache
+import com.justsomepren.gallery.ui.OpenDialogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,10 +52,14 @@ import kotlinx.coroutines.withContext
 
 sealed interface Screen {
     data class Grid(val source: Source) : Screen
-    data class Viewer(val source: Source, val startId: Long) : Screen
+    /** [opened] makes every opening its own screen, so opening the same photo again starts from the current photos. */
+    data class Viewer(val source: Source, val startId: Long, val opened: Long = System.nanoTime()) : Screen
+
+    /** Photos of an event; found by id, so editing the event updates the open screen. */
+    data class EventPhotos(val eventId: String) : Screen
 }
 
-class GalleryViewModel(app: Application) : AndroidViewModel(app) {
+class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
     private val repo = MediaRepository(app)
     val prefs = Prefs.get(app)
 
@@ -82,11 +96,33 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     val calendarState = LazyListState()
 
+    val dialogs = OpenDialogs()
+
+    /**
+     * Selected photos per screen. Kept here rather than in the saved screen state: selecting all of a big
+     * library would be too large for Android to save when the app goes to the background.
+     */
+    private val selections = mutableMapOf<String, MutableState<Set<Long>>>()
+
+    fun selection(key: String) = selections.getOrPut(key) { mutableStateOf(emptySet()) }
+
+    /** The photos each open viewer started with; kept here so turning the phone shows the same photo. */
+    private val viewerPhotos = mutableMapOf<Screen.Viewer, List<Long>>()
+
+    fun viewerPhotos(screen: Screen.Viewer, now: () -> List<Long>): List<Long> {
+        viewerPhotos.keys.retainAll(stack.toSet())
+        return viewerPhotos.getOrPut(screen, now)
+    }
+
     /** The event open in the editor, from whichever screen it was opened. */
     var editingEvent by mutableStateOf<Event?>(null)
 
     /** The account being connected while Google shows its consent dialog. */
-    var pendingAccount: String? = null
+    var pendingAccount: String?
+        get() = saved["pendingAccount"]
+        set(value) {
+            saved["pendingAccount"] = value
+        }
 
     init {
         if (!prefs.hasTargets) prefs.addTargets(GooglePhotos.defaultTargets(app))
@@ -96,16 +132,32 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun gridState(source: Source) = gridStates.getOrPut(source) { LazyGridState() }
 
+    /** An event's photo screen keeps its place by the event's id, so editing the event does not reset it. */
+    fun eventStateKey(event: Event): Source = Source.Album("event:${event.id}", event.id)
+
+    fun eventGridState(event: Event) = gridState(eventStateKey(event))
+
     fun refresh(delayMs: Long = 0, manual: Boolean = false) {
         if (manual) refreshing.value = true
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             delay(delayMs)
-            val items = withContext(Dispatchers.IO) { loadMedia() }
+            // Photos and the Kalendář events in one background step
+            var from = 0L
+            val to = today() + 400
+            val (items, calendar) = withContext(Dispatchers.IO) {
+                val media = loadMedia()
+                from = minOf(media.minOfOrNull { it.day } ?: today(), today() - 400)
+                media to CalendarLink.events(getApplication(), from, to)
+            }
+            val before = _media.value?.associateBy { it.id }.orEmpty()
+            ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items
             prefs.migrateKeys(items)
-            val oldest = minOf(items.minOfOrNull { it.day } ?: today(), today() - 400)
-            withContext(Dispatchers.IO) { CalendarLink.sync(getApplication(), oldest) }?.let { calendarItems.value = it }
+            calendar?.let {
+                calendarItems.value = it
+                CalendarLink.store(getApplication(), from, to, it)
+            }
             if (prefs.collectAuto(items) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false
         }
@@ -148,14 +200,16 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Only photos and videos from the camera go to the queue; returns how many were added. */
     fun enqueue(items: List<MediaItem>, account: String, album: String?): Int {
-        val added = prefs.enqueue(items.map { QueueItem.of(it, account, album) })
-        UploadWorker.schedule(getApplication())
+        val added = prefs.enqueue(items.filter { it.isCameraShot }.map { QueueItem.of(it, account, album) })
+        sendSoon()
         return added
     }
 
     fun saveEvent(event: Event) {
         prefs.saveEvent(event)
+        prefs.pruneAuto()
         media.value?.let { prefs.collectAuto(it) }
         UploadWorker.schedule(getApplication())
     }
@@ -167,20 +221,98 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteEvent(event: Event) {
         prefs.deleteEvent(event)
+        prefs.pruneAuto()
+        // Another event over the same days may want these photos.
+        media.value?.let { prefs.collectAuto(it) }
         UploadWorker.schedule(getApplication())
     }
 
     fun setMobileData(enabled: Boolean) {
         prefs.setMobileData(enabled)
-        UploadWorker.schedule(getApplication())
+        UploadWorker.schedule(getApplication(), restart = true)
+    }
+
+    /** A lower threshold may free a queue that waits for the charger. */
+    fun setThreshold(value: Int) {
+        prefs.setThreshold(value)
+        UploadWorker.schedule(getApplication(), restart = true)
     }
 
     fun retryFailed() {
         prefs.retryFailed()
-        UploadWorker.schedule(getApplication())
+        sendSoon()
     }
 
     fun sendNow() = UploadWorker.sendNow(getApplication())
+
+    /**
+     * Only when the user asks (Nastavení → Najít výlety): reads where camera photos were taken
+     * (once, cached) and proposes trips that are not events yet.
+     */
+    fun findTrips() {
+        if (prefs.tripSearch.value != null) return
+        prefs.tripSearch.value = 0 to 0
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>()
+                val camera = loadMedia().filter { it.isCameraShot }
+                val cache = SpotCache(app)
+                cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
+                prefs.setTrips(proposeTrips(camera, cache))
+            } finally {
+                prefs.tripSearch.value = null
+            }
+        }
+    }
+
+    /**
+     * Best source first: places (from the photos or the Timeline), then time zones,
+     * then days with unusually many photos. Days already in a trip or an event are not proposed again.
+     */
+    private fun proposeTrips(camera: List<MediaItem>, cache: SpotCache): List<TripProposal> {
+        val byPlace = TripFinder.find(camera.mapNotNull(cache::spot), Places.get(getApplication()))
+        val covered = { trips: List<TripProposal> -> trips.flatMap { (it.startDay..it.endDay).toList() }.toSet() }
+        val eventDays = prefs.events.value.flatMap { (it.startDay..it.endDay).toList() }.toSet()
+
+        val zones = camera.mapNotNull { item -> cache.offset(item)?.let { item.day to it } }.toMap()
+        val byZone = TripFinder.byTimeZone(zones, covered(byPlace))
+
+        // Many more photos than usual: extends trips found by place or zone, and finds the rest.
+        val perDay = camera.groupingBy { it.day }.eachCount()
+        val ratio = TripFinder.busyness(perDay)
+        val known = camera.filter { cache.spot(it) != null || cache.offset(it) != null }.map { it.day }.toSet()
+        val located = (byPlace + byZone).map { TripFinder.extendByBusyDays(it, perDay, ratio, known) }
+        val byBurst = TripFinder.byBursts(perDay, covered(located))
+
+        return (located + byBurst)
+            .filter { trip -> prefs.events.value.none { it.overlaps(trip.startDay, trip.endDay) } }
+            .filter { trip -> (trip.startDay..trip.endDay).none { it in eventDays } }
+            .map { trip -> trip.copy(photos = camera.count { it.day in trip.startDay..trip.endDay }) }
+            .sortedByDescending { it.startDay }
+    }
+
+    /** Fills places of photos without GPS from a Timeline export, then searches again. Returns how many got one. */
+    suspend fun importTimeline(uri: android.net.Uri): Int = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val timeline = app.contentResolver.openInputStream(uri)!!.bufferedReader().use(Timeline::read)
+        val filled = SpotCache(app).fillFrom(timeline, loadMedia().filter { it.isCameraShot })
+        findTrips()
+        filled
+    }
+
+    /** Confirmed trips become events, and if wanted albums in the app (links only, nothing is uploaded). */
+    fun createTrips(ids: Set<String>, withAlbums: Boolean) {
+        val camera = media.value.orEmpty().filter { it.isCameraShot }
+        prefs.trips.value.filter { it.id in ids }.forEachIndexed { index, trip ->
+            val color = EVENT_COLORS[(prefs.events.value.size + index) % EVENT_COLORS.size]
+            saveEvent(Event(name = trip.name, color = color, startDay = trip.startDay, endDay = trip.endDay))
+            if (withAlbums) prefs.createAlbum(trip.name, camera.filter { it.day in trip.startDay..trip.endDay })
+        }
+        prefs.removeTrips(ids)
+    }
+
+    /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */
+    private fun sendSoon() = UploadWorker.schedule(getApplication(), restart = prefs.uploading.value == null)
 
     fun setWarmup(enabled: Boolean) {
         prefs.setWarmup(enabled)

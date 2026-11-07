@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -99,6 +100,10 @@ fun GalleryApp(vm: GalleryViewModel = viewModel()) {
         CompositionLocalProvider(LocalSaver provides saver) {
             Surface(Modifier.fillMaxSize()) {
                 var granted by remember { mutableStateOf(hasMediaAccess(context)) }
+                LifecycleResumeEffect(Unit) {
+                    granted = hasMediaAccess(context)
+                    onPauseOrDispose {}
+                }
                 if (granted) Main(vm) else PermissionScreen { granted = hasMediaAccess(context) }
             }
         }
@@ -117,7 +122,7 @@ private fun Main(vm: GalleryViewModel) {
     val context = LocalContext.current
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
-    var searching by remember { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
 
     val all = media ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -137,14 +142,17 @@ private fun Main(vm: GalleryViewModel) {
     fun browser(
         source: Source,
         onBack: (() -> Unit)?,
+        // Scroll position and selection belong to this key; an event keeps its own while it is edited.
+        stateKey: Source = source,
         header: @Composable () -> Unit = {},
         extraActions: @Composable RowScope.() -> Unit = {},
     ) {
         MediaBrowser(
             source = source,
+            stateKey = stateKey.toString(),
             items = remember(all, albums, source) { all.filterBy(source, albums) },
             vm = vm,
-            gridState = vm.gridState(source),
+            gridState = vm.gridState(stateKey),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
             onBack = onBack,
             header = header,
@@ -165,25 +173,41 @@ private fun Main(vm: GalleryViewModel) {
 
     when (val top = stack.lastOrNull()) {
         is Screen.Viewer -> Viewer(
-            items = remember(all, albums, top.source) { all.filterBy(top.source, albums) },
+            // The photos it opened with, so unfavoriting in Favorites does not jump to another photo.
+            items = vm.viewerPhotos(top) { all.filterBy(top.source, albums).map { it.id } }.let { shown ->
+                remember(shown, all) {
+                    val byId = all.associateBy { it.id }
+                    shown.mapNotNull(byId::get)
+                }
+            },
             startId = top.startId,
             vm = vm,
             onBack = back,
         )
+        // A day from the calendar, or the time of an event from the Kalendář app
         is Screen.Grid -> {
-            val event = events.firstOrNull { it.source == top.source }
             val linked = calendarItems.firstOrNull { it.source == top.source }
-            val day = (top.source as? Source.Period)?.takeIf { it.start == it.end && event == null }?.start
-            val header: @Composable () -> Unit = {
-                if (day != null) DayEvents(day, calendarItems, all) { stack.add(Screen.Grid(it)) }
-            }
-            browser(top.source, back, header) {
-                if (event != null) {
-                    IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
-                } else if (linked != null) {
+            val day = (top.source as? Source.Period)?.takeIf { it.start == it.end }?.start
+            browser(
+                top.source,
+                back,
+                header = { if (day != null) DayEvents(day, calendarItems, all) { stack.add(Screen.Grid(it)) } },
+            ) {
+                if (linked != null) {
                     IconButton(onClick = { CalendarLink.openEvent(context, linked.id, linked.begin) }) {
                         Icon(Icons.Default.Event, "Otevřít v Kalendáři")
                     }
+                }
+            }
+        }
+        is Screen.EventPhotos -> {
+            val event = events.firstOrNull { it.id == top.eventId }
+            if (event == null) {
+                // Deleted in the editor.
+                LaunchedEffect(Unit) { back() }
+            } else {
+                browser(event.source, back, stateKey = vm.eventStateKey(event)) {
+                    IconButton(onClick = { vm.editingEvent = event }) { Icon(Icons.Default.Edit, "Upravit událost") }
                 }
             }
         }
@@ -205,7 +229,7 @@ private fun Main(vm: GalleryViewModel) {
             Box(Modifier.padding(padding).consumeWindowInsets(WindowInsets.navigationBars)) {
                 when (vm.tab) {
                     0 -> if (calendar) {
-                        CalendarScreen(all, events, calendarItems, vm, openSending, actions = { photoActions() }) { stack.add(Screen.Grid(it)) }
+                        CalendarScreen(all, events, calendarItems, vm, openSending, actions = { photoActions() }) { stack.add(it) }
                     } else {
                         browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }
@@ -252,7 +276,7 @@ private fun CalendarScreen(
     vm: GalleryViewModel,
     openSending: () -> Unit,
     actions: @Composable RowScope.() -> Unit,
-    onOpen: (Source) -> Unit,
+    onOpen: (Screen) -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text("Fotky") }, actions = actions) }) { padding ->
         CalendarView(
@@ -262,17 +286,23 @@ private fun CalendarScreen(
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },
-            onDay = { onOpen(Source.Period(formatDay(it), it, it, cameraOnly = true)) },
+            onDay = { onOpen(Screen.Grid(Source.Period(formatDay(it), it, it, cameraOnly = true))) },
             onNewEvent = vm::newEvent,
-            onEvent = { onOpen(it.source) },
+            onEvent = { onOpen(Screen.EventPhotos(it.id)) },
         )
     }
 }
 
 @Composable
 private fun PermissionScreen(onResult: () -> Unit) {
+    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         onResult()
+        // After two refusals Android stops asking; only the app settings can allow it then.
+        val activity = context as? Activity
+        if (!hasMediaAccess(context) && activity?.shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_IMAGES) == false) {
+            GooglePhotos.appSettings(context, context.packageName)
+        }
     }
     Column(
         Modifier.fillMaxSize().padding(32.dp),
@@ -280,7 +310,7 @@ private fun PermissionScreen(onResult: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Galerie potřebuje přístup k fotkám a videím.", style = MaterialTheme.typography.titleMedium)
-        Text("Vše zůstává v telefonu, aplikace nemá přístup k internetu.")
+        Text("Fotky zůstávají v telefonu. Ven jde jen to, co sám pošleš do cloudu.")
         Button(onClick = { launcher.launch(MEDIA_PERMISSIONS) }) { Text("Povolit přístup") }
     }
 }

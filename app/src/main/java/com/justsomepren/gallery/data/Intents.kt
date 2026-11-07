@@ -14,7 +14,6 @@ import android.widget.Toast
 /** Everything the app does not do itself is handed over to Google Photos. */
 object GooglePhotos {
     const val PACKAGE = "com.google.android.apps.photos"
-    private const val DRIVE = "com.google.android.apps.docs"
 
     fun open(context: Context, item: MediaItem) = start(
         context,
@@ -106,7 +105,6 @@ object GooglePhotos {
         uploadApps(context).map { it.second }.mapNotNull { target ->
             when (target.packageName) {
                 PACKAGE -> target.copy(name = "Google Fotky")
-                DRIVE -> target.copy(name = "Google Disk")
                 else -> null
             }
         }.distinctBy { it.packageName }

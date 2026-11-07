@@ -32,6 +32,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,7 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +55,18 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
+    val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
+    val trips by vm.prefs.trips.collectAsStateWithLifecycle()
+    val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
+    var showingTrips by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val timelineLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val filled = runCatching { vm.importTimeline(uri) }.getOrNull()
+            toast(context, if (filled != null) "Poloha doplněna u $filled fotek, hledám výlety…" else "Soubor se nepodařilo přečíst")
+        }
+    }
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
     var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
@@ -100,6 +115,35 @@ fun SettingsScreen(vm: GalleryViewModel) {
                 HorizontalDivider()
             }
 
+            Section("Zobrazení")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Seskupovat fotky po dnech", Modifier.weight(1f))
+                Switch(groupByDay, onCheckedChange = vm.prefs::setGroupByDay)
+            }
+            Hint("Vypnuto: jen po měsících, víc fotek na obrazovce.")
+
+            HorizontalDivider()
+            Section("Výlety")
+            Hint(
+                "Projde, kde byly fotky z fotoaparátu pořízené, a navrhne výlety – i ty staré. " +
+                    "Vše jen v telefonu. Poprvé to může pár minut trvat, pak už jen nové fotky."
+            )
+            val search = tripSearch
+            if (search != null) {
+                Text(if (search.second == 0) "Hledám…" else "Čtu polohu fotek ${search.first} / ${search.second}")
+            } else {
+                SettingsButton("Najít výlety") { vm.findTrips() }
+            }
+            if (trips.isNotEmpty() && search == null) {
+                SettingsButton("Návrhy výletů: ${trips.size}") { showingTrips = true }
+            }
+            Hint(
+                "Fotky bez polohy? Pokud máš zapnutou Časovou osu Google, exportuj ji v telefonu " +
+                    "(Nastavení → Poloha → Časová osa → Exportovat) a načti ji sem. Poloha se doplní podle času fotky."
+            )
+            SettingsButton("Načíst Časovou osu (Timeline.json)") { timelineLauncher.launch(arrayOf("application/json", "*/*")) }
+
+            HorizontalDivider()
             Section("Baterie")
             battery?.let {
                 Text("Baterie ${it.level} %" + if (it.charging) " · nabíjí se" else "")
@@ -109,7 +153,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             Slider(
                 value = slider,
                 onValueChange = { slider = it },
-                onValueChangeFinished = { vm.prefs.setThreshold(slider.roundToInt()) },
+                onValueChangeFinished = { vm.setThreshold(slider.roundToInt()) },
                 valueRange = 30f..100f,
                 steps = 13,
             )
@@ -125,7 +169,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             HorizontalDivider()
             Section("Google Fotky")
             Hint(
-                "Úpravy, hledání a přehrávání videí řeší Google Fotky. Aby na výletě nežraly baterku, " +
+                "Úpravy a hledání řeší Google Fotky. Aby na výletě nežraly baterku, " +
                     "nastav jim v Info o aplikaci → Baterie → Omezeno. Zálohu pak spustí, až je otevřeš."
             )
             SettingsButton("Omezit Google Fotky na pozadí") { GooglePhotos.appSettings(context) }
@@ -146,13 +190,16 @@ fun SettingsScreen(vm: GalleryViewModel) {
         }
     }
 
+
+    if (showingTrips) TripsDialog(vm) { showingTrips = false }
 }
 
 @Composable
 fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val apps = remember { GooglePhotos.uploadApps(context) }
-    var chosen by remember { mutableStateOf<UploadTarget?>(apps.firstOrNull()?.second) }
+    var chosenId by rememberSaveable { mutableStateOf(apps.firstOrNull()?.second?.appId) }
+    val chosen = apps.map { it.second }.firstOrNull { it.appId == chosenId }
 
     TextInputDialog(
         title = "Nový cíl (např. Společný cloud)",
@@ -162,10 +209,10 @@ fun AddTargetDialog(vm: GalleryViewModel, onDismiss: () -> Unit) {
             LazyColumn(Modifier.heightIn(max = 300.dp).padding(top = 8.dp)) {
                 items(apps) { (label, target) ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { chosen = target },
+                        Modifier.fillMaxWidth().clickable { chosenId = target.appId },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(chosen == target, onClick = { chosen = target })
+                        RadioButton(chosen == target, onClick = { chosenId = target.appId })
                         Text(label)
                     }
                 }

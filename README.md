@@ -5,22 +5,38 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 
 ## Co umí
 
-- **Kalendář** (výchozí) – celý měsíc na obrazovce, víkendy vpravo, v každém dni první fotka
-  a počet. Klepnutí na den otevře jeho fotky, **dlouhý stisk na den založí událost**.
-  Ikonou nahoře přepneš na klasickou mřížku.
+- **Mřížka fotek** (výchozí) – fotky po dnech („Dnes“, „Včera“, „Čtvrtek 5. 11.“) uvnitř měsíců;
+  v Nastavení jde přepnout jen na měsíce. Kde začíná událost, je barevný řádek
+  s jejím názvem, pod fotkami z události barevný proužek a při posouvání plave nahoře datum a událost.
+- **Kalendář** – ikonou nahoře; celý měsíc na obrazovce, víkendy vpravo. Klepnutí na den otevře
+  jeho fotky, **dlouhý stisk na den založí událost**.
 - **Události** – barevná období v kalendáři (třeba „Dovča Praha“). Klepnutím na událost
   uvidíš všechny její fotky.
+- **Najít výlety** – *Nastavení → Výlety*, spustí se jen tímto tlačítkem. Podle polohy ve fotkách
+  z fotoaparátu najde výlety (i staré): domov je místo s fotkami v nejvíc dnech, souvislé dny dál než
+  50 km od něj jsou výlet. Název podle země, doma podle města (např. „Tchaj-wan – říjen 2025“).
+  Návrhy potvrdíš a vzniknou z nich události, případně alba v aplikaci. Vše jen v telefonu;
+  polohy se čtou jednou a pamatují, další hledání čte jen nové fotky.
+  **Fotky bez polohy** (vypnutá poloha ve fotoaparátu):
+  - *Načíst Časovou osu* – export Časové osy Google z telefonu (Timeline.json) doplní fotkám polohu
+    podle času pořízení; nejpřesnější, pokud byla Časová osa zapnutá.
+  - Časové pásmo ve fotce – pozná cestu do zahraničí („Výlet UTC+8“), pokud ho telefon zapsal.
+  - Dny s mnohem víc fotkami než obvykle – návrh „Možná výlet“.
+
+  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než obvykle v tom období (±45 dní), takže
+  sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
+  fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
+  proč, např. „podle polohy · 5× víc fotek než obvykle“.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
 - **Záložka Odesílání** – fronta, události, Google účty a ruční cíle na jednom místě.
-- **Fotky** – všechny fotky a videa po měsících.
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
 - **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
-- **Výběr více fotek** – dlouhý stisk na fotku, pak klepáním přidáváš další.
-  Klepnutím na měsíc vybereš celý měsíc, ikonou v albu celé album.
-- **Poslat do cloudu** – vybrané fotky pošle do zvoleného cíle (např. „Osobní – Fotky“,
-  „Společný – Disk“). Cíle si nastavíš v *Nastavení → Kam posílat fotky*.
+- **Výběr více fotek** – podrž fotku a táhni prstem přes další (u okraje se seznam sám posouvá),
+  nebo pak klepáním přidávej. Klepnutím na den či měsíc vybereš celý, ikonou v albu celé album.
+- **Poslat do cloudu** – vybrané fotky dá do fronty pro zvolený Google účet (osobní, společný…)
+  a album; odešlou se samy do Google Fotek.
 - **Upravit / Hledat** – otevře Google Fotky.
 - **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
@@ -147,14 +163,20 @@ v Odesílání se u účtu objeví „Přihlásit“.
 - Pod hranicí baterie (výchozí 70 %) **jen při nabíjení**.
 - Tlačítko **Odeslat hned** pošle frontu okamžitě i přes data a bez ohledu na baterii.
 - Každá fotka se do stejného účtu pošle jen jednou.
+- Do cloudu jdou **jen fotky a videa z fotoaparátu** (složka `DCIM/Camera`). Snímky obrazovky,
+  stažené obrázky ani fotky z chatů se nepošlou nikdy, ani když je vybereš ručně.
+  Obecné „Sdílet“ (např. do WhatsAppu) toto omezení nemá.
 - Album se v Google Fotkách vytvoří samo. Aplikace smí přidávat jen do alb, která sama vytvořila.
 
 ## Ruční odesílání přes aplikace
 
-- **Google Disk** se při nahrávání vždy zeptá, na který účet.
-- **Google Fotky** nahrají do účtu, který je v nich právě aktivní.
-
-Doporučení: společný cloud přes Disk (sdílená složka), osobní přes Fotky.
-Cílů si můžeš přidat kolik chceš, každý s vlastním názvem.
+Hlavní cesta je fronta do Google Fotek (výběr účtu i alba přímo v aplikaci).
+Ruční cíle jsou navíc: otevřou jinou aplikaci s vybranými fotkami. Google Fotky takto nahrají
+do účtu, který je v nich právě aktivní.
 
 Pokud chceš potvrzovat oblíbené bez dialogu, povol *Nastavení → Oblíbené bez potvrzování*.
+
+## Data třetích stran
+
+Názvy měst a zemí pro hledání výletů: [GeoNames](https://www.geonames.org/) (cities15000),
+licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

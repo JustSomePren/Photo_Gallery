@@ -103,6 +103,7 @@ class CalendarLinkTest {
 
     @Test
     fun vacationSendsPhotosWithoutScreenshots() {
+        prefs.addAccount("ja@gmail.com")
         prefs.syncLinked(day.toEpochDay() - 30, day.toEpochDay() + 30, listOf(trip.toEvent(accounts)))
         val media = listOf(
             photo(day.atTime(10, 0), 1),
@@ -111,7 +112,7 @@ class CalendarLinkTest {
         )
 
         assertEquals(1, prefs.collectAuto(media))
-        assertEquals(QueueItem.of(media[0], "ja@gmail.com", "Moře"), prefs.queue.value.single())
+        assertEquals(QueueItem.of(media[0], "ja@gmail.com", "Moře", trip.toEvent(accounts).id), prefs.queue.value.single())
     }
 
     @Test

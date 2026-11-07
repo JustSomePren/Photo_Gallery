@@ -67,7 +67,7 @@ fun CalendarView(
     onEvent: (Event) -> Unit,
 ) {
     // Only what was really taken with the camera, no screenshots or downloads
-    val byDay = remember(media) { media.filter { it.isCamera }.groupBy { it.day } }
+    val byDay = remember(media) { media.filter { it.isCameraShot }.groupBy { it.day } }
     val months = remember(byDay, events) { calendarMonths(byDay.keys, events) }
     val paired = remember(byDay, calendarItems) { pairedDays(calendarItems, byDay) }
     val thumbPx = gridThumbPx()

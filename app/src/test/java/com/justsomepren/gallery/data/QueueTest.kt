@@ -44,6 +44,8 @@ class QueueTest {
         context.getSharedPreferences("gallery", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.filesDir, "sent.txt").delete()
         prefs = Prefs(context)
+        prefs.addAccount("me@gmail.com")
+        prefs.addAccount("shared@gmail.com")
     }
 
     private val trip = Event(
@@ -58,6 +60,7 @@ class QueueTest {
 
     @Test
     fun autoSendQueuesOnlyPhotosFromTheEventDays() {
+        prefs.addAccount("shared@gmail.com")
         prefs.saveEvent(trip)
         val media = listOf(
             photoOn(LocalDate.of(2026, 11, 5), 1),
@@ -90,6 +93,7 @@ class QueueTest {
 
         val restarted = Prefs(context)
         assertEquals(0, restarted.enqueue(listOf(item)))
+        assertEquals(0, restarted.enqueue(listOf(item.copy(account = "unknown@gmail.com"))))
         // The same photo can still go to a different account.
         assertEquals(1, restarted.enqueue(listOf(item.copy(account = "shared@gmail.com"))))
     }
@@ -105,6 +109,36 @@ class QueueTest {
         prefs.retryFailed()
         assertEquals(0, prefs.failed.value.size)
         assertEquals(1, prefs.queue.value.size)
+    }
+
+    @Test
+    fun refusedPhotosStayRefusedWhenEventIsSwitchedOffAndOn() {
+        prefs.saveEvent(trip)
+        val media = listOf(photoOn(LocalDate.of(2026, 11, 10), 1), photoOn(LocalDate.of(2026, 11, 11), 2))
+        prefs.collectAuto(media)
+        prefs.markFailed(prefs.queue.value.take(1))
+
+        prefs.saveEvent(trip.copy(autoSend = false))
+        prefs.pruneAuto()
+        prefs.saveEvent(trip)
+        prefs.pruneAuto()
+        prefs.collectAuto(media)
+        assertEquals(listOf("IMG_2.jpg"), prefs.queue.value.map { it.name })
+
+        // Still refused after a restart; only picking it by hand sends it again.
+        val restarted = Prefs(context)
+        assertEquals(0, restarted.collectAuto(media))
+        assertEquals(1, restarted.enqueue(listOf(QueueItem.of(media[0], "shared@gmail.com", null))))
+    }
+
+    @Test
+    fun queuedPhotoFollowsItsFileAfterReindex() {
+        val photo = photoOn(LocalDate.of(2026, 11, 10), 1)
+        prefs.enqueue(listOf(QueueItem.of(photo, "me@gmail.com", null)))
+        // After a reindex the same photo has a new id; the old id now belongs to something else.
+        val reindexed = photo.copy(id = 77, uri = Uri.parse("content://media/external/images/media/77"))
+        prefs.followFiles(mapOf(reindexed.key to reindexed))
+        assertEquals("content://media/external/images/media/77", prefs.queue.value.single().uri)
     }
 
     @Test
@@ -124,7 +158,7 @@ class QueueTest {
         prefs.addAccount("me@gmail.com")
         prefs.enqueue(listOf(QueueItem.of(photoOn(LocalDate.of(2026, 11, 10), 1), "me@gmail.com", null)))
         prefs.removeAccount("me@gmail.com")
-        assertEquals(emptyList<String>(), prefs.accounts.value)
+        assertEquals(listOf("shared@gmail.com"), prefs.accounts.value)
         assertEquals(0, prefs.queue.value.size)
     }
 
