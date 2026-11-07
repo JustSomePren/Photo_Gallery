@@ -77,6 +77,9 @@ object GoogleAuth {
     }
 }
 
+/** The photo is no longer wanted (queue cleared, account removed); the rest of the queue goes on. */
+class UploadCancelled : Exception()
+
 class HttpException(val code: Int, message: String) : IOException("HTTP $code: $message") {
     /** Google said no for good; unlike login, timeouts or rate limits, retrying will not help. */
     val isRefusal get() = code in 400..499 && code !in setOf(401, 408, 429)
@@ -89,7 +92,7 @@ class PhotosApi(private val context: Context, private val token: String) {
      * Uploads in pieces and remembers where it got to, so a long video continues in the next run
      * instead of starting over. Returns the upload token.
      */
-    fun upload(item: QueueItem): String {
+    fun upload(item: QueueItem, stillWanted: () -> Boolean = { true }): String {
         val uri = originalUri(context, Uri.parse(item.uri))
         val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1
         val prefs = Prefs.get(context)
@@ -112,6 +115,8 @@ class PhotosApi(private val context: Context, private val token: String) {
             }
             val buffer = ByteArray(CHUNK)
             while (true) {
+                // The user may remove the account or clear the queue while a long video goes up.
+                if (!stillWanted()) throw UploadCancelled()
                 val read = input.readNBytes(buffer, 0, CHUNK)
                 val last = read < CHUNK || (size > 0 && offset + read >= size)
                 val connection = open(url)
@@ -269,7 +274,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
         // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
         val waiting = prefs.queue.value.filter { it.key in camera && it.account !in prefs.accountProblems.value }
-        return if (waiting.isEmpty()) Result.success() else Result.retry()
+        if (waiting.isEmpty()) {
+            prefs.setSendNowPending(false)
+            return Result.success()
+        }
+        return Result.retry()
     }
 
     /**
@@ -284,7 +293,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         for (queued in batch) {
             val item = current(queued) ?: continue
             val token = try {
-                api.upload(item)
+                api.upload(item) { !isStopped && current(item) != null }
+            } catch (e: UploadCancelled) {
+                null
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
                 prefs.removeFromQueue(listOf(item))
@@ -399,7 +410,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             }
 
             if (prefs.queue.value.isNotEmpty()) {
-                val once = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints).build()
+                // A waiting "send now" keeps its any-network, any-battery conditions.
+                val once = if (prefs.sendNowPending) sendNowRequest() else
+                    OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints).build()
                 val policy = if (restart) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
                 work.enqueueUniqueWork(ONCE, policy, once)
             }
@@ -415,13 +428,15 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
         /** "Send now": any network, battery is ignored. */
         fun sendNow(context: Context) {
-            val request = OneTimeWorkRequestBuilder<UploadWorker>()
-                .setConstraints(constraints(mobileData = true, batteryNotLow = false))
-                .setInputData(workDataOf(NOW to true))
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(ONCE, ExistingWorkPolicy.REPLACE, request)
+            Prefs.get(context).setSendNowPending(true)
+            WorkManager.getInstance(context).enqueueUniqueWork(ONCE, ExistingWorkPolicy.REPLACE, sendNowRequest())
         }
+
+        private fun sendNowRequest() = OneTimeWorkRequestBuilder<UploadWorker>()
+            .setConstraints(constraints(mobileData = true, batteryNotLow = false))
+            .setInputData(workDataOf(NOW to true))
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
 
         private fun constraints(mobileData: Boolean, batteryNotLow: Boolean = true, charging: Boolean = false) =
             Constraints.Builder()

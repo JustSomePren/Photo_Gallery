@@ -272,7 +272,8 @@ private fun buildEntries(items: List<MediaItem>, events: List<Event>): List<Grid
         val entries = mutableListOf<GridEntry>(GridEntry.Header(month, group))
         var current: Event? = null
         for (item in group) {
-            val event = events.firstOrNull { it.covers(item.day) }
+            // An event inside a longer one (a city on a long trip) is the more specific one to show.
+            val event = events.filter { it.covers(item.day) }.minByOrNull { it.endDay - it.startDay }
             if (event != null && event != current) entries += GridEntry.EventStart(month, event, item.id)
             current = event
             entries += GridEntry.Photo(month, item, event)

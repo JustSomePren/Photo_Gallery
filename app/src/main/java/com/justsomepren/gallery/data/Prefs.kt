@@ -68,6 +68,11 @@ class Prefs(context: Context) {
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
 
+    /** "Odeslat hned" was tapped and its run has not finished yet. */
+    val sendNowPending get() = sp.getBoolean("sendNowPending", false)
+
+    fun setSendNowPending(value: Boolean) = sp.edit { putBoolean("sendNowPending", value) }
+
     /** Accounts whose Google login has to be confirmed again; saved, as the worker finds out while the app is closed. */
     val accountProblems = MutableStateFlow(sp.getStringSet("accountProblems", null).orEmpty().toSet())
 

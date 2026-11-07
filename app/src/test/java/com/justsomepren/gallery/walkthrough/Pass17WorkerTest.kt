@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.justsomepren.gallery.data.PhotosApi
 import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.QueueItem
+import androidx.work.testing.TestListenableWorkerBuilder
 import com.justsomepren.gallery.data.UploadWorker
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -108,10 +109,7 @@ class Pass17WorkerTest {
 
     @Suppress("UNCHECKED_CAST")
     private fun worker(): UploadWorker {
-        val unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }
-        val unsafe = unsafeField.get(null)
-        val worker = unsafe.javaClass.getMethod("allocateInstance", Class::class.java)
-            .invoke(unsafe, UploadWorker::class.java) as UploadWorker
+        val worker = TestListenableWorkerBuilder<UploadWorker>(context).build()
         UploadWorker::class.java.getDeclaredField("prefs").apply { isAccessible = true }.set(worker, prefs)
         return worker
     }
