@@ -150,21 +150,21 @@ fun MediaBrowser(
                         IconButton(onClick = { selected = items.map { it.id }.toSet() }) {
                             Icon(Icons.Default.SelectAll, "Vybrat vše")
                         }
-                        FavoriteButton(picked) { actions.toggleFavorite(picked); done() }
+                        FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
                         IconButton(onClick = { actions.send(picked); done() }) {
                             Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
                         }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem({ Text("Přidat do alba") }, onClick = { actions.addToAlbum(picked); done() })
-                            DropdownMenuItem({ Text("Přesunout do složky") }, onClick = { actions.move(picked); done() })
+                            DropdownMenuItem({ Text("Přesunout do složky") }, onClick = { if (actions.move(picked)) done() else menu = false })
                             if (album != null) {
                                 DropdownMenuItem({ Text("Odebrat z alba") }, onClick = {
                                     vm.prefs.removeFromAlbum(album.id, picked)
                                     done()
                                 })
                             }
-                            DropdownMenuItem({ Text("Sdílet") }, onClick = { actions.share(picked); done() })
+                            DropdownMenuItem({ Text("Sdílet") }, onClick = { if (actions.share(picked)) done() else menu = false })
                         }
                     },
                 )

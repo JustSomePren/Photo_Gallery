@@ -154,6 +154,7 @@ class Prefs(context: Context) {
         setAccountProblem(email, false)
     }
 
+    @Synchronized
     fun removeAccount(email: String) {
         accountList.update { it - email }
         queueList.update { list -> list.filterNot { it.account == email } }
@@ -210,18 +211,22 @@ class Prefs(context: Context) {
     }
 
     /** Queues photos of active auto-send events, from their first to their last day. */
+    @Synchronized
     fun collectAuto(media: List<MediaItem>): Int {
         val rules = events.value.filter { it.autoSend && it.account in accounts.value }
         if (rules.isEmpty()) return 0
-        return enqueue(
-            media.filter { it.isCameraShot }.flatMap { item ->
-                rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album, it.id) }
-            },
-            byHand = false,
-        )
+        val wanted = media.filter { it.isCameraShot }.flatMap { item ->
+            rules.filter { it.covers(item.day) }.map { QueueItem.of(item, it.account!!, it.album, it.id) }
+        }
+        // Refused there before: list them as failed again, so "Zkusit znovu" can reach them.
+        val listed = failed.value.map { it.sentKey }.toSet()
+        val refusedAgain = wanted.filter { it.sentKey in refused && it.sentKey !in listed && !isSent(it) }
+        if (refusedAgain.isNotEmpty()) failedList.update { (it + refusedAgain).distinctBy { item -> item.sentKey } }
+        return enqueue(wanted, byHand = false)
     }
 
     /** Takes back photos an event added that it no longer sends (turned off, deleted, shortened, other account). */
+    @Synchronized
     fun pruneAuto() {
         queueList.update { list -> list.filter { followEvent(it) == it } }
         // Failed photos follow the event's current account and album, or go when it no longer wants them.
@@ -236,6 +241,7 @@ class Prefs(context: Context) {
         return item.copy(account = event.account, album = event.album)
     }
 
+    @Synchronized
     fun markSent(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }
         sent += keys
@@ -243,6 +249,7 @@ class Prefs(context: Context) {
         removeFromQueue(items)
     }
 
+    @Synchronized
     fun markFailed(items: List<QueueItem>) {
         refused += items.map { it.sentKey }
         sp.edit { putStringSet("refused", refused.toSet()) }
@@ -250,18 +257,21 @@ class Prefs(context: Context) {
         removeFromQueue(items)
     }
 
+    @Synchronized
     fun retryFailed() {
         val items = failed.value.mapNotNull(::followEvent)
         failedList.update { emptyList() }
         enqueue(items)
     }
 
+    @Synchronized
     fun clearQueue() {
         dismissed += queue.value.map { it.sentKey }
         sp.edit { putStringSet("dismissed", dismissed.toSet()) }
         queueList.update { emptyList() }
     }
 
+    @Synchronized
     fun removeFromQueue(items: List<QueueItem>) {
         val keys = items.map { it.sentKey }.toSet()
         queueList.update { list -> list.filterNot { it.sentKey in keys } }

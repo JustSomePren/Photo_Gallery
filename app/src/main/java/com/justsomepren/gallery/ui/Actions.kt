@@ -60,29 +60,37 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
     // Kept in the ViewModel, so turning the phone does not close an open dialog.
     private val dialogs = vm.dialogs
 
-    fun toggleFavorite(items: List<MediaItem>) {
-        if (items.isEmpty() || tooMany(items)) return
+    // Actions that hand photos to Android or another app return false when there are too many,
+    // so the selection stays.
+    fun toggleFavorite(items: List<MediaItem>): Boolean {
+        if (items.isEmpty() || tooMany(context, items)) return false
         val value = !items.all { it.isFavorite }
         ask(MediaStore.createFavoriteRequest(context.contentResolver, items.map { it.uri }, value))
+        return true
     }
 
     fun moveTo(items: List<MediaItem>, path: String) {
-        if (tooMany(items)) return
+        if (tooMany(context, items)) return
         ask(MediaStore.createWriteRequest(context.contentResolver, items.map { it.uri })) { vm.move(items, path) }
     }
 
-    fun send(items: List<MediaItem>) {
-        if (!tooMany(items)) dialogs.sending = items
-    }
+    /** The queue takes any number of photos, so the dialog always opens. */
+    fun send(items: List<MediaItem>) { dialogs.sending = items }
 
     fun addToAlbum(items: List<MediaItem>) { dialogs.adding = items }
 
-    fun move(items: List<MediaItem>) { dialogs.moving = items }
+    fun move(items: List<MediaItem>): Boolean {
+        if (tooMany(context, items)) return false
+        dialogs.moving = items
+        return true
+    }
 
     fun showInfo(item: MediaItem) { dialogs.info = item }
 
-    fun share(items: List<MediaItem>) {
-        if (!tooMany(items)) GooglePhotos.share(context, items)
+    fun share(items: List<MediaItem>): Boolean {
+        if (tooMany(context, items)) return false
+        GooglePhotos.share(context, items)
+        return true
     }
 
     fun onResult(granted: Boolean) {
@@ -91,14 +99,6 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
             vm.refresh()
         }
         vm.afterGrant = {}
-    }
-
-    private fun tooMany(items: List<MediaItem>): Boolean {
-        val tooMany = items.size > GooglePhotos.MAX_ITEMS
-        if (tooMany) {
-            Toast.makeText(context, "Najednou jde nejvýš ${GooglePhotos.MAX_ITEMS} fotek", Toast.LENGTH_LONG).show()
-        }
-        return tooMany
     }
 
     /** Android asks the user to confirm changes of photos (skipped with "manage media" access). */
@@ -153,17 +153,21 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
         items(targets) { target ->
             PickerRow(target.name, Icons.Default.CloudUpload) {
                 val camera = items.filter { it.isCameraShot }
-                if (camera.isNotEmpty()) GooglePhotos.send(context, target, camera)
-                if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
-                onDismiss()
+                if (!tooMany(context, camera)) {
+                    if (camera.isNotEmpty()) GooglePhotos.send(context, target, camera)
+                    if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
+                    onDismiss()
+                }
             }
         }
         item {
             PickerRow("Jiná aplikace…", Icons.Default.Share) {
                 val camera = items.filter { it.isCameraShot }
-                if (camera.isNotEmpty()) GooglePhotos.share(context, camera)
-                if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
-                onDismiss()
+                if (!tooMany(context, camera)) {
+                    if (camera.isNotEmpty()) GooglePhotos.share(context, camera)
+                    if (camera.size < items.size) toast(context, "Posláno ${camera.size}" + skippedNote(items))
+                    onDismiss()
+                }
             }
         }
     }
@@ -309,4 +313,13 @@ fun TextInputDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Zrušit") } },
     )
+}
+
+/** Android can hand only so many photos to another app at once. */
+private fun tooMany(context: Context, items: List<MediaItem>): Boolean {
+    val tooMany = items.size > GooglePhotos.MAX_ITEMS
+    if (tooMany) {
+        Toast.makeText(context, "Najednou jde nejvýš ${GooglePhotos.MAX_ITEMS} fotek", Toast.LENGTH_LONG).show()
+    }
+    return tooMany
 }
