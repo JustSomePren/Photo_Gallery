@@ -1,11 +1,13 @@
 package com.justsomepren.gallery.data
 
+import android.Manifest
 import android.accounts.Account
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.BatteryManager
@@ -169,17 +171,21 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val media = MediaRepository(applicationContext).loadAll()
         // Last check of the owner's rule: only photos and videos taken with the camera ever leave the phone.
         val camera = media.filter { it.isCameraShot }.associateBy { it.key }
-        prefs.removeFromQueue(prefs.queue.value.filter { it.key !in camera })
+        val unseen = prefs.queue.value.filter { it.key !in camera }
+        // Remove them only when the app sees all photos; with limited access they just wait.
+        if (seesAllPhotos() && media.isNotEmpty()) prefs.removeFromQueue(unseen)
         // The stored link may point to another file after a reindex; send the camera photo with that key.
         prefs.followFiles(camera)
         prefs.collectAuto(media)
-        val total = prefs.queue.value.size
+        val sendable = prefs.queue.value.filter { it.key in camera }
+        val total = sendable.size
         if (total == 0) return Result.success()
 
+        prefs.uploading.value = 0 to total
         runCatching { setForeground(foregroundInfo(0, total)) }
         var done = 0
         try {
-            for ((account, items) in prefs.queue.value.groupBy { it.account }) {
+            for ((account, items) in sendable.groupBy { it.account }) {
                 val token = GoogleAuth.silentToken(applicationContext, account)
                 prefs.setAccountProblem(account, token == null)
                 if (token == null) continue
@@ -199,7 +205,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             prefs.uploading.value = null
         }
         // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
-        val waiting = prefs.queue.value.filter { it.account !in prefs.accountProblems.value }
+        val waiting = prefs.queue.value.filter { it.key in camera && it.account !in prefs.accountProblems.value }
         return if (waiting.isEmpty()) Result.success() else Result.retry()
     }
 
@@ -258,6 +264,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             PhotosApi.Created(emptySet(), emptySet())
         }
     }
+
+    private fun seesAllPhotos() =
+        applicationContext.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
 
     private fun lowBattery(): Boolean {
         val battery = applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))

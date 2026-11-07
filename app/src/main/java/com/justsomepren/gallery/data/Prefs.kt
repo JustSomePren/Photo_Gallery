@@ -230,7 +230,10 @@ class Prefs(context: Context) {
     fun pruneAuto() {
         queueList.update { list -> list.filter { followEvent(it) == it } }
         // Failed photos follow the event's current account and album, or go when it no longer wants them.
-        failedList.update { list -> list.mapNotNull(::followEvent).distinctBy { it.sentKey } }
+        // A failed photo follows a new album, but not a new account: that account never refused it.
+        failedList.update { list ->
+            list.mapNotNull { item -> followEvent(item)?.takeIf { it.account == item.account } }.distinctBy { it.sentKey }
+        }
     }
 
     /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */
