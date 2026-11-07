@@ -160,6 +160,14 @@ class LinkProvider : ContentProvider() {
                 "photos" -> MatrixCursor(arrayOf("id", "date")).apply {
                     photos(context, uri).forEach { addRow(arrayOf(it.id, it.date)) }
                 }
+                // "from-to,from-to,...": one count per window, the photos are read only once
+                "counts" -> MatrixCursor(arrayOf("count")).apply {
+                    val media = MediaRepository(context).loadAll()
+                    uri.getQueryParameter("windows").orEmpty().split(",").filter { it.isNotBlank() }.forEach { window ->
+                        val (from, to) = window.split("-").map { it.toLong() }
+                        addRow(arrayOf(media.filterBy(Source.Span("", from, to), emptyList()).size))
+                    }
+                }
                 "place" -> MatrixCursor(arrayOf("lat", "lon")).apply {
                     place(context, photos(context, uri))?.let { addRow(arrayOf(it[0], it[1])) }
                 }
