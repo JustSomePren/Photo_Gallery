@@ -12,6 +12,11 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   jeho fotky, **dlouhý stisk na den založí událost**.
 - **Události** – barevná období v kalendáři (třeba „Dovča Praha“). Klepnutím na událost
   uvidíš všechny její fotky.
+- **Najít výlety** – *Nastavení → Výlety*, spustí se jen tímto tlačítkem. Podle polohy ve fotkách
+  z fotoaparátu najde výlety (i staré): domov je místo s fotkami v nejvíc dnech, souvislé dny dál než
+  50 km od něj jsou výlet. Název podle země, doma podle města (např. „Tchaj-wan – říjen 2025“).
+  Návrhy potvrdíš a vzniknou z nich události, případně alba v aplikaci. Vše jen v telefonu;
+  polohy se čtou jednou a pamatují, další hledání čte jen nové fotky.
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
@@ -110,3 +115,8 @@ Ruční cíle jsou navíc: otevřou jinou aplikaci s vybranými fotkami. Google 
 do účtu, který je v nich právě aktivní.
 
 Pokud chceš potvrzovat oblíbené bez dialogu, povol *Nastavení → Oblíbené bez potvrzování*.
+
+## Data třetích stran
+
+Názvy měst a zemí pro hledání výletů: [GeoNames](https://www.geonames.org/) (cities15000),
+licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

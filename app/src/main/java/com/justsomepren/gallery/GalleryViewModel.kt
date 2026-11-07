@@ -24,6 +24,10 @@ import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.MediaRepository
+import com.justsomepren.gallery.data.Places
+import com.justsomepren.gallery.data.SpotCache
+import com.justsomepren.gallery.data.TripFinder
+import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.Prefs
 import com.justsomepren.gallery.data.QueueItem
 import com.justsomepren.gallery.data.Source
@@ -210,6 +214,41 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     }
 
     fun sendNow() = UploadWorker.sendNow(getApplication())
+
+    /**
+     * Only when the user asks (Nastavení → Najít výlety): reads where camera photos were taken
+     * (once, cached) and proposes trips that are not events yet.
+     */
+    fun findTrips() {
+        if (prefs.tripSearch.value != null) return
+        prefs.tripSearch.value = 0 to 0
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>()
+                val camera = loadMedia().filter { it.isCameraShot }
+                val cache = SpotCache(app)
+                cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
+                val events = prefs.events.value
+                val found = TripFinder.find(camera.mapNotNull(cache::spot), Places.get(app))
+                    .filter { trip -> events.none { it.overlaps(trip.startDay, trip.endDay) } }
+                    .map { trip -> trip.copy(photos = camera.count { it.day in trip.startDay..trip.endDay }) }
+                prefs.setTrips(found)
+            } finally {
+                prefs.tripSearch.value = null
+            }
+        }
+    }
+
+    /** Confirmed trips become events, and if wanted albums in the app (links only, nothing is uploaded). */
+    fun createTrips(ids: Set<String>, withAlbums: Boolean) {
+        val camera = media.value.orEmpty().filter { it.isCameraShot }
+        prefs.trips.value.filter { it.id in ids }.forEachIndexed { index, trip ->
+            val color = EVENT_COLORS[(prefs.events.value.size + index) % EVENT_COLORS.size]
+            saveEvent(Event(name = trip.name, color = color, startDay = trip.startDay, endDay = trip.endDay))
+            if (withAlbums) prefs.createAlbum(trip.name, camera.filter { it.day in trip.startDay..trip.endDay })
+        }
+        prefs.removeTrips(ids)
+    }
 
     /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */
     private fun sendSoon() = UploadWorker.schedule(getApplication(), restart = prefs.uploading.value == null)

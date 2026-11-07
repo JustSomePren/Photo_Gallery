@@ -55,6 +55,7 @@ class Prefs(context: Context) {
     private val accountList = Stored("accounts", { JSONObject().put("email", it) }, { it.getString("email") })
     private val queueList = Stored("queue", ::queueToJson, ::queueFromJson)
     private val failedList = Stored("failed", ::queueToJson, ::queueFromJson)
+    private val tripList = Stored("trips", ::tripToJson, ::tripFromJson)
 
     val albums = albumList.flow
     val targets = targetList.flow
@@ -62,6 +63,12 @@ class Prefs(context: Context) {
     val accounts = accountList.flow
     val queue = queueList.flow
     val failed = failedList.flow
+
+    /** Trips found by "Najít výlety", waiting to be confirmed. */
+    val trips = tripList.flow
+
+    /** Places read / to read while searching for trips, otherwise null. */
+    val tripSearch = MutableStateFlow<Pair<Int, Int>?>(null)
 
     val threshold = MutableStateFlow(sp.getInt("threshold", 70))
     val warmup = MutableStateFlow(sp.getBoolean("warmup", true))
@@ -141,6 +148,12 @@ class Prefs(context: Context) {
     private fun changeRefs(id: String, change: (List<AlbumRef>) -> List<AlbumRef>) = albumList.update { list ->
         list.map { if (it.id == id) it.copy(refs = change(it.refs)) else it }
     }
+
+    // ---- Trips ----
+
+    fun setTrips(found: List<TripProposal>) = tripList.update { found }
+
+    fun removeTrips(ids: Set<String>) = tripList.update { list -> list.filterNot { it.id in ids } }
 
     // ---- Share targets ----
 
@@ -385,6 +398,12 @@ class Prefs(context: Context) {
         account = o.getString("account").ifBlank { null },
         album = o.getString("album").ifBlank { null },
     )
+
+    private fun tripToJson(t: TripProposal) = JSONObject()
+        .put("id", t.id).put("name", t.name).put("start", t.startDay).put("end", t.endDay).put("photos", t.photos)
+
+    private fun tripFromJson(o: JSONObject) =
+        TripProposal(o.getString("id"), o.getString("name"), o.getLong("start"), o.getLong("end"), o.getInt("photos"))
 
     private fun queueToJson(q: QueueItem) = JSONObject()
         .put("key", q.key).put("uri", q.uri).put("name", q.name).put("mime", q.mime)

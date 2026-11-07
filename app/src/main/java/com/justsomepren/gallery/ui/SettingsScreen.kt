@@ -53,6 +53,9 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
     val warmup by vm.prefs.warmup.collectAsStateWithLifecycle()
     val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
+    val trips by vm.prefs.trips.collectAsStateWithLifecycle()
+    val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
+    var showingTrips by rememberSaveable { mutableStateOf(false) }
     var slider by remember(threshold) { mutableFloatStateOf(threshold.toFloat()) }
     var fullAccess by remember { mutableStateOf(hasFullAccess(context)) }
     var canManageMedia by remember { mutableStateOf(GooglePhotos.canManageMedia(context)) }
@@ -102,6 +105,22 @@ fun SettingsScreen(vm: GalleryViewModel) {
             Hint("Vypnuto: jen po měsících, víc fotek na obrazovce.")
 
             HorizontalDivider()
+            Section("Výlety")
+            Hint(
+                "Projde, kde byly fotky z fotoaparátu pořízené, a navrhne výlety – i ty staré. " +
+                    "Vše jen v telefonu. Poprvé to může pár minut trvat, pak už jen nové fotky."
+            )
+            val search = tripSearch
+            if (search != null) {
+                Text(if (search.second == 0) "Hledám…" else "Čtu polohu fotek ${search.first} / ${search.second}")
+            } else {
+                SettingsButton("Najít výlety") { vm.findTrips() }
+            }
+            if (trips.isNotEmpty() && search == null) {
+                SettingsButton("Návrhy výletů: ${trips.size}") { showingTrips = true }
+            }
+
+            HorizontalDivider()
             Section("Baterie")
             battery?.let {
                 Text("Baterie ${it.level} %" + if (it.charging) " · nabíjí se" else "")
@@ -127,7 +146,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             HorizontalDivider()
             Section("Google Fotky")
             Hint(
-                "Úpravy, hledání a přehrávání videí řeší Google Fotky. Aby na výletě nežraly baterku, " +
+                "Úpravy a hledání řeší Google Fotky. Aby na výletě nežraly baterku, " +
                     "nastav jim v Info o aplikaci → Baterie → Omezeno. Zálohu pak spustí, až je otevřeš."
             )
             SettingsButton("Omezit Google Fotky na pozadí") { GooglePhotos.appSettings(context) }
@@ -145,6 +164,8 @@ fun SettingsScreen(vm: GalleryViewModel) {
         }
     }
 
+
+    if (showingTrips) TripsDialog(vm) { showingTrips = false }
 }
 
 @Composable
