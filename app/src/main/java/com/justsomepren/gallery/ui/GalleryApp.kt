@@ -170,7 +170,7 @@ private fun Main(vm: GalleryViewModel) {
     when (val top = stack.lastOrNull()) {
         is Screen.Viewer -> Viewer(
             // The photos it opened with, so unfavoriting in Favorites does not jump to another photo.
-            items = remember(top) { all.filterBy(top.source, albums).map { it.id } }.let { shown ->
+            items = vm.viewerPhotos(top) { all.filterBy(top.source, albums).map { it.id } }.let { shown ->
                 remember(shown, all) {
                     val byId = all.associateBy { it.id }
                     shown.mapNotNull(byId::get)

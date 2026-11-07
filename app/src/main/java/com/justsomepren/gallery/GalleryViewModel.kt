@@ -83,6 +83,14 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
 
     val dialogs = OpenDialogs()
 
+    /** The photos each open viewer started with; kept here so turning the phone shows the same photo. */
+    private val viewerPhotos = mutableMapOf<Screen.Viewer, List<Long>>()
+
+    fun viewerPhotos(screen: Screen.Viewer, now: () -> List<Long>): List<Long> {
+        viewerPhotos.keys.retainAll(stack.toSet())
+        return viewerPhotos.getOrPut(screen, now)
+    }
+
     /** The event open in the editor, from whichever screen it was opened. */
     var editingEvent by mutableStateOf<Event?>(null)
 

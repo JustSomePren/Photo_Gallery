@@ -282,22 +282,27 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val uploads = mutableListOf<Pair<String, QueueItem>>()
         for (queued in batch) {
             val item = current(queued) ?: continue
-            try {
-                uploads += api.upload(item) to item
-                // A video took long to upload; add it right away rather than risk the run ending first.
-                if (item.mime.startsWith("video/")) {
-                    create(api, account, uploads)
-                    uploads.clear()
-                }
+            val token = try {
+                api.upload(item)
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
                 prefs.removeFromQueue(listOf(item))
+                null
             } catch (e: SecurityException) {
                 // The app may no longer read this photo; don't let it block the rest.
                 prefs.markFailed(listOf(item))
+                null
             } catch (e: HttpException) {
                 // Google refused this one file; network and login problems still retry the whole run.
                 if (e.isRefusal) prefs.markFailed(listOf(item)) else throw e
+                null
+            } ?: continue
+            uploads += token to item
+            // A video took long to upload; add it right away rather than risk the run ending first.
+            // Outside the catch above: a refused album is not a refused video.
+            if (item.mime.startsWith("video/")) {
+                create(api, account, uploads)
+                uploads.clear()
             }
         }
         create(api, account, uploads)
