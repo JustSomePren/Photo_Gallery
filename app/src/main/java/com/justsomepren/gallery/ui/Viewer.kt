@@ -239,6 +239,9 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
     var durationMs by remember { mutableIntStateOf(0) }
     var seeking by remember { mutableStateOf(false) }
     var video by remember { mutableStateOf<VideoView?>(null) }
+    // What the user wants; the player sometimes forgets to start, so it is kept to this below
+    var paused by remember(item.id) { mutableStateOf(false) }
+    var prepared by remember { mutableStateOf(false) }
 
     LaunchedEffect(isCurrent) { if (!isCurrent) playing = false }
     // Leaving the app stops the video; it continues from the same spot on the next play.
@@ -255,11 +258,13 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
                         setVideoURI(item.uri)
                         setOnPreparedListener {
                             durationMs = duration
+                            prepared = true
                             seekTo(positionMs)
-                            start()
+                            if (!paused) start()
                         }
                         setOnCompletionListener {
                             positionMs = 0
+                            paused = true
                             playing = false
                         }
                         video = this
@@ -275,14 +280,19 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
             Box(
                 Modifier.fillMaxSize().pointerInput(Unit) {
                     detectTapGestures {
-                        video?.run { if (isPlaying) pause() else start() }
+                        paused = !paused
+                        video?.run { if (paused) pause() else start() }
                         onTap()
                     }
                 },
             )
             LaunchedEffect(video) {
                 while (true) {
-                    video?.takeIf { it.isPlaying && !seeking }?.let { positionMs = it.currentPosition }
+                    video?.let { player ->
+                        // Started once more when the player stopped on its own, e.g. after its surface changed
+                        if (prepared && !paused && !seeking && !player.isPlaying) player.start()
+                        if (player.isPlaying && !seeking) positionMs = player.currentPosition
+                    }
                     delay(500)
                 }
             }
@@ -300,7 +310,11 @@ private fun VideoPage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
             )
         } else {
             Thumbnail(item.uri, 1024, Modifier.fillMaxSize().background(Color.Black), contentScale = ContentScale.Fit)
-            IconButton(onClick = { playing = true }, modifier = Modifier.size(96.dp)) {
+            IconButton(onClick = {
+                paused = false
+                prepared = false
+                playing = true
+            }, modifier = Modifier.size(96.dp)) {
                 Icon(Icons.Default.PlayCircle, "Přehrát", tint = Color.White, modifier = Modifier.size(80.dp))
             }
         }
