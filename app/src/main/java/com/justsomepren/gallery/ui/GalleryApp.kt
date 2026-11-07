@@ -173,7 +173,7 @@ private fun Main(vm: GalleryViewModel) {
         is Screen.Grid -> {
             val event = events.firstOrNull { it.source == top.source }
             val linked = calendarItems.firstOrNull { it.source == top.source }
-            val day = (top.source as? Source.Period)?.takeIf { it.start == it.end && !it.skipScreenshots }?.start
+            val day = (top.source as? Source.Period)?.takeIf { it.start == it.end && event == null }?.start
             val header: @Composable () -> Unit = {
                 if (day != null) DayEvents(day, calendarItems, all) { stack.add(Screen.Grid(it)) }
             }
@@ -262,7 +262,7 @@ private fun CalendarScreen(
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },
-            onDay = { onOpen(Source.Period(formatDay(it), it, it)) },
+            onDay = { onOpen(Source.Period(formatDay(it), it, it, cameraOnly = true)) },
             onNewEvent = vm::newEvent,
             onEvent = { onOpen(it.source) },
         )

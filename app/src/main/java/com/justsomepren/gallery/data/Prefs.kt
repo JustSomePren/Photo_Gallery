@@ -184,7 +184,7 @@ class Prefs(context: Context) {
         val rules = events.value.filter { it.autoSend && it.account != null }
         if (rules.isEmpty()) return 0
         return enqueue(media.flatMap { item ->
-            rules.filter { it.covers(item.day) && !(it.isLinked && item.isScreenshot) }.map { QueueItem.of(item, it.account!!, it.album) }
+            rules.filter { it.covers(item.day) && (!it.isLinked || item.isCamera) }.map { QueueItem.of(item, it.account!!, it.album) }
         })
     }
 

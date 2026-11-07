@@ -35,7 +35,7 @@ data class CalendarItem(
 ) {
     /** Whole days for all-day events, otherwise from a bit before the start to a bit after the end. */
     val source: Source
-        get() = if (allDay) Source.Period(title, firstDay, lastDay, skipScreenshots = true)
+        get() = if (allDay) Source.Period(title, firstDay, lastDay, cameraOnly = true)
         else Source.Span(title, begin - BEFORE_MS, end + AFTER_MS)
 
     fun covers(day: Long) = day in firstDay..lastDay
@@ -167,6 +167,14 @@ class LinkProvider : ContentProvider() {
                         val (from, to) = window.split("-").map { it.toLong() }
                         addRow(arrayOf(media.filterBy(Source.Span("", from, to), emptyList()).size))
                     }
+                }
+                // The best photo of each day between two epoch days, for the calendar month view
+                "covers" -> MatrixCursor(arrayOf("day", "id")).apply {
+                    val from = uri.getQueryParameter("from")!!.toLong()
+                    val to = uri.getQueryParameter("to")!!.toLong()
+                    MediaRepository(context).loadAll().filter { it.isCamera && it.day in from..to }
+                        .groupBy { it.day }
+                        .forEach { (day, items) -> addRow(arrayOf(day, items.cover()!!.id)) }
                 }
                 "place" -> MatrixCursor(arrayOf("lat", "lon")).apply {
                     place(context, photos(context, uri))?.let { addRow(arrayOf(it[0], it[1])) }

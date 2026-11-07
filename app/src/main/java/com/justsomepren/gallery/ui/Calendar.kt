@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.cover
 import com.justsomepren.gallery.data.day
 import com.justsomepren.gallery.data.monthTitle
 import com.justsomepren.gallery.data.pairedDays
@@ -65,7 +66,8 @@ fun CalendarView(
     onNewEvent: (Long) -> Unit,
     onEvent: (Event) -> Unit,
 ) {
-    val byDay = remember(media) { media.groupBy { it.day } }
+    // Only what was really taken with the camera, no screenshots or downloads
+    val byDay = remember(media) { media.filter { it.isCamera }.groupBy { it.day } }
     val months = remember(byDay, events) { calendarMonths(byDay.keys, events) }
     val paired = remember(byDay, calendarItems) { pairedDays(calendarItems, byDay) }
     val thumbPx = gridThumbPx()
@@ -189,7 +191,8 @@ private fun DayCell(
             .then(if (isToday) Modifier.border(2.dp, colors.primary, shape) else Modifier)
             .combinedClickable(onClick = { if (items.isNotEmpty()) onDay(day) }, onLongClick = { onNewEvent(day) }),
     ) {
-        items.firstOrNull()?.let { Thumbnail(it.uri, thumbPx, Modifier.fillMaxSize()) }
+        val cover = remember(items) { items.cover() }
+        cover?.let { Thumbnail(it.uri, thumbPx, Modifier.fillMaxSize()) }
         val onPhoto = items.isNotEmpty()
         CellLabel("${day.toDate().dayOfMonth}", Alignment.TopStart, onPhoto, bold = isToday)
         if (items.size > 1) CellLabel("${items.size}", Alignment.TopEnd, onPhoto)

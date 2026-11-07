@@ -33,7 +33,7 @@ data class Event(
 
     val isActive get() = covers(today())
 
-    val source get() = Source.Period(name, startDay, endDay, skipScreenshots = isLinked)
+    val source get() = Source.Period(name, startDay, endDay, cameraOnly = isLinked)
 }
 
 val EVENT_COLORS = listOf(

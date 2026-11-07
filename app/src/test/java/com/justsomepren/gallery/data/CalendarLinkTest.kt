@@ -25,20 +25,27 @@ class CalendarLinkTest {
 
     private fun millis(time: LocalDateTime) = time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    private fun photo(time: LocalDateTime, id: Long, folder: String = "DCIM/Camera/") = MediaItem(
+    private fun photo(
+        time: LocalDateTime,
+        id: Long,
+        folder: String = "DCIM/Camera/",
+        favorite: Boolean = false,
+        size: Long = 1,
+        video: Boolean = false,
+    ) = MediaItem(
         id = id,
         uri = Uri.parse("content://media/external/images/media/$id"),
         mime = "image/jpeg",
-        isVideo = false,
+        isVideo = video,
         date = millis(time),
         dateTaken = millis(time),
         bucketId = 1,
         bucketName = "Camera",
-        isFavorite = false,
+        isFavorite = favorite,
         name = "IMG_$id.jpg",
         width = 1,
         height = 1,
-        size = 1,
+        size = size,
         relativePath = folder,
     )
 
@@ -120,11 +127,28 @@ class CalendarLinkTest {
             photo(day.atTime(17, 50), 2),
             photo(day.atTime(20, 0), 3),
             photo(day.atTime(20, 5), 4, folder = "Pictures/Screenshots/"),
+            photo(day.atTime(20, 6), 7, folder = "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/"),
+            photo(day.atTime(20, 7), 8, folder = "DCIM/Screenshots/"),
+            photo(day.atTime(20, 8), 9, folder = "Download/"),
             photo(day.atTime(22, 20), 5),
             photo(day.atTime(23, 0), 6),
         )
         assertEquals(listOf(2L, 3L, 5L), media.filterBy(party.source, emptyList()).map { it.id })
         assertEquals(setOf(day.toEpochDay()), pairedDays(listOf(party, trip), media.groupBy { it.day }))
+    }
+
+    @Test
+    fun coverPrefersFavoriteThenTheSharpestPhoto() {
+        val noon = day.atTime(12, 0)
+        val blurry = photo(noon, 1, size = 100)
+        val sharp = photo(noon, 2, size = 900)
+        val video = photo(noon, 3, size = 5000, video = true)
+        val liked = photo(noon, 4, size = 50, favorite = true)
+
+        assertEquals(liked, listOf(blurry, sharp, video, liked).cover())
+        assertEquals(sharp, listOf(blurry, sharp, video).cover())
+        assertEquals(video, listOf(video).cover())
+        assertNull(emptyList<MediaItem>().cover())
     }
 
     @Test

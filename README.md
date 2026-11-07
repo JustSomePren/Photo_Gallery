@@ -40,7 +40,9 @@ Když je nainstalovaný i **Kalendář** (repozitář Calendar), propojí se sam
   má nahoře tečku. Po otevření dne jsou nahoře štítky událostí (např. „Oslava · 12“),
   klepnutím uvidíš jen fotky z té doby (15 min před až 30 min po konci).
 - Kalendář si od Galerie bere náhledy fotek, seznam Google účtů a polohu fotek (pokud ji mají).
-- K události se nepočítají snímky obrazovky.
+- Kalendář (v obou aplikacích) i události z Kalendáře berou **jen fotky a videa z fotoaparátu**
+  (složka DCIM), ne snímky obrazovky, stažené ani přijaté obrázky.
+- Fotka dne v kalendáři: přednost má oblíbená, jinak nejostřejší (ostré fotky mají víc dat na pixel).
 
 Změnu v Kalendáři Galerie zachytí hned, jinak při otevření a při odesílání na pozadí.
 
