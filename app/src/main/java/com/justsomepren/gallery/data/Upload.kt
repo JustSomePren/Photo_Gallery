@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.BatteryManager
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -84,18 +85,72 @@ class HttpException(val code: Int, message: String) : IOException("HTTP $code: $
 /** The few calls of the Google Photos Library API the app needs. */
 class PhotosApi(private val context: Context, private val token: String) {
 
+    /**
+     * Uploads in pieces and remembers where it got to, so a long video continues in the next run
+     * instead of starting over. Returns the upload token.
+     */
     fun upload(item: QueueItem): String {
-        val connection = open("https://photoslibrary.googleapis.com/v1/uploads")
-        connection.setRequestProperty("Content-Type", "application/octet-stream")
-        connection.setRequestProperty("X-Goog-Upload-Content-Type", item.mime)
-        connection.setRequestProperty("X-Goog-Upload-Protocol", "raw")
         val uri = originalUri(context, Uri.parse(item.uri))
-        val length = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1
-        if (length > 0) connection.setFixedLengthStreamingMode(length) else connection.setChunkedStreamingMode(256 * 1024)
-        context.contentResolver.openInputStream(uri)!!.use { input ->
-            connection.outputStream.use { input.copyTo(it) }
+        val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1
+        val prefs = Prefs.get(context)
+
+        var url = prefs.uploadSession(item.sentKey)
+        var offset = url?.let(::receivedSoFar)
+        if (url == null || offset == null) {
+            url = startSession(item, size)
+            offset = 0L
+            prefs.setUploadSession(item.sentKey, url)
         }
-        return read(connection)
+
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            var toSkip = offset
+            while (toSkip > 0) {
+                val skipped = input.skip(toSkip)
+                if (skipped <= 0) throw IOException("File is shorter than the part already sent")
+                toSkip -= skipped
+            }
+            val buffer = ByteArray(CHUNK)
+            while (true) {
+                val read = input.readNBytes(buffer, 0, CHUNK)
+                val last = read < CHUNK || (size > 0 && offset + read >= size)
+                val connection = open(url)
+                connection.setRequestProperty("X-Goog-Upload-Command", if (last) "upload, finalize" else "upload")
+                connection.setRequestProperty("X-Goog-Upload-Offset", offset.toString())
+                connection.setFixedLengthStreamingMode(read)
+                connection.outputStream.use { it.write(buffer, 0, read) }
+                val body = read(connection)
+                offset += read
+                if (last) {
+                    prefs.setUploadSession(item.sentKey, null)
+                    return body
+                }
+            }
+        }
+    }
+
+    private fun startSession(item: QueueItem, size: Long): String {
+        val connection = open("$baseUrl/uploads")
+        connection.setRequestProperty("X-Goog-Upload-Command", "start")
+        connection.setRequestProperty("X-Goog-Upload-Content-Type", item.mime)
+        connection.setRequestProperty("X-Goog-Upload-Protocol", "resumable")
+        if (size > 0) connection.setRequestProperty("X-Goog-Upload-Raw-Size", size.toString())
+        connection.setFixedLengthStreamingMode(0)
+        connection.outputStream.close()
+        read(connection)
+        return connection.getHeaderField("X-Goog-Upload-URL") ?: throw IOException("No upload URL")
+    }
+
+    /** How much of an earlier upload Google already has, or null when it has to start over. */
+    private fun receivedSoFar(url: String): Long? = try {
+        val connection = open(url)
+        connection.setRequestProperty("X-Goog-Upload-Command", "query")
+        connection.setFixedLengthStreamingMode(0)
+        connection.outputStream.close()
+        read(connection)
+        connection.takeIf { it.getHeaderField("X-Goog-Upload-Status") == "active" }
+            ?.getHeaderField("X-Goog-Upload-Size-Received")?.toLongOrNull()
+    } catch (e: HttpException) {
+        if (e.isRefusal) null else throw e
     }
 
     /** Which upload tokens Google Photos accepted, and which hit a passing error worth another try. */
@@ -106,7 +161,7 @@ class PhotosApi(private val context: Context, private val token: String) {
             JSONObject().put("simpleMediaItem", JSONObject().put("uploadToken", token).put("fileName", item.name))
         }))
         if (albumId != null) body.put("albumId", albumId)
-        val results = JSONObject(post("https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate", body))
+        val results = JSONObject(post("$baseUrl/mediaItems:batchCreate", body))
             .optJSONArray("newMediaItemResults") ?: JSONArray()
         val all = (0 until results.length()).map { results.getJSONObject(it) }
         return Created(
@@ -119,11 +174,18 @@ class PhotosApi(private val context: Context, private val token: String) {
     companion object {
         // gRPC codes Google asks to retry: deadline exceeded, resource exhausted, internal, unavailable.
         private val PASSING_ERRORS = setOf(4, 8, 13, 14)
+
+        // 8 MB, a multiple of Google's 256 KB chunk size.
+        @VisibleForTesting
+        var CHUNK = 8 * 1024 * 1024
+
+        @VisibleForTesting
+        var baseUrl = "https://photoslibrary.googleapis.com/v1"
     }
 
     fun createAlbum(title: String): String {
         val body = JSONObject().put("album", JSONObject().put("title", title))
-        return JSONObject(post("https://photoslibrary.googleapis.com/v1/albums", body)).getString("id")
+        return JSONObject(post("$baseUrl/albums", body)).getString("id")
     }
 
     private fun post(url: String, body: JSONObject): String {
@@ -222,6 +284,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val item = current(queued) ?: continue
             try {
                 uploads += api.upload(item) to item
+                // A video took long to upload; add it right away rather than risk the run ending first.
+                if (item.mime.startsWith("video/")) {
+                    create(api, account, uploads)
+                    uploads.clear()
+                }
             } catch (e: FileNotFoundException) {
                 // Deleted from the phone in the meantime.
                 prefs.removeFromQueue(listOf(item))
@@ -233,6 +300,10 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (e.isRefusal) prefs.markFailed(listOf(item)) else throw e
             }
         }
+        create(api, account, uploads)
+    }
+
+    private fun create(api: PhotosApi, account: String, uploads: List<Pair<String, QueueItem>>) {
         // Uploading can take minutes; add only what is still wanted, with its current album.
         val wanted = uploads.mapNotNull { (token, item) -> current(item)?.let { token to it } }
         for ((album, group) in wanted.groupBy { it.second.album }) {

@@ -151,7 +151,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     /** Only photos and videos from the camera go to the queue; returns how many were added. */
     fun enqueue(items: List<MediaItem>, account: String, album: String?): Int {
         val added = prefs.enqueue(items.filter { it.isCameraShot }.map { QueueItem.of(it, account, album) })
-        UploadWorker.schedule(getApplication())
+        sendSoon()
         return added
     }
 
@@ -188,10 +188,13 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
 
     fun retryFailed() {
         prefs.retryFailed()
-        UploadWorker.schedule(getApplication())
+        sendSoon()
     }
 
     fun sendNow() = UploadWorker.sendNow(getApplication())
+
+    /** New photos in the queue: start a fresh run (on Wi-Fi) unless one is uploading right now. */
+    private fun sendSoon() = UploadWorker.schedule(getApplication(), restart = prefs.uploading.value == null)
 
     fun setWarmup(enabled: Boolean) {
         prefs.setWarmup(enabled)

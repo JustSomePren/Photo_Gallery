@@ -290,6 +290,12 @@ class Prefs(context: Context) {
         queueList.update { list -> list.filterNot { it.sentKey in keys } }
     }
 
+    /** Where an unfinished upload can continue, per photo and account. */
+    fun uploadSession(sentKey: String): String? = sp.getString("upload|$sentKey", null)
+
+    fun setUploadSession(sentKey: String, url: String?) =
+        sp.edit { if (url == null) remove("upload|$sentKey") else putString("upload|$sentKey", url) }
+
     /** Google Photos album ids the app created, per account and title. */
     fun albumId(account: String, title: String): String? = sp.getString("albumId|$account|$title", null)
 
