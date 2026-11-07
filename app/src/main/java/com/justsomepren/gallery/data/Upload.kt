@@ -71,7 +71,15 @@ object GoogleAuth {
     )
 
     /** What went wrong with a login, in words the user can act on. */
-    fun problem(e: Throwable): String = when ((e as? ApiException)?.statusCode) {
+    fun problem(e: Throwable): String = when {
+        // Google's answer when no Android client for this app exists in Google Cloud yet
+        e.message.orEmpty().contains("UNREGISTERED_ON_API_CONSOLE") ->
+            "Galerie ještě není zaregistrovaná v Google Cloud. Je potřeba jednou vytvořit klienta pro Android " +
+                "(README, Automatické odesílání – nastavení, krok 5) a pak to zkusit znovu."
+        else -> problemByCode(e)
+    }
+
+    private fun problemByCode(e: Throwable): String = when ((e as? ApiException)?.statusCode) {
         CommonStatusCodes.DEVELOPER_ERROR ->
             "Google tuhle aplikaci nezná. Zkontroluj v Google Cloud balíček a SHA-1 klienta (README, krok 5)."
         CommonStatusCodes.NETWORK_ERROR, CommonStatusCodes.TIMEOUT -> "Není připojení k internetu, zkus to znovu."

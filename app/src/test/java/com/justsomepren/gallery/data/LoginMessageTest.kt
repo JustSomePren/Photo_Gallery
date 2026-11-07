@@ -26,4 +26,10 @@ class LoginMessageTest {
         assertTrue(message(CommonStatusCodes.CANCELED).contains("zrušeno"))
         assertTrue(message(CommonStatusCodes.INTERNAL_ERROR).contains("testovacími uživateli"))
     }
+
+    @Test
+    fun appMissingInGoogleCloudSaysSo() {
+        val error = ApiException(Status(CommonStatusCodes.INTERNAL_ERROR, "Unknown error [status=UNREGISTERED_ON_API_CONSOLE]."))
+        assertTrue(GoogleAuth.problem(error).contains("není zaregistrovaná v Google Cloud"))
+    }
 }
