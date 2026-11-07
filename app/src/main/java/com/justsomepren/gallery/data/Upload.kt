@@ -259,11 +259,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private var needsRetry = false
 
     private suspend fun sendQueue(): Result {
-        if (batteryStop) {
-            // Waiting for the charger instead of retrying, so it starts right after plugging in.
-            waitForCharger(applicationContext)
-            return Result.success()
-        }
+        if (batteryStop) return pause(charger = true)
 
         val media = MediaRepository(applicationContext).loadAll()
         // Last check of the owner's rule: only photos and videos taken with the camera ever leave the phone.
@@ -275,6 +271,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         prefs.followFiles(camera)
         prefs.collectAuto(media)
         val sendable = prefs.queue.value.filter { it.key in camera }
+        val atStart = prefs.queue.value.map { it.sentKey }.toSet()
         val total = sendable.size
         if (total == 0) return Result.success()
 
@@ -294,11 +291,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                         try {
                             send(api, account, batch)
                         } catch (e: LowBattery) {
-                            waitForCharger(applicationContext)
-                            return Result.success()
+                            return pause(charger = true)
                         } catch (e: NoWifi) {
-                            waitForWifi(applicationContext)
-                            return Result.success()
+                            return pause(charger = false)
                         }
                     }
                     done += chunk.size
@@ -313,7 +308,20 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
         // What only waits for a new login is sent after it (that restarts the upload); no reason to retry.
         val waiting = prefs.queue.value.filter { it.key in camera && it.account !in prefs.accountProblems.value }
-        return if (waiting.isEmpty() && !needsRetry) Result.success() else Result.retry()
+        // Photos queued while this run went on could not start a run of their own; take them in the next one.
+        val addedMeanwhile = prefs.queue.value.any { it.sentKey !in atStart && it.account !in prefs.accountProblems.value }
+        return if (waiting.isEmpty() && !needsRetry && !addedMeanwhile) Result.success() else Result.retry()
+    }
+
+    /**
+     * Waits for the charger or Wi-Fi. A run that already waits for it simply retries under its own condition;
+     * asking for a new one would be dropped while this one is still running.
+     */
+    private fun pause(charger: Boolean): Result {
+        val tag = if (charger) CHARGING else WIFI
+        if (tag in tags) return Result.retry()
+        if (charger) waitForCharger(applicationContext) else waitForWifi(applicationContext)
+        return Result.success()
     }
 
     /**
@@ -452,6 +460,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private const val ONCE = "upload-once"
         private const val CHARGING = "upload-charging"
         private const val WIFI = "upload-wifi"
+        private const val NEXT = "upload-next"
         private val sending = Mutex()
 
         /**
@@ -481,16 +490,25 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 work.enqueueUniqueWork(ONCE, policy, once)
             }
             if (restart) work.cancelUniqueWork(CHARGING)
+            // A request under the running run's own name would be dropped; queue a follow-up after it instead.
+            if (prefs.queue.value.isNotEmpty() && prefs.uploading.value != null) {
+                val next = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints).build()
+                work.enqueueUniqueWork(NEXT, ExistingWorkPolicy.KEEP, next)
+            }
         }
 
         private fun waitForWifi(context: Context) {
-            val request = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints(mobileData = false)).build()
+            val request = OneTimeWorkRequestBuilder<UploadWorker>()
+                .setConstraints(constraints(mobileData = false))
+                .addTag(WIFI)
+                .build()
             WorkManager.getInstance(context).enqueueUniqueWork(WIFI, ExistingWorkPolicy.KEEP, request)
         }
 
         private fun waitForCharger(context: Context) {
             val request = OneTimeWorkRequestBuilder<UploadWorker>()
                 .setConstraints(constraints(Prefs.get(context).mobileData.value, charging = true))
+                .addTag(CHARGING)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(CHARGING, ExistingWorkPolicy.KEEP, request)
         }
