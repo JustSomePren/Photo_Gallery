@@ -4,6 +4,19 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.justsomepren.gallery.data.CalendarZoom
+import com.justsomepren.gallery.data.mostSpecific
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -48,36 +61,193 @@ import kotlin.math.min
 
 private val WEEKDAYS = listOf("Po", "Út", "St", "Čt", "Pá", "So", "Ne")
 
-/** Months under each other, newest first. A whole month fits on the screen. */
+/** One line of the calendar list; [month] tells where it is, to keep the place when zooming. */
+private sealed interface CalendarRow {
+    val month: YearMonth
+
+    data class Year(val year: Int) : CalendarRow {
+        override val month: YearMonth get() = YearMonth.of(year, 12)
+    }
+
+    data class Month(override val month: YearMonth) : CalendarRow
+    data class Day(val day: Long) : CalendarRow {
+        override val month: YearMonth get() = YearMonth.from(day.toDate())
+    }
+}
+
+/**
+ * Photos by date, newest first, at three zoom levels: whole years, months as a calendar, or each
+ * day with its photos in a row. Pinch or the chips at the top change the level.
+ */
 @Composable
 fun CalendarView(
     media: List<MediaItem>,
     events: List<Event>,
+    zoom: Int,
     state: LazyListState,
     contentPadding: PaddingValues,
     header: @Composable () -> Unit,
+    onZoom: (Int) -> Unit,
     onDay: (Long) -> Unit,
+    onPhoto: (Long, MediaItem) -> Unit,
     onNewEvent: (Long) -> Unit,
     onEvent: (Event) -> Unit,
 ) {
-    val byDay = remember(media) { media.groupBy { it.day } }
+    val byDay = remember(media) { media.groupBy { it.day }.mapValues { (_, items) -> items.sortedByDescending { it.isFavorite } } }
     val months = remember(byDay, events) { calendarMonths(byDay.keys, events) }
-    val thumbPx = gridThumbPx()
+    val rows = remember(months, byDay, zoom) {
+        when (zoom) {
+            CalendarZoom.YEAR -> months.map { it.year }.distinct().map { CalendarRow.Year(it) }
+            CalendarZoom.DAYS -> months.flatMap { month ->
+                listOf(CalendarRow.Month(month)) + byDay.keys.filter { YearMonth.from(it.toDate()) == month }
+                    .sortedDescending().map { CalendarRow.Day(it) }
+            }
+            else -> months.map { CalendarRow.Month(it) }
+        }
+    }
 
-    LazyColumn(state = state, contentPadding = contentPadding) {
-        item { header() }
-        items(months, key = { it.toString() }) { month ->
-            val first = month.atDay(1).toEpochDay()
-            val last = month.atEndOfMonth().toEpochDay()
-            MonthCalendar(
-                month = month,
-                byDay = byDay,
-                events = events.filter { it.overlaps(first, last) },
-                thumbPx = thumbPx,
-                onDay = onDay,
-                onNewEvent = onNewEvent,
-                onEvent = onEvent,
+    // Zooming keeps the month that was at the top in view.
+    var anchor by remember { mutableStateOf<YearMonth?>(null) }
+    fun zoomTo(level: Int, at: YearMonth? = null) {
+        if (level == zoom || level !in CalendarZoom.YEAR..CalendarZoom.DAYS) return
+        anchor = at ?: rows.getOrNull(state.firstVisibleItemIndex - 1)?.month
+        onZoom(level)
+    }
+    LaunchedEffect(rows) {
+        val month = anchor ?: return@LaunchedEffect
+        anchor = null
+        val index = rows.indexOfFirst { if (it is CalendarRow.Year) it.year == month.year else it.month == month }
+        if (index >= 0) state.scrollToItem(index + 1)
+    }
+
+    LazyColumn(state = state, contentPadding = contentPadding, modifier = Modifier.pinchToZoom { zoomTo(zoom + it) }) {
+        item {
+            header()
+            ZoomChips(zoom) { zoomTo(it) }
+        }
+        items(rows, key = { it.toString() }) { row ->
+            when (row) {
+                is CalendarRow.Year -> YearCalendar(row.year, byDay) { zoomTo(CalendarZoom.MONTH, it) }
+                is CalendarRow.Month -> {
+                    val first = row.month.atDay(1).toEpochDay()
+                    val last = row.month.atEndOfMonth().toEpochDay()
+                    val inMonth = events.filter { it.overlaps(first, last) }
+                    if (zoom == CalendarZoom.DAYS) {
+                        MonthTitle(row.month, inMonth, onEvent)
+                    } else {
+                        MonthCalendar(row.month, byDay, inMonth, onDay, onNewEvent, onEvent)
+                    }
+                }
+                is CalendarRow.Day -> DayPhotos(row.day, byDay[row.day].orEmpty(), events.mostSpecific(row.day), onDay, onPhoto, onNewEvent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoomChips(zoom: Int, onZoom: (Int) -> Unit) {
+    Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("Rok", "Měsíc", "Dny").forEachIndexed { level, name ->
+            FilterChip(selected = zoom == level, onClick = { onZoom(level) }, label = { Text(name) })
+        }
+    }
+}
+
+/** A year as twelve small months; a day with photos shows one. Tapping a month zooms into it. */
+@Composable
+private fun YearCalendar(year: Int, byDay: Map<Long, List<MediaItem>>, onMonth: (YearMonth) -> Unit) {
+    val thumbPx = gridThumbPx(21)
+    Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+        Text("$year", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(4.dp))
+        (1..12).chunked(3).forEach { quarter ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                quarter.forEach { number ->
+                    val month = YearMonth.of(year, number)
+                    val offset = month.atDay(1).dayOfWeek.value - 1
+                    val first = month.atDay(1).toEpochDay()
+                    val count = (first until first + month.lengthOfMonth()).sumOf { byDay[it]?.size ?: 0 }
+                    Column(Modifier.weight(1f).clickable { onMonth(month) }.padding(vertical = 4.dp)) {
+                        Text(
+                            monthTitle(month).substringBefore(' ') + if (count > 0) " · $count" else "",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        (0 until (offset + month.lengthOfMonth() + 6) / 7).forEach { week ->
+                            Row {
+                                for (column in 0..6) {
+                                    val day = first - offset + week * 7 + column
+                                    val photo = byDay[day]?.firstOrNull()
+                                    Box(Modifier.weight(1f).aspectRatio(1f).padding(0.5.dp)) {
+                                        when {
+                                            photo != null -> Thumbnail(photo.uri, thumbPx, Modifier.fillMaxSize())
+                                            day in first until first + month.lengthOfMonth() -> Box(
+                                                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MonthTitle(month: YearMonth, events: List<Event>, onEvent: (Event) -> Unit) {
+    FlowRow(
+        Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(monthTitle(month), style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.CenterVertically))
+        events.forEach { EventChip(it) { onEvent(it) } }
+    }
+}
+
+/** One day: its date on the left, its photos in a row to scroll through and open. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DayPhotos(
+    day: Long,
+    items: List<MediaItem>,
+    event: Event?,
+    onDay: (Long) -> Unit,
+    onPhoto: (Long, MediaItem) -> Unit,
+    onNewEvent: (Long) -> Unit,
+) {
+    val thumbPx = gridThumbPx(3)
+    val date = day.toDate()
+    val weekend = date.dayOfWeek.value >= 6
+    Row(Modifier.padding(vertical = 2.dp).height(120.dp)) {
+        Column(
+            Modifier
+                .width(52.dp)
+                .fillMaxHeight()
+                .combinedClickable(onClick = { onDay(day) }, onLongClick = { onNewEvent(day) })
+                .padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                WEEKDAYS[date.dayOfWeek.value - 1],
+                style = MaterialTheme.typography.labelMedium,
+                color = if (weekend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text("${date.dayOfMonth}", style = MaterialTheme.typography.titleLarge, fontWeight = if (day == today()) FontWeight.Bold else null)
+            Text("${items.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            event?.let { Box(Modifier.padding(top = 4.dp).width(24.dp).height(4.dp).background(Color(it.color), RoundedCornerShape(2.dp))) }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            items(items, key = { it.id }) { item ->
+                Box(Modifier.fillMaxHeight().aspectRatio(1f).clickable { onPhoto(day, item) }) {
+                    Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
+                    if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                }
+            }
         }
     }
 }
@@ -103,11 +273,11 @@ private fun MonthCalendar(
     month: YearMonth,
     byDay: Map<Long, List<MediaItem>>,
     events: List<Event>,
-    thumbPx: Int,
     onDay: (Long) -> Unit,
     onNewEvent: (Long) -> Unit,
     onEvent: (Event) -> Unit,
 ) {
+    val thumbPx = gridThumbPx(7)
     val first = month.atDay(1).toEpochDay()
     val last = month.atEndOfMonth().toEpochDay()
     val offset = month.atDay(1).dayOfWeek.value - 1
@@ -180,7 +350,18 @@ private fun DayCell(
             .then(if (isToday) Modifier.border(2.dp, colors.primary, shape) else Modifier)
             .combinedClickable(onClick = { if (items.isNotEmpty()) onDay(day) }, onLongClick = { onNewEvent(day) }),
     ) {
-        items.firstOrNull()?.let { Thumbnail(it.uri, thumbPx, Modifier.fillMaxSize()) }
+        if (items.size >= 4) {
+            // A busy day shows four of its photos.
+            Column(Modifier.fillMaxSize()) {
+                items.take(4).chunked(2).forEach { pair ->
+                    Row(Modifier.weight(1f)) {
+                        pair.forEach { Thumbnail(it.uri, thumbPx / 2, Modifier.weight(1f).fillMaxHeight()) }
+                    }
+                }
+            }
+        } else {
+            items.firstOrNull()?.let { Thumbnail(it.uri, thumbPx, Modifier.fillMaxSize()) }
+        }
         val onPhoto = items.isNotEmpty()
         CellLabel("${day.toDate().dayOfMonth}", Alignment.TopStart, onPhoto, bold = isToday)
         if (items.size > 1) CellLabel("${items.size}", Alignment.TopEnd, onPhoto)

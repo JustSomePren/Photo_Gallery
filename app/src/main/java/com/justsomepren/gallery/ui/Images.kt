@@ -124,6 +124,6 @@ fun <T : Any> rememberLoaded(vararg keys: Any, initial: T? = null, load: suspend
     return value
 }
 
-/** One thumbnail size for the grid and the calendar, so they share the cache. */
+/** Thumbnail size for a grid of [columns]; the same size is shared by the grid and the calendar. */
 @Composable
-fun gridThumbPx(): Int = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / 4).roundToPx() }
+fun gridThumbPx(columns: Int = 4): Int = with(LocalDensity.current) { (LocalConfiguration.current.screenWidthDp.dp / columns).roundToPx() }

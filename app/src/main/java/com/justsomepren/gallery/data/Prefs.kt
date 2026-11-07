@@ -82,6 +82,8 @@ class Prefs(context: Context) {
     val threshold = MutableStateFlow(sp.getInt("threshold", 70))
     val warmup = MutableStateFlow(sp.getBoolean("warmup", true))
     val calendarView = MutableStateFlow(sp.getBoolean("calendar", false))
+    val gridColumns = MutableStateFlow(sp.getInt("gridColumns", 4))
+    val calendarZoom = MutableStateFlow(sp.getInt("calendarZoom", CalendarZoom.MONTH))
     val mobileData = MutableStateFlow(sp.getBoolean("mobileData", false))
 
     /** Photos grouped by day (like most galleries) or only by month. */
@@ -113,6 +115,8 @@ class Prefs(context: Context) {
     fun setThreshold(value: Int) = setInt(threshold, "threshold", value)
     fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
+    fun setGridColumns(value: Int) = setInt(gridColumns, "gridColumns", value.coerceIn(2, 7))
+    fun setCalendarZoom(value: Int) = setInt(calendarZoom, "calendarZoom", value.coerceIn(CalendarZoom.YEAR, CalendarZoom.DAYS))
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
     fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)
 
@@ -461,4 +465,11 @@ class Prefs(context: Context) {
             instance ?: Prefs(context.applicationContext).also { instance = it }
         }
     }
+}
+
+/** How close the calendar is: a whole year, months, or each day with its photos. */
+object CalendarZoom {
+    const val YEAR = 0
+    const val MONTH = 1
+    const val DAYS = 2
 }

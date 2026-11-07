@@ -308,8 +308,9 @@ private fun MediaGrid(
     onSelect: (Set<Long>) -> Unit,
     onHeaderClick: (List<MediaItem>) -> Unit,
 ) {
-    val columns = if (LocalSaver.current) 5 else 4
-    val thumbPx = gridThumbPx()
+    val chosen by vm.prefs.gridColumns.collectAsStateWithLifecycle()
+    val columns = if (LocalSaver.current) (chosen + 1).coerceAtMost(7) else chosen
+    val thumbPx = gridThumbPx(columns)
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     val entries = remember(items, events, byDay) { buildEntries(items, events, byDay) }
@@ -343,7 +344,9 @@ private fun MediaGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = state,
-            modifier = Modifier.dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
+            modifier = Modifier
+                .pinchToZoom { vm.prefs.setGridColumns(chosen - it) }
+                .dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -611,7 +614,7 @@ private fun FastScroller(state: LazyGridState, current: GridEntry.Photo?, modifi
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.CornerIcon(
+internal fun androidx.compose.foundation.layout.BoxScope.CornerIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     alignment: Alignment,
     tint: Color = Color.White,

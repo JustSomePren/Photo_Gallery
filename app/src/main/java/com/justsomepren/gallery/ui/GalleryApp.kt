@@ -259,13 +259,17 @@ private fun CalendarScreen(
     onOpen: (Screen) -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text("Fotky") }, actions = actions) }) { padding ->
+        val zoom by vm.prefs.calendarZoom.collectAsStateWithLifecycle()
         CalendarView(
             media = media,
             events = events,
+            zoom = zoom,
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },
+            onZoom = vm.prefs::setCalendarZoom,
             onDay = { onOpen(Screen.Grid(Source.Period(formatDay(it), it, it))) },
+            onPhoto = { day, item -> onOpen(Screen.Viewer(Source.Period(formatDay(day), day, day), item.id)) },
             onNewEvent = vm::newEvent,
             onEvent = { onOpen(Screen.EventPhotos(it.id)) },
         )
