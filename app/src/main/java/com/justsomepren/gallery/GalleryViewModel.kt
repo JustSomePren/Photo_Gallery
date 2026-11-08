@@ -34,6 +34,7 @@ import com.justsomepren.gallery.data.PhotosApi
 import com.justsomepren.gallery.data.Places
 import com.justsomepren.gallery.data.SpotCache
 import com.justsomepren.gallery.data.Timeline
+import com.justsomepren.gallery.data.TripNamer
 import com.justsomepren.gallery.data.TripProposal
 import com.justsomepren.gallery.data.TripFinder
 import com.justsomepren.gallery.data.confirmedInCloud
@@ -238,6 +239,12 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     /** What the last trip search found, shown under its button. */
     val tripResult = MutableStateFlow<String?>(null)
 
+    /** Trips named by the AI so far / to name, while it works. */
+    val tripNaming = MutableStateFlow<Pair<Int, Int>?>(null)
+
+    @VisibleForTesting
+    var nameTrip: suspend (List<MediaItem>) -> String? = { TripNamer.name(getApplication(), it) }
+
     fun findTrips() {
         if (prefs.tripSearch.value != null) return
         prefs.tripSearch.value = 0 to 0
@@ -248,7 +255,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
                 val camera = loadMedia().filter { it.isCameraShot }
                 val cache = SpotCache(app)
                 cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
-                val trips = proposeTrips(camera, cache)
+                val trips = nameByAi(proposeTrips(camera, cache), camera)
                 prefs.setTrips(trips)
                 tripResult.value = when {
                     camera.isEmpty() -> "Žádné fotky z fotoaparátu."
@@ -261,6 +268,18 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
                 prefs.tripSearch.value = null
             }
         }
+    }
+
+    /** Trips known only by their dates get a name from the AI on the phone, when it is there. */
+    private suspend fun nameByAi(trips: List<TripProposal>, camera: List<MediaItem>): List<TripProposal> {
+        val total = trips.count { it.datedName }
+        var done = 0
+        return trips.map { trip ->
+            if (!trip.datedName) return@map trip
+            tripNaming.value = done++ to total
+            val name = nameTrip(camera.filter { it.day in trip.startDay..trip.endDay })
+            if (name == null) trip else trip.copy(name = name, note = "${trip.note} · název navrhla AI v telefonu")
+        }.also { tripNaming.value = null }
     }
 
     /**

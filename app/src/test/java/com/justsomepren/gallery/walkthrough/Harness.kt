@@ -34,6 +34,7 @@ class AppSetupRule(private val prepare: (Prefs) -> Unit = {}) : ExternalResource
         Prefs.reset()
         ImageCache.clear()
         ImageCache.fake = ::fakePhoto
+        com.justsomepren.gallery.data.TripNamer.fakeStatus = com.google.mlkit.genai.common.FeatureStatus.UNAVAILABLE
         prepare(Prefs.get(app))
     }
 

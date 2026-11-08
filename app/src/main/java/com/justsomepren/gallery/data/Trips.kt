@@ -19,6 +19,8 @@ data class TripProposal(
     val photos: Int,
     /** Why it was proposed, e.g. "podle polohy · 5× víc fotek než obvykle". */
     val note: String = "",
+    /** Named only by its dates, so the AI on the phone may suggest a better name. */
+    val datedName: Boolean = false,
 )
 
 /**
@@ -33,6 +35,9 @@ object TripFinder {
     private const val BUSY = 3.0
     private const val LIVELY = 1.5
     private const val MIN_BUSY_PHOTOS = 5
+
+    /** One day alone is a trip when it is busy and has at least this many photos. */
+    private const val MIN_DAY_TRIP_PHOTOS = 15
 
     fun find(spots: List<Spot>, places: Places): List<TripProposal> {
         if (spots.isEmpty()) return emptyList()
@@ -107,7 +112,7 @@ object TripFinder {
 
     /**
      * Without places or zones: days close together with far more photos than usual, e.g. a week of
-     * holiday. Up to two calmer days inside keep it together; it needs at least two really busy days.
+     * holiday, or one day out. Up to two calmer days inside keep it together.
      */
     fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
         if (perDay.size < 7) return emptyList()
@@ -116,7 +121,8 @@ object TripFinder {
         val candidates = perDay.keys.filter { it !in skip && ratio.getValue(it) >= LIVELY }.sorted()
         return runs(candidates, emptySet()).mapNotNull { run ->
             val days = run.dropWhile { !busy(it) }.dropLastWhile { !busy(it) }
-            if (days.count(busy) < 2) return@mapNotNull null
+            val dayTrip = days.size == 1 && perDay.getValue(days.single()) >= MIN_DAY_TRIP_PHOTOS
+            if (days.count(busy) < 2 && !dayTrip) return@mapNotNull null
             val photos = (days.first()..days.last()).sumOf { perDay[it] ?: 0 }
             // Nothing tells where it was: a name with the dates, to rename when creating.
             TripProposal(
@@ -125,6 +131,7 @@ object TripFinder {
                 endDay = days.last(),
                 photos = photos,
                 note = "${timesMore(days, ratio)}× víc fotek než obvykle",
+                datedName = true,
             )
         }
     }

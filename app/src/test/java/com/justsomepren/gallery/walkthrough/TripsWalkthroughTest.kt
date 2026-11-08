@@ -2,6 +2,7 @@ package com.justsomepren.gallery.walkthrough
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
@@ -109,5 +110,48 @@ class TripsWalkthroughTest {
         vm.findTrips()
         compose.waitUntil(30_000) { idleMain(); prefs.tripSearch.value == null }
         assertTrue(prefs.trips.value.isEmpty())
+    }
+
+    /** A holiday week without any place: found by the many photos, named by the AI, renamed by hand. */
+    @Test
+    fun busyWeekWithoutPlaceGetsAiNameAndCanBeRenamed() {
+        val today = Fixtures.today
+        val normal = (0L until 120L step 4).map { Fixtures.photo(it, today.minusDays(40 + it)) }
+        val holiday = (0L until 60L).map { Fixtures.photo(1000 + it, today.minusDays(10 + it / 10)) }
+        val all = (normal + holiday).sortedByDescending { it.date }
+        File(setup.app.filesDir, "locations.tsv").writeText(all.joinToString("") { "${it.key}\t-\t-\t-\n" })
+        val asked = mutableListOf<Int>()
+        vm.nameTrip = { photos -> asked += photos.size; "Hory na sněhu" }
+        vm.loadMedia = { all }
+        vm.refresh()
+        compose.waitUntil(30_000) { idleMain(); vm.media.value == all }
+
+        vm.findTrips()
+        compose.waitUntil(30_000) { idleMain(); prefs.tripSearch.value == null }
+        val trip = prefs.trips.value.single()
+        assertEquals("Hory na sněhu", trip.name)
+        assertEquals(listOf(holiday.count { it.isCameraShot }), asked)
+        assertTrue(trip.note, trip.note.endsWith("název navrhla AI v telefonu"))
+
+        compose.onNodeWithText("Nastavení").performClick()
+        compose.onNodeWithText("Návrhy výletů: 1").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Přejmenovat").assertExists()
+        captureScreenRoboImage("build/outputs/walkthrough/trips_dialog_ai.png")
+        // The text field itself cannot be typed into here (its blinking cursor never lets the test rest).
+        prefs.renameTrip(trip.id, "Krkonoše")
+        assertEquals("Krkonoše", prefs.trips.value.single().name)
+    }
+
+    /** Without the AI the trip keeps a name with its dates, and an empty search says so. */
+    @Test
+    fun withoutAiDatedNameAndEmptySearchSaysSo() {
+        vm.nameTrip = { null }
+        File(setup.app.filesDir, "locations.tsv").writeText(camera.joinToString("") { "${it.key}\t-\t-\t-\n" })
+        start()
+        vm.findTrips()
+        compose.waitUntil(30_000) { idleMain(); prefs.tripSearch.value == null }
+        assertTrue(prefs.trips.value.isEmpty())
+        assertTrue(vm.tripResult.value.orEmpty().startsWith("Žádné nové výlety"))
     }
 }

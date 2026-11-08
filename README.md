@@ -21,10 +21,12 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   - *Načíst Časovou osu* – export Časové osy Google z telefonu (Timeline.json) doplní fotkám polohu
     podle času pořízení; nejpřesnější, pokud byla Časová osa zapnutá.
   - Časové pásmo ve fotce – pozná cestu do zahraničí („Výlet UTC+8“), pokud ho telefon zapsal.
-  - Dny s mnohem víc fotkami než obvykle – návrh „Možná výlet“.
+  - Dny s mnohem víc fotkami než obvykle (i jediný den s aspoň 15 fotkami) – výlet s názvem
+    podle data. Na Pixelu 9 a novějších mu název navrhne **AI přímo v telefonu** (Gemini Nano,
+    podle 4 fotek z výletu; fotky telefon neopustí). Návrh jde přejmenovat tužkou.
 
-  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než obvykle v tom období (±45 dní), takže
-  sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
+  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než typický týden s fotkami v půlroce
+  kolem (asi 3×), takže sedí, i když fotíš málokdy nebo víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
   fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
   proč, např. „podle polohy · 5× víc fotek než obvykle“.
 - **Uvolnit místo** – *Nastavení → Uvolnit místo*. Smaže z telefonu jen fotky a videa, které tahle

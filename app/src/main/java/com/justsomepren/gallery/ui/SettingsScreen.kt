@@ -50,6 +50,9 @@ import kotlinx.coroutines.launch
 import com.justsomepren.gallery.data.onWifi
 import java.text.DateFormat
 import java.util.Date
+import com.google.mlkit.genai.common.FeatureStatus
+import com.justsomepren.gallery.data.TripNamer
+import androidx.compose.runtime.LaunchedEffect
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +66,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val trips by vm.prefs.trips.collectAsStateWithLifecycle()
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
     val tripResult by vm.tripResult.collectAsStateWithLifecycle()
+    val tripNaming by vm.tripNaming.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
     var keepFavorites by rememberSaveable { mutableStateOf(true) }
     var choosingFreeUp by rememberSaveable { mutableStateOf(false) }
@@ -139,9 +143,13 @@ fun SettingsScreen(vm: GalleryViewModel) {
                 "Projde, kde byly fotky z fotoaparátu pořízené, a navrhne výlety – i ty staré. " +
                     "Vše jen v telefonu. Poprvé to může pár minut trvat, pak už jen nové fotky."
             )
+            AiNamingHint()
             val search = tripSearch
             if (search != null) {
-                Text(if (search.second == 0) "Hledám…" else "Čtu polohu fotek ${search.first} / ${search.second}")
+                Text(
+                    tripNaming?.let { "AI v telefonu vymýšlí názvy ${it.first + 1} / ${it.second}" }
+                        ?: if (search.second == 0) "Hledám…" else "Čtu polohu fotek ${search.first} / ${search.second}"
+                )
             } else {
                 SettingsButton("Najít výlety") { vm.findTrips() }
             }
@@ -335,5 +343,30 @@ private fun CloudSection(vm: GalleryViewModel) {
     }
     if (state != null && !state.done && state.error == null) {
         SettingsButton("Ukončit načítání") { vm.stopCloudSync() }
+    }
+}
+
+/** Whether the AI on the phone can name trips found only by their dates. */
+@Composable
+private fun AiNamingHint() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(Unit) { status = TripNamer.status() }
+    when (status) {
+        FeatureStatus.AVAILABLE -> Hint("Výletům bez polohy navrhne název AI přímo v telefonu (Gemini Nano). Fotky telefon neopustí.")
+        FeatureStatus.DOWNLOADING -> Hint("AI pro názvy výletů se stahuje do telefonu…")
+        FeatureStatus.DOWNLOADABLE -> SettingsButton("Stáhnout AI pro názvy výletů (jen Wi-Fi)") {
+            if (!onWifi(context)) {
+                toast(context, "Připoj se k Wi-Fi")
+            } else {
+                status = FeatureStatus.DOWNLOADING
+                scope.launch {
+                    TripNamer.download(context)
+                    status = TripNamer.status()
+                }
+            }
+        }
+        FeatureStatus.UNAVAILABLE -> Hint("Výlety bez polohy dostanou název s datem, přejmenuješ je tužkou.")
     }
 }
