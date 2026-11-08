@@ -21,6 +21,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.justsomepren.gallery.data.CalendarItem
+import com.justsomepren.gallery.data.CameraAuto
 import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.CloudLibrary
 import com.justsomepren.gallery.data.CloudPhoto
@@ -222,6 +223,13 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         val added = prefs.enqueue(items.filter { it.isCameraShot }.map { QueueItem.of(it, account, album) })
         sendSoon()
         return added
+    }
+
+    fun setCameraAuto(value: CameraAuto?) {
+        prefs.setCameraAuto(value)
+        prefs.pruneAuto()
+        media.value?.let { prefs.collectAuto(it) }
+        UploadWorker.schedule(getApplication())
     }
 
     fun saveEvent(event: Event) {

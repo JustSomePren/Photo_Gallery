@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -52,12 +56,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.CameraAuto
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.CloudWorker
 import com.justsomepren.gallery.data.GoogleAuth
@@ -158,6 +164,9 @@ fun SendingScreen(vm: GalleryViewModel) {
             }
 
             HorizontalDivider()
+            CameraAutoSection(vm)
+
+            HorizontalDivider()
             SectionWithAdd("Události") { vm.newEvent() }
             Hint("Barevné období v kalendáři. Může samo posílat všechny fotky z těch dní do účtu a alba.")
             events.sortedByDescending { it.startDay }.forEach { EventRow(it) { vm.editingEvent = it } }
@@ -241,4 +250,58 @@ private fun EventRow(event: Event, onClick: () -> Unit) {
             if (event.autoSend) Icon(Icons.Default.CloudSync, "Posílá automaticky", tint = MaterialTheme.colorScheme.primary)
         },
     )
+}
+
+/** One switch for sending new camera photos by itself, with where they go. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CameraAutoSection(vm: GalleryViewModel) {
+    val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
+    val camera by vm.prefs.cameraAuto.collectAsStateWithLifecycle()
+    val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
+    // The album is typed freely and saved when the field is left or the switch changes
+    var album by rememberSaveable(camera?.album) { mutableStateOf(camera?.album.orEmpty()) }
+
+    Section("Nové fotky z fotoaparátu")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Posílat do Google Fotek automaticky", Modifier.weight(1f))
+        Switch(
+            checked = camera != null,
+            enabled = accounts.isNotEmpty(),
+            onCheckedChange = { on ->
+                val account = vm.prefs.mainAccount
+                vm.setCameraAuto(if (on && account != null) CameraAuto(account, album.ifBlank { null }, System.currentTimeMillis()) else null)
+            },
+        )
+    }
+    val current = camera
+    if (accounts.isEmpty()) {
+        Hint("Nejdřív přidej Google účet níže.")
+    } else if (current == null) {
+        Hint("Fotky a videa pořízené od zapnutí půjdou samy do zvoleného účtu. Starší fotky se neposílají.")
+    } else {
+        Text("Účet", style = MaterialTheme.typography.labelMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            vm.prefs.accountsDefaultFirst.forEach { email ->
+                FilterChip(
+                    selected = current.account == email,
+                    onClick = { vm.setCameraAuto(current.copy(account = email)) },
+                    label = { Text(email) },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = album,
+            onValueChange = { album = it },
+            label = { Text("Do alba (nepovinné)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focus ->
+                if (!focus.isFocused && album.ifBlank { null } != current.album) vm.setCameraAuto(current.copy(album = album.ifBlank { null }))
+            },
+        )
+        Hint(
+            "Posílá se jen přes Wi-Fi, nikdy přes mobilní data. Pod $threshold % baterie jen při nabíjení. " +
+                "Aby se fotky neposílaly dvakrát, vypni zálohu v Google Fotkách (Nastavení Fotek → Zálohování).",
+        )
+    }
 }

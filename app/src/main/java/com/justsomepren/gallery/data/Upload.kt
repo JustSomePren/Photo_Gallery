@@ -365,6 +365,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private val wifiStop get() = !now && !prefs.mobileData.value &&
         applicationContext.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
 
+    private fun wifiOnlyStop(item: QueueItem) = !now && item.eventId == CAMERA_AUTO &&
+        applicationContext.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
+
     /** Stops a normal run that may no longer go on: below the battery threshold or on paid data. */
     private fun checkPause() {
         if (batteryStop) throw LowBattery()
@@ -392,7 +395,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         // Vacations from the Kalendář app may have changed since the last run
         CalendarLink.sync(applicationContext)
         prefs.collectAuto(media)
-        val sendable = prefs.queue.value.filter { it.key in camera }
+        // New camera photos go over Wi-Fi only, also when mobile data is allowed for the rest
+        val sendable = prefs.queue.value.filter { it.key in camera && !wifiOnlyStop(it) }
         val atStart = prefs.queue.value.map { it.sentKey }.toSet()
         val total = sendable.size
         if (total == 0) return Result.success()
@@ -471,7 +475,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             checkPause()
             val item = current(queued) ?: continue
             val token = try {
-                api.upload(item) { !isStopped && current(item) != null && !batteryStop && !wifiStop }
+                api.upload(item) { !isStopped && current(item) != null && !batteryStop && !wifiStop && !wifiOnlyStop(item) }
             } catch (e: UploadCancelled) {
                 checkPause()
                 null
@@ -594,7 +598,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val work = WorkManager.getInstance(context)
             val constraints = constraints(prefs.mobileData.value)
 
-            if (prefs.events.value.any { it.autoSend && it.endDay >= today() }) {
+            // New camera photos are picked up by this check too, also while the app is closed
+            if (prefs.events.value.any { it.autoSend && it.endDay >= today() } || prefs.cameraAuto.value != null) {
                 val periodic = PeriodicWorkRequestBuilder<UploadWorker>(1, TimeUnit.HOURS)
                     .setConstraints(constraints)
                     .build()

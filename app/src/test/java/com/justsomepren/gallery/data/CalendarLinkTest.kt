@@ -116,6 +116,21 @@ class CalendarLinkTest {
     }
 
     @Test
+    fun cameraRuleSendsOnlyNewCameraPhotos() {
+        prefs.addAccount("ja@gmail.com")
+        prefs.setCameraAuto(CameraAuto("ja@gmail.com", null, millis(day.atTime(12, 0))))
+        val media = listOf(
+            photo(day.atTime(10, 0), 1),
+            photo(day.atTime(13, 0), 2),
+            photo(day.atTime(14, 0), 3, folder = "Pictures/Screenshots/"),
+        )
+
+        assertEquals(1, prefs.collectAuto(media))
+        assertEquals(QueueItem.of(media[1], "ja@gmail.com", null, CAMERA_AUTO), prefs.queue.value.single())
+        assertEquals("ja@gmail.com", Prefs(context).cameraAuto.value?.account)
+    }
+
+    @Test
     fun calendarCannotSendToAnAccountNotConnectedHere() {
         val event = trip.copy(account = "cizi@gmail.com").toEvent(accounts)
         assertEquals(false, event.autoSend)

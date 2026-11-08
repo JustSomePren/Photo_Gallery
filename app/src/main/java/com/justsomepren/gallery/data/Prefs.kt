@@ -25,6 +25,12 @@ data class UploadTarget(val name: String, val packageName: String, val activityN
 data class CloudCopy(val account: String, val mediaItemId: String, val size: Long)
 
 /** A photo waiting to be uploaded to a Google account, optionally into an album. */
+/** New camera photos taken since [since] go to [account] by themselves, over Wi-Fi only. */
+data class CameraAuto(val account: String, val album: String?, val since: Long)
+
+/** The event id of photos the camera rule queued. */
+const val CAMERA_AUTO = "camera"
+
 data class QueueItem(
     val key: String,
     val uri: String,
@@ -213,6 +219,21 @@ class Prefs(context: Context) {
 
     // ---- Accounts ----
 
+    /** Sending new camera photos by itself; null while switched off. */
+    val cameraAuto = MutableStateFlow(
+        sp.getString("cameraAuto", null)?.let { runCatching { JSONObject(it) }.getOrNull() }?.let {
+            CameraAuto(it.getString("account"), it.optString("album").ifBlank { null }, it.getLong("since"))
+        },
+    )
+
+    fun setCameraAuto(value: CameraAuto?) {
+        cameraAuto.value = value
+        sp.edit {
+            if (value == null) remove("cameraAuto")
+            else putString("cameraAuto", JSONObject().put("account", value.account).put("album", value.album.orEmpty()).put("since", value.since).toString())
+        }
+    }
+
     /** The account photos go to unless another one is picked. */
     val defaultAccount = MutableStateFlow(sp.getString("defaultAccount", null))
 
@@ -292,12 +313,18 @@ class Prefs(context: Context) {
     @Synchronized
     fun collectAuto(media: List<MediaItem>): Int {
         val rules = events.value.filter { it.autoSend && it.account in accounts.value }
-        if (rules.isEmpty()) return 0
+        val camera = cameraAuto.value?.takeIf { it.account in accounts.value }
+        if (rules.isEmpty() && camera == null) return 0
         // Per account the most specific event decides the album, the same one the grid shows.
-        val wanted = media.filter { it.isCameraShot }.flatMap { item ->
-            rules.groupBy { it.account!! }.mapNotNull { (account, events) ->
+        // Previews of photos already in the cloud have nothing to send
+        val wanted = media.filter { it.isCameraShot && !it.cloud }.flatMap { item ->
+            val byEvents = rules.groupBy { it.account!! }.mapNotNull { (account, events) ->
                 events.mostSpecific(item.day)?.let { QueueItem.of(item, account, it.album, it.id) }
             }
+            // A new photo goes by the camera rule too, unless an event already sends it to that account
+            val byCamera = camera?.takeIf { item.date >= it.since && byEvents.none { queued -> queued.account == it.account } }
+                ?.let { QueueItem.of(item, it.account, it.album, CAMERA_AUTO) }
+            byEvents + listOfNotNull(byCamera)
         }
         // Refused there before: list them as failed again, so "Zkusit znovu" can reach them.
         val listed = failed.value.map { it.sentKey }.toSet()
@@ -320,6 +347,10 @@ class Prefs(context: Context) {
     /** The item as its event wants it now: same, moved to the current account/album, or null when not wanted. */
     private fun followEvent(item: QueueItem): QueueItem? {
         val id = item.eventId ?: return item
+        if (id == CAMERA_AUTO) {
+            val camera = cameraAuto.value?.takeIf { it.account in accounts.value } ?: return null
+            return item.copy(account = camera.account, album = camera.album)
+        }
         val event = events.value.firstOrNull { it.id == id } ?: return null
         if (!event.autoSend || event.account == null || !event.covers(item.day)) return null
         // A newer event inside this one takes these photos over.
