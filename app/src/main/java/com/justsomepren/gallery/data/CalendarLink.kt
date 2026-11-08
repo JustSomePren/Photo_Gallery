@@ -160,7 +160,8 @@ class LinkProvider : ContentProvider() {
         return runCatching {
             when (uri.pathSegments.firstOrNull()) {
                 "accounts" -> MatrixCursor(arrayOf("email")).apply {
-                    Prefs.get(context).accounts.value.forEach { addRow(arrayOf(it)) }
+                    // The default first: the Kalendář app offers the first one for a new vacation
+                    Prefs.get(context).accountsDefaultFirst.forEach { addRow(arrayOf(it)) }
                 }
                 "photos" -> MatrixCursor(arrayOf("id", "date")).apply {
                     photos(context, uri).forEach { addRow(arrayOf(it.id, it.date)) }

@@ -69,7 +69,7 @@ fun EventEditor(initial: Event, vm: GalleryViewModel, onDismiss: () -> Unit) {
     var start by rememberSaveable { mutableLongStateOf(initial.startDay) }
     var end by rememberSaveable { mutableLongStateOf(initial.endDay) }
     var autoSend by rememberSaveable { mutableStateOf(initial.autoSend) }
-    var account by rememberSaveable { mutableStateOf(initial.account ?: accounts.firstOrNull()) }
+    var account by rememberSaveable { mutableStateOf(initial.account ?: vm.prefs.mainAccount) }
     // An auto-send event saved without an album must stay without one.
     val keptWithoutAlbum = exists && initial.autoSend && initial.album == null
     var album by rememberSaveable { mutableStateOf(initial.album ?: if (keptWithoutAlbum) "" else initial.name) }

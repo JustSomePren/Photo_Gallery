@@ -1,6 +1,7 @@
 package com.justsomepren.gallery.ui
 
 import android.Manifest
+import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,9 +94,27 @@ fun SendingScreen(vm: GalleryViewModel) {
 
     fun connect(email: String) = authorize(email, GoogleAuth.UPLOAD)
 
+    // The phone's list of accounts, for a second and further account
+    val chooseAccount = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val email = result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
+        when {
+            email == null -> loginError = "Účet se nevybral. V seznamu ho označ a potvrď tlačítkem OK."
+            email in prefs.accounts.value -> loginError = "Účet $email už je přidaný, vyber jiný."
+            else -> authorize(email, GoogleAuth.UPLOAD)
+        }
+    }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        // Google's own list of accounts: one tap picks the account
-        authorize(null, GoogleAuth.UPLOAD)
+        if (prefs.accounts.value.isEmpty()) {
+            // Google's own list: one tap picks the first account
+            authorize(null, GoogleAuth.UPLOAD)
+        } else {
+            // Google's list would quietly reuse the account it already allowed, so the phone's list picks another
+            chooseAccount.launch(
+                AccountManager.newChooseAccountIntent(
+                    null, null, arrayOf("com.google"), "Vyber účet, který chceš přidat, a potvrď OK.", null, null, null,
+                ),
+            )
+        }
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Odesílání") }) }) { padding ->
@@ -148,11 +169,21 @@ fun SendingScreen(vm: GalleryViewModel) {
             if (accounts.isEmpty()) {
                 Hint("Před prvním účtem je potřeba jednou nastavit Google Cloud (README, Automatické odesílání – nastavení), jinak Google přihlášení nepustí.")
             }
+            val default by prefs.defaultAccount.collectAsStateWithLifecycle()
             accounts.forEach { email ->
+                val isDefault = email == (default?.takeIf { it in accounts } ?: accounts.firstOrNull())
                 ListItem(
+                    // The star makes the account the default for sending; it is offered first everywhere
+                    leadingContent = {
+                        IconButton(onClick = { prefs.setDefaultAccount(email) }) {
+                            if (isDefault) Icon(Icons.Default.Star, "Výchozí účet", tint = MaterialTheme.colorScheme.primary)
+                            else Icon(Icons.Default.StarBorder, "Nastavit jako výchozí")
+                        }
+                    },
                     headlineContent = { Text(email) },
                     supportingContent = {
                         if (email in problems) Text("Je potřeba znovu přihlásit", color = MaterialTheme.colorScheme.error)
+                        else if (isDefault && accounts.size > 1) Text("Výchozí pro posílání")
                     },
                     trailingContent = {
                         Row {

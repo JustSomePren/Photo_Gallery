@@ -213,6 +213,20 @@ class Prefs(context: Context) {
 
     // ---- Accounts ----
 
+    /** The account photos go to unless another one is picked. */
+    val defaultAccount = MutableStateFlow(sp.getString("defaultAccount", null))
+
+    /** The chosen default, or the first account while none is chosen. */
+    val mainAccount: String? get() = defaultAccount.value?.takeIf { it in accounts.value } ?: accounts.value.firstOrNull()
+
+    /** All accounts, the default first, as every account list shows them. */
+    val accountsDefaultFirst: List<String> get() = listOfNotNull(mainAccount) + (accounts.value - setOfNotNull(mainAccount))
+
+    fun setDefaultAccount(email: String) {
+        defaultAccount.value = email
+        sp.edit { putString("defaultAccount", email) }
+    }
+
     fun addAccount(email: String) {
         accountList.update { (it + email).distinct() }
         setAccountProblem(email, false)

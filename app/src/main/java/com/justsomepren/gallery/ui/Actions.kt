@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -129,6 +130,9 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
     val context = LocalContext.current
     val targets by vm.prefs.targets.collectAsStateWithLifecycle()
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
+    val default by vm.prefs.defaultAccount.collectAsStateWithLifecycle()
+    // The default account on top, so the usual case is one tap
+    val ordered = remember(accounts, default) { vm.prefs.accountsDefaultFirst }
     // A running event with an album is the most likely place for these photos.
     var album by rememberSaveable {
         mutableStateOf(vm.prefs.events.value.firstOrNull { it.isActive && it.album != null }?.album.orEmpty())
@@ -141,8 +145,9 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
             item {
                 OutlinedTextField(album, { album = it }, label = { Text("Do alba (nepovinné)") }, singleLine = true)
             }
-            items(accounts) { account ->
-                PickerRow(account, Icons.Default.CloudQueue) {
+            items(ordered) { account ->
+                // The default account is marked with the same star as in Odesílání
+                PickerRow(account, if (account == ordered.first() && ordered.size > 1) Icons.Default.Star else Icons.Default.CloudQueue) {
                     val added = vm.enqueue(items, account, album)
                     toast(context, (if (added > 0) "Ve frontě: $added" else "Nic nového k odeslání") + skippedNote(items))
                     onDismiss()
