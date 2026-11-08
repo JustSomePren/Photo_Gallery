@@ -29,6 +29,14 @@ jobs:
           fi
           echo "$SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/klic.p12"
           echo "SIGNING_KEY_FILE=$RUNNER_TEMP/klic.p12" >> "$GITHUB_ENV"
+      # GitHub sometimes stops serving the Gradle download; then the same file comes from a mirror.
+      # The wrapper checks it against Gradle's official SHA-256, so a changed file stops the build.
+      - name: Zdroj Gradle
+        run: |
+          if ! curl -sfL -r 0-0 -o /dev/null https://services.gradle.org/distributions/gradle-8.14.3-bin.zip; then
+            sed -i 's#^distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip#' gradle/wrapper/gradle-wrapper.properties
+            echo "::warning::GitHub nevydal Gradle, beru ho ze zrcadla (ověřeno SHA-256)"
+          fi
       - run: ./gradlew testDebugUnitTest assembleRelease
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
