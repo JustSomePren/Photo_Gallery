@@ -33,9 +33,10 @@ jobs:
       # The wrapper checks it against Gradle's official SHA-256, so a changed file stops the build.
       - name: Zdroj Gradle
         run: |
-          if ! curl -sfL -r 0-0 -o /dev/null https://services.gradle.org/distributions/gradle-8.14.3-bin.zip; then
+          if ! ./gradlew --version; then
             sed -i 's#^distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip#' gradle/wrapper/gradle-wrapper.properties
             echo "::warning::GitHub nevydal Gradle, beru ho ze zrcadla (ověřeno SHA-256)"
+            ./gradlew --version
           fi
       - run: ./gradlew testDebugUnitTest assembleRelease
         env:
