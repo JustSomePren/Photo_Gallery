@@ -29,10 +29,10 @@ object TripFinder {
     private const val AWAY_KM = 50.0
     private const val MAX_GAP_DAYS = 2
 
-    /** Three times the usual number of photos (and at least ten) is a busy day; one and a half a lively one. */
+    /** Three times the usual number of photos (and at least five) is a busy day; one and a half a lively one. */
     private const val BUSY = 3.0
     private const val LIVELY = 1.5
-    private const val MIN_BUSY_PHOTOS = 10
+    private const val MIN_BUSY_PHOTOS = 5
 
     fun find(spots: List<Spot>, places: Places): List<TripProposal> {
         if (spots.isEmpty()) return emptyList()
@@ -89,32 +89,43 @@ object TripFinder {
     }
 
     /**
-     * How many times more photos than usual each day has. "Usual" is the median of the days with photos
-     * within 45 days around it, so it follows how photo habits change over the years.
+     * How many times more photos than usual each day has. "Usual" is a typical week with photos in the
+     * half-year around it, divided by seven: a trip of a week or two cannot make itself look usual,
+     * even for someone who takes photos only now and then, and it follows how habits change over the years.
      */
     fun busyness(perDay: Map<Long, Int>): Map<Long, Double> {
-        val days = perDay.keys.sorted()
-        return days.associateWith { day ->
-            val around = days.filter { it != day && kotlin.math.abs(it - day) <= 45 }.map { perDay.getValue(it) }.sorted()
-            val usual = if (around.isEmpty()) 1 else maxOf(1, around[around.size / 2])
-            perDay.getValue(day).toDouble() / usual
+        if (perDay.isEmpty()) return emptyMap()
+        val first = perDay.keys.min()
+        val weeks = IntArray(((perDay.keys.max() - first) / 7 + 1).toInt())
+        perDay.forEach { (day, count) -> weeks[((day - first) / 7).toInt()] += count }
+        val usual = weeks.indices.map { week ->
+            val around = (week - 26..week + 26).filter { it in weeks.indices && it != week && weeks[it] > 0 }.map { weeks[it] }.sorted()
+            maxOf(1.0, around.getOrElse(around.size / 2) { 1 } / 7.0)
         }
+        return perDay.mapValues { (day, count) -> count / usual[((day - first) / 7).toInt()] }
     }
 
     /**
-     * Without places or zones: days in a row with far more photos than usual. A calmer day inside
-     * (still above usual) keeps the run together; it needs at least two really busy days.
+     * Without places or zones: days close together with far more photos than usual, e.g. a week of
+     * holiday. Up to two calmer days inside keep it together; it needs at least two really busy days.
      */
     fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
         if (perDay.size < 7) return emptyList()
         val ratio = busyness(perDay)
         val busy = { day: Long -> ratio.getValue(day) >= BUSY && perDay.getValue(day) >= MIN_BUSY_PHOTOS }
         val candidates = perDay.keys.filter { it !in skip && ratio.getValue(it) >= LIVELY }.sorted()
-        return runs(candidates, perDay.keys).mapNotNull { run ->
+        return runs(candidates, emptySet()).mapNotNull { run ->
             val days = run.dropWhile { !busy(it) }.dropLastWhile { !busy(it) }
             if (days.count(busy) < 2) return@mapNotNull null
-            val photos = days.sumOf { perDay[it] ?: 0 }
-            proposal("Možná výlet", days, photos, "${timesMore(days, ratio)}× víc fotek než obvykle")
+            val photos = (days.first()..days.last()).sumOf { perDay[it] ?: 0 }
+            // Nothing tells where it was: a name with the dates, to rename when creating.
+            TripProposal(
+                name = "Výlet ${formatRange(days.first(), days.last())}",
+                startDay = days.first(),
+                endDay = days.last(),
+                photos = photos,
+                note = "${timesMore(days, ratio)}× víc fotek než obvykle",
+            )
         }
     }
 

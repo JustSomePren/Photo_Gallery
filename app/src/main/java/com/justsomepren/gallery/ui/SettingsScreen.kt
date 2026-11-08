@@ -63,6 +63,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
     val groupByDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     val trips by vm.prefs.trips.collectAsStateWithLifecycle()
     val tripSearch by vm.prefs.tripSearch.collectAsStateWithLifecycle()
+    val tripResult by vm.tripResult.collectAsStateWithLifecycle()
     var showingTrips by rememberSaveable { mutableStateOf(false) }
     var keepFavorites by rememberSaveable { mutableStateOf(true) }
     var choosingFreeUp by rememberSaveable { mutableStateOf(false) }
@@ -155,6 +156,7 @@ fun SettingsScreen(vm: GalleryViewModel) {
             if (trips.isNotEmpty() && search == null) {
                 SettingsButton("Návrhy výletů: ${trips.size}") { showingTrips = true }
             }
+            tripResult?.let { Hint(it) }
             Hint(
                 "Fotky bez polohy? Pokud máš zapnutou Časovou osu Google, exportuj ji v telefonu " +
                     "(Nastavení → Poloha → Časová osa → Exportovat) a načti ji sem. Poloha se doplní podle času fotky."
