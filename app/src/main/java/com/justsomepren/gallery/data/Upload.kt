@@ -85,6 +85,20 @@ object GoogleAuth {
         CommonStatusCodes.INTERRUPTED,
     )
 
+    /**
+     * The email of the account a token belongs to. Google's own account list returns no account
+     * object in this mode, so ask Google directly; the "email" scope requested with it allows that.
+     */
+    suspend fun emailOf(token: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = URL("https://www.googleapis.com/oauth2/v3/userinfo").openConnection() as HttpURLConnection
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.inputStream.bufferedReader().use { JSONObject(it.readText()).optString("email").ifBlank { null } }
+        }.getOrNull()
+    }
+
     /** What went wrong with a login, in words the user can act on. */
     fun problem(e: Throwable): String = when {
         // Google's answer when no Android client for this app exists in Google Cloud yet

@@ -32,10 +32,13 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         // Google puts the reason into the result also when its dialog ends without success
         val login = runCatching { Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data) }
-        val email = vm.pendingAccount ?: login.getOrNull()?.toGoogleSignInAccount()?.email
+        val token = login.getOrNull()?.accessToken
         val error = login.exceptionOrNull()
         when {
-            result.resultCode == Activity.RESULT_OK && login.getOrNull()?.accessToken != null && email != null -> granted(email)
+            result.resultCode == Activity.RESULT_OK && token != null -> scope.launch {
+                val email = vm.pendingAccount ?: login.getOrNull()?.toGoogleSignInAccount()?.email ?: GoogleAuth.emailOf(token)
+                if (email != null) granted(email) else failed("Přihlášení prošlo, ale nepodařilo se zjistit e-mail účtu. Zkus to prosím znovu.")
+            }
             error is ApiException -> failed(GoogleAuth.problem(error))
             else -> failed(
                 "Přihlášení neprošlo. Jestli jsi ho nezrušil sám, Google tuhle aplikaci nejspíš ještě nezná: " +
@@ -70,6 +73,7 @@ fun rememberGoogleConsent(vm: GalleryViewModel, onGranted: (String) -> Unit, onE
                             }
                             else -> {
                                 val account = vm.pendingAccount ?: result.toGoogleSignInAccount()?.email
+                                    ?: result.accessToken?.let { GoogleAuth.emailOf(it) }
                                 if (account != null) granted(account) else failed("Google nevrátil účet, zkus to prosím znovu.")
                                 return@launch
                             }
