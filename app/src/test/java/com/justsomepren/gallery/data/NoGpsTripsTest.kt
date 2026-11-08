@@ -110,6 +110,17 @@ class NoGpsTripsTest {
     }
 
     @Test
+    fun twoBusyDaysWithTwoEmptyDaysBetweenAreNoTrip() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 30).forEach { perDay[day(LocalDate.of(2025, 9, 1).plusDays(it * 2))] = 3 }
+        perDay[day(LocalDate.of(2025, 11, 10))] = 50
+        perDay[day(LocalDate.of(2025, 11, 13))] = 45
+
+        assertEquals(emptyList<TripProposal>(), TripFinder.byBursts(perDay, skip = emptySet()))
+    }
+
+    @Test
     fun calmerDayInsideHolidayKeepsItTogether() {
         val day = { d: LocalDate -> d.toEpochDay() }
         val perDay = mutableMapOf<Long, Int>()

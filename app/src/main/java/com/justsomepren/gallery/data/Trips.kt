@@ -27,7 +27,7 @@ data class TripProposal(
  */
 object TripFinder {
     private const val AWAY_KM = 50.0
-    private const val MAX_GAP_DAYS = 2
+    private const val MAX_GAP_DAYS = 1
 
     /** Three times the usual number of photos (and at least five) is a busy day; one and a half a lively one. */
     private const val BUSY = 3.0
@@ -46,7 +46,7 @@ object TripFinder {
             distanceKm(lat, lon, homeLat, homeLon) > AWAY_KM
         }.keys
 
-        // Days away in a row make one trip; a gap without photos does not break it, a day at home does.
+        // Days away in a row make one trip; one day without photos does not break it, a day at home does.
         return runs(awayDays.toList(), byDay.keys).mapNotNull { days ->
             val tripSpots = days.flatMap { byDay.getValue(it) }
             // One afternoon with a couple of photos is not a trip.
@@ -107,7 +107,7 @@ object TripFinder {
 
     /**
      * Without places or zones: days close together with far more photos than usual, e.g. a week of
-     * holiday. Up to two calmer days inside keep it together; it needs at least two really busy days.
+     * holiday. Calmer days and one day without photos inside keep it together; it needs at least two really busy days.
      */
     fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
         if (perDay.size < 7) return emptyList()
@@ -148,7 +148,7 @@ object TripFinder {
     private fun timesMore(days: List<Long>, ratio: Map<Long, Double>): Int =
         days.mapNotNull { ratio[it] }.average().takeIf { !it.isNaN() }?.let { kotlin.math.round(it).toInt() } ?: 1
 
-    /** Groups sorted days into runs; a gap of up to two days without photos is allowed, a day with others is not. */
+    /** Groups sorted days into runs; one day without photos between them is allowed, a day with others is not. */
     private fun runs(days: List<Long>, withPhotos: Set<Long>): List<List<Long>> {
         val runs = mutableListOf<MutableList<Long>>()
         for (day in days) {
