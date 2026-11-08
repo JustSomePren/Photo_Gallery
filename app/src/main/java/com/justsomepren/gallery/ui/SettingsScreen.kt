@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.GooglePhotos
+import com.justsomepren.gallery.data.Takeout
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
 import kotlinx.coroutines.launch
@@ -357,5 +358,39 @@ private fun CloudSection(vm: GalleryViewModel) {
     }
     if (state != null && !state.done && state.error == null) {
         SettingsButton("Ukončit načítání") { vm.stopCloudSync() }
+    }
+    TakeoutImport(vm)
+}
+
+/** All old photos at once: Google exports them as ZIP files, the app keeps only previews. */
+@Composable
+private fun TakeoutImport(vm: GalleryViewModel) {
+    val context = LocalContext.current
+    val progress by Takeout.progress.collectAsStateWithLifecycle()
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files ->
+        if (files.isNotEmpty()) vm.importTakeout(files)
+    }
+
+    Text("Všechny staré fotky najednou (Google Takeout)", style = MaterialTheme.typography.titleSmall)
+    Hint(
+        "1. Otevři Takeout, nech vybrané jen Google Fotky a dej Další krok → Vytvořit export.\n" +
+            "2. Až přijde e-mail, stáhni ZIP soubory do telefonu.\n" +
+            "3. Vyber je tady, klidně všechny části najednou. Uloží se jen malé náhledy, ZIPy pak smaž.\n" +
+            "Fotky, které v telefonu pořád máš, a už načtené se přeskočí."
+    )
+    val state = progress
+    when {
+        state == null || state.done -> {
+            state?.error?.let { Text("Zastaveno: $it", color = MaterialTheme.colorScheme.error) }
+            if (state?.done == true && state.error == null) Text("Hotovo, přibylo ${state.added} fotek.")
+            SettingsButton("Otevřít Google Takeout") {
+                GooglePhotos.openLink(context, "https://takeout.google.com/settings/takeout/custom/photos")
+            }
+            SettingsButton("Vybrat ZIP z Takeoutu") { pick.launch(arrayOf("application/zip", "application/x-zip-compressed")) }
+        }
+        else -> {
+            Text("Čtu ZIP: ${state.read} fotek… Běží i se zavřenou aplikací.")
+            SettingsButton("Zastavit import") { vm.stopTakeout() }
+        }
     }
 }

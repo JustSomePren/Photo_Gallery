@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentValues
 import android.content.Intent
 import android.database.ContentObserver
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -24,6 +25,7 @@ import com.justsomepren.gallery.data.CalendarItem
 import com.justsomepren.gallery.data.CameraAuto
 import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.CloudLibrary
+import com.justsomepren.gallery.data.Takeout
 import com.justsomepren.gallery.data.CloudPhoto
 import com.justsomepren.gallery.data.CloudPhotos
 import com.justsomepren.gallery.data.CloudWorker
@@ -420,7 +422,8 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         prefs.removeTrips(ids)
     }
 
-    val cloud by lazy { CloudLibrary(getApplication()) }
+    /** Read again each time: the Takeout import adds previews in the background. */
+    val cloud get() = CloudLibrary(getApplication())
 
     /** Where the Google Photos sync is: picking, downloading previews, done or stopped by a problem. */
     data class CloudSync(
@@ -452,6 +455,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         if (cloudJob?.isActive == true) return
         cloudSync.value = CloudSync(account)
         cloudJob = viewModelScope.launch(Dispatchers.IO) {
+            val library = cloud
             var session: String? = null
             val api = try {
                 PickerApi(cloudToken(account) ?: throw java.io.IOException("Google nepovolil přístup"))
@@ -469,9 +473,9 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
                         if (System.currentTimeMillis() > until) throw java.io.IOException("Výběr vypršel")
                         delay(picking.pollMillis)
                     }
-                    val fresh = api.items(picking.id).filterNot { cloud.has(it.id) }.distinctBy { it.id }
+                    val fresh = api.items(picking.id).filterNot { library.has(it.id) }.distinctBy { it.id }
                     cloudSync.value = cloudSync.value?.copy(downloading = fresh.size)
-                    download(api, fresh)
+                    download(library, api, fresh)
                     api.delete(picking.id)
                     session = null
                     refresh()
@@ -492,16 +496,20 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     }
 
     /** Previews are fetched a few at a time; each is saved at once, so a stopped sync keeps what it got. */
-    private suspend fun download(api: PickerApi, photos: List<PickerApi.Picked>) = coroutineScope {
+    private suspend fun download(library: CloudLibrary, api: PickerApi, photos: List<PickerApi.Picked>) = coroutineScope {
         photos.chunked(8).forEach { chunk ->
             if (!onWifi(getApplication())) throw NotOnWifi()
             chunk.map { picked ->
                 async { picked to CloudLibrary.shrink(api.preview(picked)) }
             }.awaitAll().forEach { (picked, preview) ->
-                cloud.add(CloudPhoto(picked.id, picked.created, picked.name, picked.mime), preview)
+                library.add(CloudPhoto(picked.id, picked.created, picked.name, picked.mime), preview)
             }
         }
     }
+
+    fun importTakeout(files: List<Uri>) = Takeout.start(getApplication(), files)
+
+    fun stopTakeout() = Takeout.stop(getApplication())
 
     fun stopCloudSync() {
         cloudJob?.cancel()

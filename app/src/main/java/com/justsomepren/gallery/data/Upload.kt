@@ -561,20 +561,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun lowBattery() = applicationContext.belowBatteryThreshold(prefs.threshold.value)
 
-    private fun foregroundInfo(done: Int, total: Int): ForegroundInfo {
-        val manager = applicationContext.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Odesílání fotek", NotificationManager.IMPORTANCE_LOW),
-        )
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle("Odesílám fotky")
-            .setContentText("$done z $total")
-            .setProgress(total, done, false)
-            .setOngoing(true)
-            .build()
-        return ForegroundInfo(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-    }
+    private fun foregroundInfo(done: Int, total: Int) =
+        applicationContext.progressNotice(CHANNEL, "Odesílání fotek", NOTIFICATION, "Odesílám fotky", "$done z $total", done, total, android.R.drawable.stat_sys_upload)
 
     companion object {
         private const val BATCH = 20
@@ -658,4 +646,18 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 .setRequiresCharging(charging)
                 .build()
     }
+}
+
+/** An ongoing notification with progress, so long work keeps running when the app is closed. */
+fun Context.progressNotice(channel: String, channelName: String, id: Int, title: String, text: String, done: Int, total: Int, icon: Int): ForegroundInfo {
+    getSystemService(NotificationManager::class.java)
+        .createNotificationChannel(NotificationChannel(channel, channelName, NotificationManager.IMPORTANCE_LOW))
+    val notification = NotificationCompat.Builder(this, channel)
+        .setSmallIcon(icon)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setProgress(total, done, total == 0)
+        .setOngoing(true)
+        .build()
+    return ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 }
