@@ -169,6 +169,8 @@ class Prefs(context: Context) {
 
     fun setTrips(found: List<TripProposal>) = tripList.update { found }
 
+    fun renameTrip(id: String, name: String) = tripList.update { list -> list.map { if (it.id == id) it.copy(name = name) else it } }
+
     fun removeTrips(ids: Set<String>) = tripList.update { list -> list.filterNot { it.id in ids } }
 
     // ---- Share targets ----

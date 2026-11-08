@@ -235,16 +235,28 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
      * Only when the user asks (Nastavení → Najít výlety): reads where camera photos were taken
      * (once, cached) and proposes trips that are not events yet.
      */
+    /** What the last trip search found, shown under its button. */
+    val tripResult = MutableStateFlow<String?>(null)
+
     fun findTrips() {
         if (prefs.tripSearch.value != null) return
         prefs.tripSearch.value = 0 to 0
+        tripResult.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val app = getApplication<Application>()
                 val camera = loadMedia().filter { it.isCameraShot }
                 val cache = SpotCache(app)
                 cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
-                prefs.setTrips(proposeTrips(camera, cache))
+                val trips = proposeTrips(camera, cache)
+                prefs.setTrips(trips)
+                tripResult.value = when {
+                    camera.isEmpty() -> "Žádné fotky z fotoaparátu."
+                    trips.isEmpty() -> "Žádné nové výlety: nikde výrazně víc fotek než obvykle (dny v událostech se přeskakují)."
+                    else -> null
+                }
+            } catch (e: Exception) {
+                tripResult.value = "Hledání se nepovedlo (${e.javaClass.simpleName})."
             } finally {
                 prefs.tripSearch.value = null
             }

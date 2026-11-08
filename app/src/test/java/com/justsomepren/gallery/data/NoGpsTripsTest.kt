@@ -73,7 +73,7 @@ class NoGpsTripsTest {
 
         val trips = TripFinder.byBursts(perDay, skip = emptySet())
         assertEquals(1, trips.size)
-        assertTrue(trips.single().name.startsWith("Možná výlet"))
+        assertTrue(trips.single().name, trips.single().name.startsWith("Výlet 15. 10."))
         assertEquals(160, trips.single().photos)
     }
 
@@ -90,6 +90,23 @@ class NoGpsTripsTest {
         val trips = TripFinder.byBursts(perDay, skip = emptySet())
         assertEquals(listOf(day(LocalDate.of(2019, 4, 10))), trips.map { it.startDay })
         assertEquals("12× víc fotek než obvykle", trips.single().note)
+    }
+
+    /** Someone who takes a couple of photos a month: a week with many photos is still a trip. */
+    @Test
+    fun rarePhotographerWeekOfPhotos() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 36).forEach { perDay[day(LocalDate.of(2024, 1, 3).plusDays(it * 20))] = 2 }
+        // Holiday week: some days without photos, one calmer day.
+        listOf(15, 0, 22, 30, 4, 0, 25).forEachIndexed { i, n ->
+            if (n > 0) perDay[day(LocalDate.of(2025, 7, 12).plusDays(i.toLong()))] = n
+        }
+
+        val trip = TripFinder.byBursts(perDay, skip = emptySet()).single()
+        assertEquals(day(LocalDate.of(2025, 7, 12)), trip.startDay)
+        assertEquals(day(LocalDate.of(2025, 7, 18)), trip.endDay)
+        assertEquals(96, trip.photos)
     }
 
     @Test
