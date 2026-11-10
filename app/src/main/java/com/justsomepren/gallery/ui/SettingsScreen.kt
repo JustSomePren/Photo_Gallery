@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -332,6 +334,22 @@ private fun CloudSection(vm: GalleryViewModel) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Ukazovat v galerii", Modifier.weight(1f))
         Switch(show, onCheckedChange = vm::setShowCloud)
+    }
+    var clearing by remember { mutableStateOf(false) }
+    SettingsButton("Smazat všechny náhledy") { clearing = true }
+    if (clearing) {
+        AlertDialog(
+            onDismissRequest = { clearing = false },
+            title = { Text("Smazat všechny náhledy?") },
+            text = { Text("Smažou se jen náhledy v telefonu a zastaví se jejich načítání. V Google Fotkách se nic nezmění, náhledy jde načíst znovu.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    clearing = false
+                    vm.clearCloud()
+                }) { Text("Smazat") }
+            },
+            dismissButton = { TextButton(onClick = { clearing = false }) { Text("Zrušit") } },
+        )
     }
     WebPhotosSync(vm)
     Text("Ruční výběr v Google Fotkách", style = MaterialTheme.typography.titleSmall)

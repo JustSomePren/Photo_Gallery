@@ -43,6 +43,13 @@ class CloudLibrary(context: Context) {
         photos[photo.id] = photo
     }
 
+    /** Deletes every preview; the photos in Google Photos stay as they are. */
+    @Synchronized
+    fun clear() {
+        dir.listFiles()?.forEach { it.delete() }
+        photos.clear()
+    }
+
     fun ids(): Set<String> = photos.keys.toSet()
 
     /** Photos deleted in Google Photos lose their preview too. */

@@ -525,6 +525,15 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         WebPhotosWorker.schedule(getApplication())
     }
 
+    /** Deletes all downloaded previews and stops every way of loading them. */
+    fun clearCloud() {
+        stopCloudSync()
+        stopTakeout()
+        setWebPhotos(false)
+        cloud.clear()
+        refresh()
+    }
+
     fun stopCloudSync() {
         cloudJob?.cancel()
         cloudSync.value = null

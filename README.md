@@ -106,6 +106,9 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
   v soukromé části aplikace a mimo zálohu. *Zrušit a smazat přihlášení* ho smaže hned.
 - V otevřeném náhledu tlačítko **otevřít v Google Fotkách** otevře přímo tu fotku v plné kvalitě
   (u náhledů z ručního výběru a Takeoutu jen aplikaci, tam Galerie adresu fotky nezná).
+- **Mráček nahoře v galerii** jedním klepnutím schová a zase ukáže fotky, které jsou jen
+  v Google Fotkách (stejné jako *Ukazovat v galerii* v Nastavení).
+- *Smazat všechny náhledy* v Nastavení smaže náhledy z telefonu a zastaví jejich načítání.
 - Kdykoli později jde načíst znovu (nové přihlášení): doplní náhledy fotek, které mezitím
   z telefonu zmizely, a odebere náhledy fotek smazaných v Google Fotkách.
 - **Neoficiální cesta.** Google aplikacím celou knihovnu oficiálně neukáže, Galerie ji proto čte
