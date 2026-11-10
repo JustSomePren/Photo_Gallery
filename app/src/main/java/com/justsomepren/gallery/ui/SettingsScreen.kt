@@ -384,7 +384,7 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
         state?.error != null -> Text("Zastaveno: ${state.error}", color = MaterialTheme.colorScheme.error)
         state?.done == true -> Text(
             "Hotovo: v knihovně ${state.listed} položek, přibylo ${state.added} náhledů" +
-                if (state.failed > 0) ", ${state.failed} se nepodařilo stáhnout." else "."
+                if (state.failed > 0) ", ${state.failed} se nepodařilo stáhnout (${state.reason})." else "."
         )
         state != null -> Text("Načítám: prošel jsem ${state.listed} položek, přibylo ${state.added} náhledů…")
     }

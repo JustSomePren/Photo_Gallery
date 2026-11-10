@@ -98,6 +98,9 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
 
 - Jen na **Wi-Fi**, na mobilních datech nikdy.
 - Stahuje jen malé náhledy (cca 10–20 kB) fotek, které **nejsou v telefonu**.
+- Uloží se jen to, co je opravdu obrázek, a vždy zmenšené. Když náhledy nejdou stáhnout,
+  načítání se po pár pokusech zastaví a Nastavení ukáže důvod.
+- Příliš velké náhledy ze starší verze aplikace se při spuštění samy zmenší nebo smažou.
 - U velké knihovny to trvá déle (desítky tisíc fotek i přes hodinu). Po přerušení naváže samo
   (při otevření aplikace nebo do dne na Wi-Fi); do té doby přihlášení v telefonu zůstává,
   v soukromé části aplikace a mimo zálohu. *Zrušit a smazat přihlášení* ho smaže hned.

@@ -38,6 +38,8 @@ class WebPhotosTest {
     /** Key, file name and time of each photo in the pretend library, newest first. */
     private var photos = listOf(Triple("A1", "PXL_1.jpg", day), Triple("B2", "PXL_2.mp4", day - 60_000), Triple("C3", "PXL_3.jpg", day - 120_000))
     private var signedIn = true
+    private var broken = false
+    private var jar = "SID=abc"
     private val requests = mutableListOf<String>()
 
     private fun jpeg(): Buffer {
@@ -48,7 +50,7 @@ class WebPhotosTest {
     private fun item(photo: Triple<String, String, Long>): JSONArray {
         val extras = JSONObject().put("163238866", JSONArray(listOf(false)))
         if (photo.second.endsWith(".mp4")) extras.put("76647426", JSONArray(listOf(22932)))
-        val thumb = JSONArray(listOf(server.url("/pw/${photo.first}").toString(), 1080, 1920))
+        val thumb = JSONArray(listOf(server.url("/pw/${photo.first}").toString() + "=w1080-h1920", 1080, 1920))
         return JSONArray(listOf(photo.first, thumb, photo.third, "dedup", 3600000, photo.third, null, extras))
     }
 
@@ -75,7 +77,8 @@ class WebPhotosTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
                 requests += path.substringBefore('?') + (request.requestUrl?.queryParameter("rpcids")?.let { " $it" } ?: "")
-                if (request.getHeader("Cookie") != "SID=abc") return MockResponse().setResponseCode(403)
+                val cookie = request.getHeader("Cookie").orEmpty()
+                if (!cookie.startsWith("SID=abc")) return MockResponse().setResponseCode(403)
                 return when {
                     path == "/" -> MockResponse().setBody(
                         if (signedIn) """<script>window.WIZ_global_data = {"FdrFJe":"-123","SNlM0e":"TOKEN:1","cfb2h":"boq_1","eptZe":"\/_\/PhotosUi\/"};</script>"""
@@ -92,7 +95,14 @@ class WebPhotosTest {
                             else -> MockResponse().setBody(wrapped("EWgK9e", names(data.getJSONArray(0).getJSONArray(0).getJSONArray(0))))
                         }
                     }
-                    path.startsWith("/pw/") && path.endsWith("=w300-h300") -> MockResponse().setBody(jpeg())
+                    path.startsWith("/signin") -> MockResponse().setResponseCode(302)
+                        .addHeader("Set-Cookie", "PICTURES=1; Path=/; HttpOnly")
+                        .addHeader("Location", request.requestUrl!!.queryParameter("continue")!!)
+                    // Like Google: the address of the pictures first sends the visitor to sign in
+                    path.startsWith("/pw/") && "PICTURES=1" !in cookie && !broken ->
+                        MockResponse().setResponseCode(302).addHeader("Location", "/signin?continue=$path")
+                    path.startsWith("/pw/") && path.endsWith("=w300-h300") ->
+                        if (broken) MockResponse().addHeader("Content-Type", "text/html").setBody("<html>Sign in</html>") else MockResponse().setBody(jpeg())
                     else -> MockResponse().setResponseCode(404)
                 }
             }
@@ -106,7 +116,8 @@ class WebPhotosTest {
 
     private fun sync(onPhone: Set<Pair<String, Long>> = emptySet()) = runBlocking {
         val names = WebNames(File(context.filesDir, "cloud/web-names.tsv"))
-        WebPhotos.sync(WebSession({ "SID=abc" }, "test"), CloudLibrary(context), names, onPhone)
+        val session = WebSession({ jar }, "test") { _, cookie -> jar += "; " + cookie.substringBefore(';') }
+        WebPhotos.sync(session, CloudLibrary(context), names, onPhone)
     }
 
     @Test
@@ -144,6 +155,33 @@ class WebPhotosTest {
         sync()
 
         assertTrue(CloudLibrary(context).has("takeout:OLD.jpg:1"))
+    }
+
+    @Test
+    fun savesNothingWhenGoogleSendsAPageInsteadOfThePicture() {
+        broken = true
+
+        val result = sync()
+
+        assertEquals(3, result.failed)
+        assertTrue(result.reason!!.contains("text/html"))
+        assertEquals(0, CloudLibrary(context).count)
+    }
+
+    @Test
+    fun repairsPreviewsSavedTooBig() {
+        val library = CloudLibrary(context)
+        val big = Bitmap.createBitmap(3000, 2000, Bitmap.Config.ARGB_8888).apply { setPixels(IntArray(6_000_000) { it * 7919 }, 0, 3000, 0, 0, 3000, 2000) }
+        library.add(CloudPhoto("web:BIG", day, "BIG.jpg", "image/jpeg"), ByteArrayOutputStream().also { big.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray())
+        library.add(CloudPhoto("web:PAGE", day, "PAGE.jpg", "image/jpeg"), ByteArray(200_000) { 'x'.code.toByte() })
+        library.add(CloudPhoto("web:FINE", day, "FINE.jpg", "image/jpeg"), jpeg().readByteArray())
+
+        assertTrue(library.repair())
+
+        assertEquals(setOf("web:BIG", "web:FINE"), CloudLibrary(context).ids())
+        val fixed = android.graphics.BitmapFactory.decodeFile(CloudLibrary(context).asMediaItems(emptyList()).first { it.name == "BIG.jpg" }.uri.path)
+        assertEquals(600 to 400, fixed.width to fixed.height)
+        assertFalse(CloudLibrary(context).repair())
     }
 
     @Test
