@@ -26,6 +26,8 @@ import com.justsomepren.gallery.data.CameraAuto
 import com.justsomepren.gallery.data.CalendarLink
 import com.justsomepren.gallery.data.CloudLibrary
 import com.justsomepren.gallery.data.Takeout
+import com.justsomepren.gallery.data.WebPhotos
+import com.justsomepren.gallery.data.WebPhotosWorker
 import com.justsomepren.gallery.data.CloudPhoto
 import com.justsomepren.gallery.data.CloudPhotos
 import com.justsomepren.gallery.data.CloudWorker
@@ -147,6 +149,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         WarmupWorker.schedule(app, prefs.warmup.value)
         UploadWorker.schedule(app)
         CloudWorker.schedule(app)
+        WebPhotosWorker.schedule(app)
         viewModelScope.launch { CloudPhotos.version.drop(1).collect { refresh() } }
     }
 
@@ -510,6 +513,13 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     fun importTakeout(files: List<Uri>) = Takeout.start(getApplication(), files)
 
     fun stopTakeout() = Takeout.stop(getApplication())
+
+    /** Signed in (or out) in the app's browser window; signing out keeps the previews. */
+    fun setWebPhotos(on: Boolean) {
+        prefs.setWebPhotos(on)
+        if (!on) WebPhotos.logout()
+        WebPhotosWorker.schedule(getApplication())
+    }
 
     fun stopCloudSync() {
         cloudJob?.cancel()

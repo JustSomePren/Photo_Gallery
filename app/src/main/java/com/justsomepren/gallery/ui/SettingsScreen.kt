@@ -46,6 +46,7 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GoogleAuth
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.Takeout
+import com.justsomepren.gallery.data.WebPhotos
 import com.justsomepren.gallery.data.UploadTarget
 import com.justsomepren.gallery.data.batteryFlow
 import kotlinx.coroutines.launch
@@ -332,6 +333,8 @@ private fun CloudSection(vm: GalleryViewModel) {
         Text("Ukazovat v galerii", Modifier.weight(1f))
         Switch(show, onCheckedChange = vm::setShowCloud)
     }
+    WebPhotosSync(vm)
+    Text("Ruční výběr v Google Fotkách", style = MaterialTheme.typography.titleSmall)
     val state = sync
     when {
         state == null || state.done || state.error != null -> {
@@ -360,6 +363,46 @@ private fun CloudSection(vm: GalleryViewModel) {
         SettingsButton("Ukončit načítání") { vm.stopCloudSync() }
     }
     TakeoutImport(vm)
+}
+
+/** The whole library by itself, after one login in the app's browser window. */
+@Composable
+private fun WebPhotosSync(vm: GalleryViewModel) {
+    val context = LocalContext.current
+    val on by vm.prefs.webPhotos.collectAsStateWithLifecycle()
+    val progress by WebPhotos.progress.collectAsStateWithLifecycle()
+    var login by remember { mutableStateOf(false) }
+
+    Text("Celá knihovna automaticky", style = MaterialTheme.typography.titleSmall)
+    Hint(
+        "Jednou se přihlásíš do Google Fotek v okně Galerie. Ta si pak sama, jednou denně na Wi-Fi " +
+            "a při otevření, stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
+            "Neoficiální cesta (čte se stejně jako web photos.google.com): po změně na straně Googlu může přestat fungovat."
+    )
+    val state = progress
+    when {
+        state?.error != null -> Text("Zastaveno: ${state.error}", color = MaterialTheme.colorScheme.error)
+        state?.done == true -> Text(
+            "Hotovo: v knihovně ${state.listed} položek, přibylo ${state.added} náhledů" +
+                if (state.failed > 0) ", ${state.failed} se nepodařilo stáhnout." else "."
+        )
+        state != null -> Text("Načítám: prošel jsem ${state.listed} položek, přibylo ${state.added} náhledů…")
+    }
+    if (on) {
+        SettingsButton("Načíst teď") {
+            if (onWifi(context)) vm.setWebPhotos(true) else toast(context, "Připoj se k Wi-Fi")
+        }
+        SettingsButton("Přihlásit se znovu") { login = true }
+        SettingsButton("Odhlásit z Google Fotek") { vm.setWebPhotos(false) }
+    } else {
+        SettingsButton("Přihlásit se do Google Fotek") { login = true }
+    }
+    if (login) {
+        GooglePhotosLogin { signedIn ->
+            login = false
+            if (signedIn) vm.setWebPhotos(true)
+        }
+    }
 }
 
 /** All old photos at once: Google exports them as ZIP files, the app keeps only previews. */

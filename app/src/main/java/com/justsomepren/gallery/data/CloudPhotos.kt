@@ -8,6 +8,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ListenableWorker
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -165,24 +166,25 @@ class CloudWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     }
 
     companion object {
-        private const val PERIODIC = "cloud-periodic"
-        private const val ONCE = "cloud-once"
-
-        private val wifi = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.UNMETERED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-
         /** Twice a day, plus once when the app is opened; the worker itself checks the battery threshold. */
-        fun schedule(context: Context) {
-            val work = WorkManager.getInstance(context)
-            if (!Prefs.get(context).showCloud.value) {
-                work.cancelUniqueWork(PERIODIC)
-                return
-            }
-            val periodic = PeriodicWorkRequestBuilder<CloudWorker>(12, TimeUnit.HOURS).setConstraints(wifi).build()
-            work.enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, periodic)
-            work.enqueueUniqueWork(ONCE, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<CloudWorker>().setConstraints(wifi).build())
-        }
+        fun schedule(context: Context) = scheduleOnWifi<CloudWorker>(context, "cloud", 12, Prefs.get(context).showCloud.value)
     }
+}
+
+val wifiOnly = Constraints.Builder()
+    .setRequiredNetworkType(NetworkType.UNMETERED)
+    .setRequiresBatteryNotLow(true)
+    .build()
+
+/** Runs the worker on Wi-Fi every [hours] and once right now; stops it when [enabled] is off. */
+inline fun <reified W : ListenableWorker> scheduleOnWifi(context: Context, name: String, hours: Long, enabled: Boolean) {
+    val work = WorkManager.getInstance(context)
+    if (!enabled) {
+        work.cancelUniqueWork("$name-periodic")
+        work.cancelUniqueWork("$name-once")
+        return
+    }
+    val periodic = PeriodicWorkRequestBuilder<W>(hours, TimeUnit.HOURS).setConstraints(wifiOnly).build()
+    work.enqueueUniquePeriodicWork("$name-periodic", ExistingPeriodicWorkPolicy.KEEP, periodic)
+    work.enqueueUniqueWork("$name-once", ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<W>().setConstraints(wifiOnly).build())
 }

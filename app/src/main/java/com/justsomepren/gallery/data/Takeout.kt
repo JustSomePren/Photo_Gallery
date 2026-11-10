@@ -40,7 +40,7 @@ object Takeout {
     private const val PREVIEW = 400
     private const val MAX_PHOTO = 80L shl 20
 
-    private val types = mapOf(
+    val types = mapOf(
         "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "heic" to "image/heic",
         "heif" to "image/heif", "webp" to "image/webp", "gif" to "image/gif", "dng" to "image/x-adobe-dng",
         "mp4" to "video/mp4", "mov" to "video/quicktime", "3gp" to "video/3gpp", "webm" to "video/webm", "mkv" to "video/x-matroska",

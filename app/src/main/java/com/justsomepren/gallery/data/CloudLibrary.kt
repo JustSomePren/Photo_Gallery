@@ -39,9 +39,24 @@ class CloudLibrary(context: Context) {
     @Synchronized
     fun add(photo: CloudPhoto, preview: ByteArray) {
         previewFile(photo.id).writeBytes(preview)
-        index.appendText("${photo.id}\t${photo.created}\t${photo.name}\t${photo.mime}\n")
+        index.appendText(line(photo))
         photos[photo.id] = photo
     }
+
+    fun ids(): Set<String> = photos.keys.toSet()
+
+    /** Photos deleted in Google Photos lose their preview too. */
+    @Synchronized
+    fun remove(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        ids.forEach {
+            photos.remove(it)
+            previewFile(it).delete()
+        }
+        index.writeText(photos.values.joinToString("", transform = ::line))
+    }
+
+    private fun line(photo: CloudPhoto) = "${photo.id}\t${photo.created}\t${photo.name}\t${photo.mime}\n"
 
     /** The previews as gallery items, leaving out photos that are on the phone as well. */
     fun asMediaItems(local: List<MediaItem>): List<MediaItem> {

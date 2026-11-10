@@ -86,6 +86,26 @@ mřížka, kalendář i Kalendář ji ukazují dál z malého náhledu, s ikonko
 - Funguje s oprávněním, které Galerie dostane při *Uvolnit místo*; jinak není co ukazovat.
 - Vypíná se spolu se starými fotkami níže: *Ukazovat v galerii*.
 
+### Celá knihovna z Google Fotek automaticky
+
+Náhledy **všech** fotek a videí z Google Fotek, bez ručního vybírání a bez Takeoutu.
+
+1. *Nastavení → Fotky z Google Fotek → Přihlásit se do Google Fotek.*
+2. V okně se přihlas ke svému Google účtu (stránka Googlu, heslo Galerie nevidí).
+3. Okno se samo zavře a Galerie začne stahovat. Průběh je vidět v Nastavení a v oznámení.
+
+- Dál běží sama: **jednou denně na Wi-Fi** a při otevření aplikace. Na mobilních datech nikdy.
+- Stahuje jen malé náhledy (cca 10–20 kB) fotek, které **nejsou v telefonu**. Když fotku z telefonu
+  později smažeš (Uvolnit místo), další běh její náhled doplní. Fotka smazaná v Google Fotkách
+  o náhled přijde.
+- První běh u velké knihovny trvá déle (desítky tisíc fotek i přes hodinu); po přerušení naváže.
+- **Neoficiální cesta.** Google aplikacím celou knihovnu oficiálně neukáže, Galerie ji proto čte
+  stejně jako web photos.google.com. Po změně na straně Googlu to může přestat fungovat, dokud
+  se aplikace neupraví. Jen čte, v Google Fotkách nic nemění ani nemaže.
+- Přihlášení zůstává jen v telefonu (do zálohy se nedává). Když vyprší, Nastavení ukáže
+  „Přihlas se znovu“. *Odhlásit z Google Fotek* přihlášení smaže, náhledy zůstanou.
+- Pokud Google v okně přihlášení odmítne, zbývají níže ruční výběr a Takeout.
+
 ### Staré fotky z Google Fotek
 
 *Nastavení → Fotky z Google Fotek → Načíst z účtu.* Otevře se výběr v Google Fotkách
