@@ -19,6 +19,8 @@ data class TripProposal(
     val photos: Int,
     /** Why it was proposed, e.g. "podle polohy · 5× víc fotek než obvykle". */
     val note: String = "",
+    /** Named only by its dates, so the AI on the phone may suggest a better name. */
+    val datedName: Boolean = false,
 )
 
 /**
@@ -33,6 +35,9 @@ object TripFinder {
     private const val BUSY = 3.0
     private const val LIVELY = 1.5
     private const val MIN_BUSY_PHOTOS = 5
+
+    /** One day alone is a trip when it is busy and has at least this many photos. */
+    private const val MIN_DAY_TRIP_PHOTOS = 15
 
     fun find(spots: List<Spot>, places: Places): List<TripProposal> {
         if (spots.isEmpty()) return emptyList()
@@ -114,9 +119,13 @@ object TripFinder {
         val ratio = busyness(perDay)
         val busy = { day: Long -> ratio.getValue(day) >= BUSY && perDay.getValue(day) >= MIN_BUSY_PHOTOS }
         val candidates = perDay.keys.filter { it !in skip && ratio.getValue(it) >= LIVELY }.sorted()
-        return runs(candidates, emptySet()).mapNotNull { run ->
+        // An ordinary day with photos ends the run; one day without photos does not.
+        return runs(candidates, perDay.keys).mapNotNull { run ->
             val days = run.dropWhile { !busy(it) }.dropLastWhile { !busy(it) }
-            if (days.count(busy) < 2) return@mapNotNull null
+            if (days.isEmpty()) return@mapNotNull null
+            val dayTrip = days.size == 1 && perDay.getValue(days.single()) >= MIN_DAY_TRIP_PHOTOS
+            if (days.count(busy) < 2 && !dayTrip) return@mapNotNull null
+            if (timesMore(days, ratio) < 2) return@mapNotNull null
             val photos = (days.first()..days.last()).sumOf { perDay[it] ?: 0 }
             // Nothing tells where it was: a name with the dates, to rename when creating.
             TripProposal(
@@ -125,6 +134,7 @@ object TripFinder {
                 endDay = days.last(),
                 photos = photos,
                 note = "${timesMore(days, ratio)}× víc fotek než obvykle",
+                datedName = true,
             )
         }
     }

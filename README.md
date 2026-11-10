@@ -21,10 +21,12 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   - *Načíst Časovou osu* – export Časové osy Google z telefonu (Timeline.json) doplní fotkám polohu
     podle času pořízení; nejpřesnější, pokud byla Časová osa zapnutá.
   - Časové pásmo ve fotce – pozná cestu do zahraničí („Výlet UTC+8“), pokud ho telefon zapsal.
-  - Dny s mnohem víc fotkami než obvykle – návrh „Možná výlet“.
+  - Dny s mnohem víc fotkami než obvykle (i jediný den s aspoň 15 fotkami) – výlet s názvem
+    podle data. Na Pixelu 9 a novějších mu název navrhne **AI přímo v telefonu** (Gemini Nano,
+    podle 4 fotek z výletu; fotky telefon neopustí). Návrh jde přejmenovat tužkou.
 
-  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než obvykle v tom období (±45 dní), takže
-  sedí i když fotíš víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
+  Počet fotek se bere v potaz vždy: „hodně“ znamená víc než typický týden s fotkami v půlroce
+  kolem (asi 3×), takže sedí, i když fotíš málokdy nebo víc než dřív. Výlet podle polohy či pásma se rozšíří o sousední dny s návalem
   fotek bez polohy (den odletu) a klidnější den uprostřed dovolené ji nerozdělí. U návrhu je vidět
   proč, např. „podle polohy · 5× víc fotek než obvykle“.
 - **Uvolnit místo** – *Nastavení → Uvolnit místo*. Smaže z telefonu jen fotky a videa, které tahle
@@ -43,20 +45,26 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
 - **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
 - **Výběr více fotek** – podrž fotku a táhni prstem přes další (u okraje se seznam sám posouvá),
-  nebo pak klepáním přidávej. Klepnutím na den či měsíc vybereš celý, ikonou v albu celé album.
+  nebo pak klepáním přidávej. Když už je něco vybrané, stačí táhnout prstem do strany (bez držení).
+  Kroužkem u dne či měsíce vybereš celý, ikonou v albu celé album.
 - **Poslat do cloudu** – vybrané fotky dá do fronty pro zvolený Google účet (osobní, společný…)
   a album; odešlou se samy do Google Fotek.
 - **Upravit / Hledat** – otevře Google Fotky.
-- **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
+- **Videa** – spustí se sama po přejetí na ně. Klepnutí ukáže ovládání, dvojí klepnutí vlevo/vpravo
+  skočí o 10 s zpět/vpřed, posuvník ukazuje obraz už při tažení, tlačítko ztlumí zvuk.
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
 - **Přesunout do složky** – mezi složkami v DCIM/ a Pictures/ nebo do nové složky.
-- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (1–7 sloupců).
+- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (1–14 sloupců). Delší roztažení či stažení
+  přeskočí víc velikostí najednou.
 - **Kalendář fotek** – tři úrovně (tlačítka nahoře nebo roztažení prstů):
   **Rok** (12 malých měsíců, klepnutím na měsíc se přiblíží), **Měsíc** (kalendář, rušné dny
   ukazují 4 fotky) a **Dny** (každý den jeden řádek fotek; velikost jako v galerii, roztažením prstů,
   další fotky dne jsou schované pod „+N“ – klepnutím otevřeš celý den; vpravo rychlé posouvání).
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
+- **Zavření fotky** – stáhni ji prstem dolů (nebo šipka zpět).
+- **Koš** – ikonou koše u vybraných fotek nebo v otevřené fotce. Je to koš Androidu: fotky v něm
+  zůstanou 30 dní a v *Alba → Koš* je obnovíš. Pak je Android smaže sám.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
 
 ### Propojení s Kalendářem

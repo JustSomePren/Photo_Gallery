@@ -93,6 +93,8 @@ fun CalendarView(
     calendarItems: List<CalendarItem> = emptyList(),
     zoom: Int,
     columns: Int,
+    /** The size right now, also in the middle of a pinch. */
+    currentColumns: () -> Int,
     state: LazyListState,
     contentPadding: PaddingValues,
     header: @Composable () -> Unit,
@@ -138,11 +140,12 @@ fun CalendarView(
     // In days the pinch first makes the photos bigger or smaller, like in the gallery; past the smallest
     // size it goes on to months.
     fun pinch(step: Int): Float {
-        val wanted = columns - step
+        val now = currentColumns()
+        val wanted = nextColumns(now, step)
         return when {
-            zoom == CalendarZoom.DAYS && wanted in 1..7 -> {
+            zoom == CalendarZoom.DAYS && wanted != now -> {
                 onColumns(wanted)
-                columns.toFloat() / wanted
+                now.toFloat() / wanted
             }
             zoom == CalendarZoom.DAYS && step > 0 -> 0f
             zoom == CalendarZoom.YEAR && step < 0 -> 0f

@@ -122,7 +122,7 @@ class Prefs(context: Context) {
     fun setThreshold(value: Int) = setInt(threshold, "threshold", value)
     fun setWarmup(value: Boolean) = setBoolean(warmup, "warmup", value)
     fun setCalendarView(value: Boolean) = setBoolean(calendarView, "calendar", value)
-    fun setGridColumns(value: Int) = setInt(gridColumns, "gridColumns", value.coerceIn(1, 7))
+    fun setGridColumns(value: Int) = setInt(gridColumns, "gridColumns", value.coerceIn(1, 14))
     fun setCalendarZoom(value: Int) = setInt(calendarZoom, "calendarZoom", value.coerceIn(CalendarZoom.YEAR, CalendarZoom.DAYS))
     fun setMobileData(value: Boolean) = setBoolean(mobileData, "mobileData", value)
     fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)

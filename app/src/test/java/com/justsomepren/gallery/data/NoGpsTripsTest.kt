@@ -68,13 +68,17 @@ class NoGpsTripsTest {
         val perDay = mutableMapOf<Long, Int>()
         (0L until 40).forEach { perDay[day(LocalDate.of(2025, 9, 1).plusDays(it))] = 3 }
         (0L until 4).forEach { perDay[day(LocalDate.of(2025, 10, 15).plusDays(it))] = 40 }
-        // One busy day alone (a party) is not a trip.
+        // One day with many photos is a day trip; a little busier day is not.
         perDay[day(LocalDate.of(2025, 10, 25))] = 60
+        perDay[day(LocalDate.of(2025, 9, 20))] = 12
 
-        val trips = TripFinder.byBursts(perDay, skip = emptySet())
-        assertEquals(1, trips.size)
-        assertTrue(trips.single().name, trips.single().name.startsWith("Výlet 15. 10."))
-        assertEquals(160, trips.single().photos)
+        val trips = TripFinder.byBursts(perDay, skip = emptySet()).sortedBy { it.startDay }
+        assertEquals(2, trips.size)
+        assertTrue(trips[0].name, trips[0].name.startsWith("Výlet 15. 10."))
+        assertEquals(160, trips[0].photos)
+        assertEquals(day(LocalDate.of(2025, 10, 25)), trips[1].startDay)
+        assertEquals(trips[1].startDay, trips[1].endDay)
+        assertTrue(trips.all { it.datedName })
     }
 
     @Test
@@ -107,6 +111,19 @@ class NoGpsTripsTest {
         assertEquals(day(LocalDate.of(2025, 7, 12)), trip.startDay)
         assertEquals(day(LocalDate.of(2025, 7, 18)), trip.endDay)
         assertEquals(96, trip.photos)
+    }
+
+    /** Someone who photographs every day, some days more: only the real trip, not weeks of ordinary life. */
+    @Test
+    fun everydayPhotographerGetsOnlyTheTrip() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val random = java.util.Random(4)
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 180).forEach { perDay[day(LocalDate.of(2025, 3, 1).plusDays(it))] = 2 + random.nextInt(9) }
+        (0L until 4).forEach { perDay[day(LocalDate.of(2025, 6, 10).plusDays(it))] = 60 }
+
+        val trips = TripFinder.byBursts(perDay, skip = emptySet())
+        assertEquals(listOf(day(LocalDate.of(2025, 6, 10)) to day(LocalDate.of(2025, 6, 13))), trips.map { it.startDay to it.endDay })
     }
 
     @Test
@@ -154,5 +171,25 @@ class NoGpsTripsTest {
         assertEquals(480, parseOffset("+08:00"))
         assertEquals(-330, parseOffset("-05:30"))
         assertNull(parseOffset(null))
+    }
+
+    @Test
+    fun aiAnswerBecomesAName() {
+        assertEquals("Hory na sněhu", TripNamer.clean("„Hory na sněhu“.\n"))
+        assertEquals("Pláž u moře", TripNamer.clean("\n  pláž u moře  "))
+        assertEquals(null, TripNamer.clean("Tady je návrh názvu pro tvůj krásný výlet na hory"))
+        assertEquals(null, TripNamer.clean("   "))
+    }
+
+    @Test
+    fun aiSeesFavouritesAndPhotosFromTheWholeTrip() {
+        val start = LocalDate.of(2025, 7, 1)
+        val photos = (0L until 40L).map { com.justsomepren.gallery.walkthrough.Fixtures.photo(it, start.plusDays(it / 10)) }
+            .map { it.copy(isFavorite = it.id == 7L) }
+        val picked = TripNamer.sample(photos)
+        assertEquals(4, picked.size)
+        assertEquals(7L, picked.first().id)
+        assertTrue(picked.map { it.day }.distinct().size >= 3)
+        assertTrue(picked.none { it.isVideo })
     }
 }

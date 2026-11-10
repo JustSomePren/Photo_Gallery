@@ -45,6 +45,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
@@ -97,6 +100,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
@@ -165,6 +169,13 @@ fun MediaBrowser(
                         IconButton(onClick = { selected = items.filterNot { it.cloud }.map { it.id }.toSet() }) {
                             Icon(Icons.Default.SelectAll, "Vybrat vše")
                         }
+                        if (source == Source.Trash) {
+                            IconButton(onClick = { if (actions.trash(picked, restore = true)) done() }) {
+                                Icon(Icons.Default.RestoreFromTrash, "Obnovit")
+                            }
+                            return@TopAppBar
+                        }
+                        IconButton(onClick = { if (actions.trash(picked)) done() }) { Icon(Icons.Default.Delete, "Do koše") }
                         FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
                         IconButton(onClick = { actions.send(picked); done() }) {
                             Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
@@ -234,7 +245,8 @@ fun MediaBrowser(
                     bottomPadding = padding.calculateBottomPadding(),
                     vm = vm,
                     header = header,
-                    onClick = { if (selected.isEmpty()) onOpen(it) else if (!it.cloud) toggle(listOf(it.id)) },
+                    // Photos in the trash are only picked for restoring, previews from the cloud never
+                    onClick = { if (selected.isEmpty() && source != Source.Trash) onOpen(it) else if (!it.cloud) toggle(listOf(it.id)) },
                     onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
@@ -314,7 +326,7 @@ private fun MediaGrid(
 ) {
     val chosen by vm.prefs.gridColumns.collectAsStateWithLifecycle()
     val saver = LocalSaver.current
-    fun columnsFor(chosen: Int) = if (saver) (chosen + 1).coerceAtMost(7) else chosen
+    fun columnsFor(chosen: Int) = if (saver) nextColumns(chosen, -1) else chosen
     val columns = columnsFor(chosen)
     val thumbPx = gridThumbPx(columns)
     val events by vm.prefs.events.collectAsStateWithLifecycle()
@@ -351,9 +363,11 @@ private fun MediaGrid(
             columns = GridCells.Fixed(columns),
             state = state,
             modifier = Modifier
-                .pinchToZoom {
-                    vm.prefs.setGridColumns(chosen - it)
-                    columns.toFloat() / columnsFor(vm.prefs.gridColumns.value)
+                .pinchToZoom { bigger ->
+                    val before = columnsFor(vm.prefs.gridColumns.value)
+                    vm.prefs.setGridColumns(nextColumns(vm.prefs.gridColumns.value, bigger))
+                    val after = columnsFor(vm.prefs.gridColumns.value)
+                    if (after == before) 0f else before.toFloat() / after
                 }
                 .dragToSelect(state, photoOrder, { currentSelection }, onSelect, autoScroll),
             contentPadding = PaddingValues(bottom = bottomPadding),
@@ -375,17 +389,14 @@ private fun MediaGrid(
                 contentType = { it::class },
             ) { entry ->
                 when (entry) {
-                    is GridEntry.Header -> Text(
-                        entry.month,
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 16.dp, 12.dp, 8.dp),
-                    )
-                    is GridEntry.DayHeader -> Text(
-                        formatDayHeader(entry.day),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { onHeaderClick(entry.items) }.padding(12.dp, 10.dp, 12.dp, 6.dp),
-                    )
+                    is GridEntry.Header -> GroupHeader(
+                        entry.month, entry.items, selected, MaterialTheme.typography.titleSmall, MaterialTheme.colorScheme.onSurface,
+                        PaddingValues(12.dp, 16.dp, 12.dp, 8.dp),
+                    ) { onHeaderClick(entry.items) }
+                    is GridEntry.DayHeader -> GroupHeader(
+                        formatDayHeader(entry.day), entry.items, selected, MaterialTheme.typography.labelLarge,
+                        MaterialTheme.colorScheme.onSurfaceVariant, PaddingValues(12.dp, 10.dp, 12.dp, 6.dp),
+                    ) { onHeaderClick(entry.items) }
                     is GridEntry.EventStart -> EventRow(entry.event) { vm.editingEvent = entry.event }
                     is GridEntry.Photo -> {
                         val item = entry.item
@@ -453,17 +464,23 @@ private fun Modifier.dragToSelect(
     // Watches touches before the photos and the scrolling do, so after a long press the drag selects.
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        // Lifted (a tap) or moved (a scroll) before the long press: not ours.
+        // Lifted (a tap) or moved (a scroll) before the long press: not ours. While something is
+        // already selected, a sideways swipe selects at once; up and down still scrolls.
+        val selecting = selected().isNotEmpty()
+        var sideways = false
         val endedEarly = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
             var early = false
-            while (!early) {
+            while (!early && !sideways) {
                 val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                val moved = change?.let { it.position - down.position }
+                sideways = selecting && moved != null && moved.getDistance() > viewConfiguration.touchSlop &&
+                    abs(moved.x) > abs(moved.y)
                 early = change == null || !change.pressed ||
-                    (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                    (!sideways && moved!!.getDistance() > viewConfiguration.touchSlop)
             }
             early
         }
-        if (endedEarly != null) return@awaitEachGesture
+        if (endedEarly == true) return@awaitEachGesture
 
         val start = photoAt(down.position) ?: return@awaitEachGesture
         last = start
@@ -486,6 +503,37 @@ private fun Modifier.dragToSelect(
             }
         }
         autoScroll.floatValue = 0f
+    }
+}
+
+/** A month or day title with a circle that selects all its photos at once. */
+@Composable
+private fun GroupHeader(
+    text: String,
+    items: List<MediaItem>,
+    selected: Set<Long>,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+    padding: PaddingValues,
+    onClick: () -> Unit,
+) {
+    val all = items.isNotEmpty() && items.all { it.id in selected || it.cloud }
+    Row(
+        Modifier.clickable(onClick = onClick).padding(padding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text, style = style, color = color)
+        Icon(
+            if (all) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            if (all) "Zrušit výběr: $text" else "Vybrat: $text",
+            Modifier.size(20.dp),
+            tint = when {
+                all -> MaterialTheme.colorScheme.primary
+                selected.isEmpty() -> MaterialTheme.colorScheme.outlineVariant
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }
 
