@@ -112,7 +112,7 @@ object TripFinder {
 
     /**
      * Without places or zones: days close together with far more photos than usual, e.g. a week of
-     * holiday. Calmer days and one day without photos inside keep it together; it needs at least two really busy days.
+     * holiday. Calmer days and one day without photos inside keep it together; it needs two really busy days, or one with many photos.
      */
     fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
         if (perDay.size < 7) return emptyList()
