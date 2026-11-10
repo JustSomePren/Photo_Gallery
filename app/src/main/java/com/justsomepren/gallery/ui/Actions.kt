@@ -66,7 +66,13 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
     fun toggleFavorite(items: List<MediaItem>): Boolean {
         if (items.isEmpty() || tooMany(context, items)) return false
         val value = !items.all { it.isFavorite }
-        ask(MediaStore.createFavoriteRequest(context.contentResolver, items.map { it.uri }, value))
+        // Android keeps favorites only of the phone's photos; those in Google Photos are remembered by the app
+        val (cloud, local) = items.partition { it.cloud }
+        if (cloud.isNotEmpty()) {
+            vm.prefs.setCloudFavorites(cloud.map { it.key }, value)
+            vm.refresh()
+        }
+        if (local.isNotEmpty()) ask(MediaStore.createFavoriteRequest(context.contentResolver, local.map { it.uri }, value))
         return true
     }
 
@@ -90,7 +96,15 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
 
     fun share(items: List<MediaItem>): Boolean {
         if (tooMany(context, items)) return false
-        GooglePhotos.share(context, items)
+        if (items.none { it.cloud }) {
+            GooglePhotos.share(context, items)
+            return true
+        }
+        toast(context, "Stahuji z Google Fotek v plné kvalitě…")
+        vm.withOriginals(items) { result ->
+            result.onSuccess { GooglePhotos.share(context, it) }
+                .onFailure { toast(context, it.message ?: "Fotku se nepodařilo stáhnout") }
+        }
         return true
     }
 

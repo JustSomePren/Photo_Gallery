@@ -65,7 +65,12 @@ object CloudPhotos {
      */
     fun withCloud(context: Context, local: List<MediaItem>, library: CloudLibrary = CloudLibrary(context)): List<MediaItem> {
         if (!Prefs.get(context).showCloud.value) return local
-        val extra = (library.asMediaItems(local) + missing(context, local)).distinctBy { it.name to it.date / 60_000 }
+        val favorites = Prefs.get(context).cloudFavorites.value
+        // Of the same photo from two sources the one that can load in full quality stays
+        val extra = (library.asMediaItems(local) + missing(context, local))
+            .sortedBy { WebPhotos.key(it) == null }
+            .distinctBy { it.name to it.date / 60_000 }
+            .map { if (it.key in favorites) it.copy(isFavorite = true) else it }
         return if (extra.isEmpty()) local else (local + extra).sortedByDescending { it.date }
     }
 

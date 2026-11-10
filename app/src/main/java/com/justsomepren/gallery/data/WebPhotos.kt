@@ -5,6 +5,7 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebStorage
 import androidx.annotation.VisibleForTesting
+import androidx.core.content.FileProvider
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,7 @@ import java.net.URLEncoder
  * so this can stop working when Google changes the page. It only reads and keeps small previews.
  */
 object WebPhotos {
-    data class Item(val key: String, val thumb: String, val taken: Long, val video: Boolean)
+    data class Item(val key: String, val thumb: String, val taken: Long, val video: Boolean, val favorite: Boolean = false)
     data class Page(val items: List<Item>, val next: String?)
     data class Progress(
         val listed: Int = 0,
@@ -46,6 +47,7 @@ object WebPhotos {
     val login get() = "https://accounts.google.com/ServiceLogin?continue=" + URLEncoder.encode("$site/", "UTF-8")
 
     const val PAGE_SIZE = 500
+    const val PHOTO = "https://photos.google.com/photo/"
     private const val PREVIEW = "=w300-h300"
     private const val PARALLEL = 8
     private const val GIVE_UP = 24
@@ -53,8 +55,44 @@ object WebPhotos {
     /** Google refuses to sign in when the browser says it is a window inside an app. */
     fun agent(context: Context): String = WebSettings.getDefaultUserAgent(context).replace("; wv", "")
 
+    fun signedIn() = CookieManager.getInstance().getCookie(site)?.contains("SID=") == true
+
+    private var open: Pair<Long, WebSession>? = null
+
+    /** Opening a visit downloads the whole page, so one is used again for a few minutes. */
+    @Synchronized
+    fun session(context: Context): WebSession {
+        open?.takeIf { System.currentTimeMillis() - it.first < 10 * 60_000 }?.let { return it.second }
+        val jar = CookieManager.getInstance()
+        val session = WebSession(jar::getCookie, agent(context)) { url, cookie -> jar.setCookie(url, cookie) }
+        open = System.currentTimeMillis() to session
+        return session
+    }
+
+    /** The key Google Photos knows the photo by; only previews read from the page have one. */
+    fun key(item: MediaItem): String? = item.link?.substringAfter(PHOTO, "")?.ifEmpty { null }
+
+    /** The photo in screen size, loaded from Google Photos into the app's cache; null when it cannot be. */
+    suspend fun screenSized(context: Context, item: MediaItem): File? = withContext(Dispatchers.IO) {
+        val key = key(item) ?: return@withContext null
+        val file = File(context.cacheDir, "cloud-full/$key.jpg")
+        if (!file.exists() && (!onWifi(context) || !signedIn())) return@withContext null
+        runCatching { file.also { if (!it.exists()) session(context).fetch(key, item.isVideo, original = false, it) } }.getOrNull()
+    }
+
+    /** The photo or video as it was uploaded, as a file other apps can be given (e.g. for an Instagram story). */
+    suspend fun original(context: Context, item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
+        val key = key(item) ?: throw IOException("„${item.name}“ jde otevřít jen v Google Fotkách")
+        if (!onWifi(context)) throw NotOnWifi()
+        if (!signedIn()) throw NeedsLogin()
+        val file = File(context.cacheDir, "cloud-share/${item.name}")
+        session(context).fetch(key, item.isVideo, original = true, file)
+        item.copy(uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file), cloud = false)
+    }
+
     /** Removes the login and everything else the browser window kept. */
     fun forgetLogin() {
+        open = null
         CookieManager.getInstance().apply {
             removeAllCookies(null)
             flush()
@@ -78,9 +116,12 @@ object WebPhotos {
         names: WebNames,
         onPhone: Set<Pair<String, Long>>,
         stopped: () -> Boolean = { false },
+        onFavorites: (Set<String>) -> Unit = {},
         onProgress: (Progress) -> Unit = {},
     ): Progress = coroutineScope {
         val seen = HashSet<String>()
+        // By the same key the gallery uses for a photo: name and time
+        val favorites = HashSet<String>()
         var progress = Progress()
         var next: String? = null
         do {
@@ -89,6 +130,7 @@ object WebPhotos {
             val missing = page.items.filter { item ->
                 val name = names[item.key] ?: return@filter false
                 seen += id(item)
+                if (item.favorite) favorites += "$name|${item.taken}"
                 !library.has(id(item)) && (name to item.taken / 60_000) !in onPhone
             }
             for (group in missing.chunked(PARALLEL)) {
@@ -110,6 +152,7 @@ object WebPhotos {
             next = page.next
         } while (next != null)
         library.remove(library.ids().filter { it.startsWith("web:") && it !in seen })
+        onFavorites(favorites)
         progress.copy(done = true)
     }
 
@@ -126,8 +169,8 @@ object WebPhotos {
             val key = item.text(0) ?: return@mapNotNull null
             val thumb = item.optJSONArray(1)?.text(0) ?: return@mapNotNull null
             // The last field holds extras, this one only for videos
-            val video = item.optJSONObject(item.length() - 1)?.has("76647426") == true
-            Item(key, thumb, item.optLong(2), video)
+            val extras = item.optJSONObject(item.length() - 1)
+            Item(key, thumb, item.optLong(2), extras?.has("76647426") == true, extras?.optJSONArray("163238866")?.optBoolean(0) == true)
         }
         return Page(items, data.text(1))
     }
@@ -142,9 +185,10 @@ object WebPhotos {
         }.toMap()
     }
 
-    // optString gives the text "null" for an empty field
-    private fun JSONArray.text(index: Int): String? = if (isNull(index)) null else optString(index).ifEmpty { null }
 }
+
+// optString gives the text "null" for an empty field
+internal fun JSONArray.text(index: Int): String? = if (isNull(index)) null else optString(index).ifEmpty { null }
 
 /** The login into Google Photos is missing or has run out. */
 class NeedsLogin : IOException("Přihlas se znovu do Google Fotek")
@@ -201,6 +245,28 @@ class WebSession(
         val bytes = read(connection)
         return CloudLibrary.shrink(bytes)
             ?: throw IOException("Google místo obrázku poslal ${connection.contentType} (${connection.url.host}, ${bytes.size / 1024} kB)")
+    }
+
+    /**
+     * Saves one photo to [file]: in screen size, or as it was uploaded when [original].
+     * The page's "VrseUb" call gives the photo's current address.
+     */
+    fun fetch(key: String, video: Boolean, original: Boolean, file: File) {
+        val info = call("VrseUb", JSONArray(listOf(key, null, null, null, null)).toString())
+        val base = info.optJSONArray(0)?.optJSONArray(1)?.text(0)?.substringBefore('=')
+            ?: throw IOException("Google Fotky fotku nenašly")
+        val url = when {
+            !original -> "$base=w2560-h2560"
+            video -> info.text(1) ?: "$base=dv"
+            else -> "$base=d"
+        }
+        val connection = get(url)
+        if (connection.responseCode !in 200..299) throw HttpException(connection.responseCode, connection.url.host)
+        if (connection.contentType.orEmpty().startsWith("text/")) throw IOException("Google místo fotky poslal ${connection.contentType}")
+        // Under another name first, so a download cut halfway is never taken for the photo
+        val part = File(file.parentFile!!.apply { mkdirs() }, file.name + ".part")
+        connection.inputStream.use { input -> part.outputStream().use { input.copyTo(it) } }
+        part.renameTo(file)
     }
 
     /**
@@ -279,9 +345,9 @@ class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val onPhone = MediaRepository(context).loadAll().map { it.name to it.date / 60_000 }.toSet()
         WebPhotos.progress.value = WebPhotos.Progress()
         val result = try {
-            val jar = CookieManager.getInstance()
-            val session = WebSession(jar::getCookie, WebPhotos.agent(context)) { url, cookie -> jar.setCookie(url, cookie) }
-            WebPhotos.sync(session, library, WebNames(File(context.filesDir, "cloud/web-names.tsv")), onPhone, { isStopped }) {
+            val session = WebPhotos.session(context)
+            val names = WebNames(File(context.filesDir, "cloud/web-names.tsv"))
+            WebPhotos.sync(session, library, names, onPhone, { isStopped }, Prefs.get(context)::googleFavorites) {
                 WebPhotos.progress.value = it
                 // New previews show up while the rest is still loading
                 if (it.added > 0) CloudPhotos.version.value++
@@ -290,7 +356,7 @@ class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWor
             WebPhotos.Progress(done = true, error = e.message?.take(120) ?: "Nepodařilo se načíst")
         }
         // The login is needed only until the whole library was read once
-        if (result.done && result.error == null) {
+        if (result.done && result.error == null && !Prefs.get(context).webStay.value) {
             WebPhotos.forgetLogin()
             Prefs.get(context).setWebPhotos(false)
         }

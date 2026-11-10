@@ -104,8 +104,6 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
 - U velké knihovny to trvá déle (desítky tisíc fotek i přes hodinu). Po přerušení naváže samo
   (při otevření aplikace nebo do dne na Wi-Fi); do té doby přihlášení v telefonu zůstává,
   v soukromé části aplikace a mimo zálohu. *Zrušit a smazat přihlášení* ho smaže hned.
-- V otevřeném náhledu tlačítko **otevřít v Google Fotkách** otevře aplikaci Google Fotky
-  na fotkách z toho dne (přímo na jednu fotku aplikace odkaz z webu nepřijímá).
 - **Mráček nahoře v galerii** jedním klepnutím schová a zase ukáže fotky, které jsou jen
   v Google Fotkách (stejné jako *Ukazovat v galerii* v Nastavení).
 - *Smazat všechny náhledy* v Nastavení smaže náhledy z telefonu a zastaví jejich načítání.
@@ -115,6 +113,25 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
   stejně jako web photos.google.com. Po změně na straně Googlu to může přestat fungovat, dokud
   se aplikace neupraví. Jen čte, v Google Fotkách nic nemění ani nemaže.
 - Pokud Google v okně přihlášení odmítne, zbývají níže ruční výběr a Takeout.
+
+### Plná kvalita, oblíbené, alba a sdílení fotek z cloudu
+
+*Nastavení → Fotky z Google Fotek → Zůstat přihlášen* (nebo **Plná kvalita** u otevřeného náhledu).
+Přihlášení pak v telefonu zůstává; vypnutím přepínače se odhlásíš.
+
+- **Plná kvalita:** otevřený náhled se na Wi-Fi sám nahradí skutečnou fotkou (velikost obrazovky).
+  Dokud se nenačte, je dole nápis „Jen náhled“. Načtené fotky zůstávají týden v mezipaměti.
+  Videa se ukazují jako obrázek, přehraješ je v Google Fotkách (*⋮ → Otevřít v Google Fotkách*,
+  otevře aplikaci na fotkách z toho dne).
+- **Sdílení:** *⋮ → Sdílet v plné kvalitě* (nebo výběr více fotek → Sdílet) stáhne fotku či video
+  tak, jak byly nahrány, a otevře sdílení Androidu – třeba Instagram → Příběh. Jen na Wi-Fi.
+- **Oblíbené:** srdíčko funguje i u náhledů. Pamatuje si ho Galerie, do Google Fotek se nezapisuje.
+  Při načtení knihovny se převezmou oblíbené z Google Fotek; co tam později změníš, se promítne
+  při dalším načtení, srdíčka změněná v Galerii zůstanou.
+- **Alba:** náhledy jdou vybrat (podržením) a přidat do alba stejně jako fotky z telefonu.
+  Fotka v albu zůstane i poté, co ji z telefonu uvolníš a zbude jen náhled.
+- Knihovna se s přihlášením načítá **denně na Wi-Fi**, takže přibývají i nové fotky.
+- Plná kvalita a sdílení fungují u náhledů z načtení celé knihovny, ne z ručního výběru a Takeoutu.
 
 ### Staré fotky z Google Fotek
 

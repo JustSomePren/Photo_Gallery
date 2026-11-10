@@ -135,8 +135,9 @@ fun MediaBrowser(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
     val album = source as? Source.Album
-    // Photos only in Google Photos can't be moved, shared or deleted from here
-    val picked = items.filter { it.id in selected && !it.cloud }
+    val picked = items.filter { it.id in selected }
+    // Photos only in Google Photos have nothing in the phone to send or move
+    val local = picked.filterNot { it.cloud }
 
     fun toggle(ids: List<Long>) {
         selected = if (selected.containsAll(ids)) selected - ids.toSet() else selected + ids
@@ -147,9 +148,8 @@ fun MediaBrowser(
     }
 
     BackHandler(selected.isNotEmpty()) { done() }
-    // Cloud previews cannot be selected: there is nothing on the phone to send, move or delete.
     LaunchedEffect(items, selected) {
-        val present = items.filterNot { it.cloud }.map { it.id }.toSet()
+        val present = items.map { it.id }.toSet()
         if (!present.containsAll(selected)) selected = selected intersect present
     }
 
@@ -162,17 +162,21 @@ fun MediaBrowser(
                         IconButton(onClick = ::done) { Icon(Icons.Default.Close, "Zrušit výběr") }
                     },
                     actions = {
-                        IconButton(onClick = { selected = items.filterNot { it.cloud }.map { it.id }.toSet() }) {
+                        IconButton(onClick = { selected = items.map { it.id }.toSet() }) {
                             Icon(Icons.Default.SelectAll, "Vybrat vše")
                         }
                         FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
-                        IconButton(onClick = { actions.send(picked); done() }) {
-                            Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
+                        if (local.isNotEmpty()) {
+                            IconButton(onClick = { actions.send(local); done() }) {
+                                Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
+                            }
                         }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem({ Text("Přidat do alba") }, onClick = { actions.addToAlbum(picked); done() })
-                            DropdownMenuItem({ Text("Přesunout do složky") }, onClick = { if (actions.move(picked)) done() else menu = false })
+                            if (local.isNotEmpty()) {
+                                DropdownMenuItem({ Text("Přesunout do složky") }, onClick = { if (actions.move(local)) done() else menu = false })
+                            }
                             if (album != null) {
                                 DropdownMenuItem({ Text("Odebrat z alba") }, onClick = {
                                     vm.prefs.removeFromAlbum(album.id, picked)
@@ -194,7 +198,7 @@ fun MediaBrowser(
                     actions = {
                         extraActions()
                         if (onBack != null && items.isNotEmpty()) {
-                            IconButton(onClick = { selected = items.filterNot { it.cloud }.map { it.id }.toSet() }) {
+                            IconButton(onClick = { selected = items.map { it.id }.toSet() }) {
                                 Icon(Icons.Default.SelectAll, "Vybrat celé album")
                             }
                         }
@@ -234,7 +238,7 @@ fun MediaBrowser(
                     bottomPadding = padding.calculateBottomPadding(),
                     vm = vm,
                     header = header,
-                    onClick = { if (selected.isEmpty()) onOpen(it) else if (!it.cloud) toggle(listOf(it.id)) },
+                    onClick = { if (selected.isEmpty()) onOpen(it) else toggle(listOf(it.id)) },
                     onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
@@ -395,7 +399,7 @@ private fun MediaGrid(
                                 .combinedClickable(
                                     onClick = { onClick(item) },
                                     // Starts selecting; dragging on from here is handled by dragToSelect.
-                                    onLongClick = { if (!item.cloud) onSelect(currentSelection + item.id) },
+                                    onLongClick = { onSelect(currentSelection + item.id) },
                                 ),
                         ) {
                             Thumbnail(item.uri, thumbPx, Modifier.fillMaxSize())
