@@ -57,6 +57,17 @@ class CloudPhotosTest {
     }
 
     @Test
+    fun calendarKeepsPreviewsHiddenInTheGallery() {
+        val prefs = Prefs.get(context)
+        prefs.setShowCloud(false)
+        assertEquals(listOf(inPhone), CloudPhotos.withCloud(context, listOf(inPhone)))
+        assertEquals(setOf("PXL_1.jpg", "PXL_2.jpg"), CloudPhotos.forCalendar(context).map { it.name }.toSet())
+
+        prefs.setCalendarCloud(false)
+        assertEquals(emptyList<MediaItem>(), CloudPhotos.forCalendar(context))
+    }
+
+    @Test
     fun pickedAndSentPreviewsShowTogetherOnce() {
         val library = CloudLibrary(context)
         val time = Instant.parse("2026-08-11T12:30:00Z").toEpochMilli()

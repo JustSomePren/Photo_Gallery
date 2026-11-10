@@ -131,6 +131,20 @@ class CalendarLinkTest {
     }
 
     @Test
+    fun tripAlreadyInCalendarIsNotProposedAgain() {
+        val start = day.toEpochDay()
+        fun trip(from: Long, to: Long) = TripProposal(name = "Výlet", startDay = from, endDay = to, photos = 50)
+
+        // A week-long all-day event takes in a trip found inside it
+        assertEquals(true, trip.coversTrip(trip(start + 1, start + 4)))
+        // Half of the trip in the event is enough, a smaller part is not
+        assertEquals(true, trip.coversTrip(trip(start + 5, start + 8)))
+        assertEquals(false, trip.coversTrip(trip(start + 6, start + 12)))
+        // A party in the evening is no trip
+        assertEquals(false, party.coversTrip(trip(start, start)))
+    }
+
+    @Test
     fun calendarCannotSendToAnAccountNotConnectedHere() {
         val event = trip.copy(account = "cizi@gmail.com").toEvent(accounts)
         assertEquals(false, event.autoSend)

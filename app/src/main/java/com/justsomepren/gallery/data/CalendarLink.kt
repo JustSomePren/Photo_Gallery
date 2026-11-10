@@ -40,6 +40,13 @@ data class CalendarItem(
 
     fun covers(day: Long) = day in firstDay..lastDay
 
+    /** A whole-day or longer event over at least half of the trip, e.g. "Chorvatsko" or a birthday. */
+    fun coversTrip(trip: TripProposal): Boolean {
+        if (!allDay && firstDay == lastDay) return false
+        val shared = minOf(lastDay, trip.endDay) - maxOf(firstDay, trip.startDay) + 1
+        return shared * 2 >= trip.endDay - trip.startDay + 1
+    }
+
     /** Sends only to an account the user connected here, whatever the calendar says. */
     fun toEvent(accounts: List<String>) = Event(
         id = "calendar:$id:$begin",
@@ -168,7 +175,7 @@ class LinkProvider : ContentProvider() {
                 }
                 // "from-to,from-to,...": one count per window, the photos are read only once
                 "counts" -> MatrixCursor(arrayOf("count")).apply {
-                    val media = CloudPhotos.withCloud(context, MediaRepository(context).loadAll())
+                    val media = CloudPhotos.forCalendar(context)
                     uri.getQueryParameter("windows").orEmpty().split(",").filter { it.isNotBlank() }.forEach { window ->
                         val (from, to) = window.split("-").map { it.toLong() }
                         addRow(arrayOf(media.filterBy(Source.Span("", from, to), emptyList()).size))
@@ -178,7 +185,7 @@ class LinkProvider : ContentProvider() {
                 "covers" -> MatrixCursor(arrayOf("day", "id")).apply {
                     val from = uri.getQueryParameter("from")!!.toLong()
                     val to = uri.getQueryParameter("to")!!.toLong()
-                    CloudPhotos.withCloud(context, MediaRepository(context).loadAll()).filter { it.inCalendar && it.day in from..to }
+                    CloudPhotos.forCalendar(context).filter { it.inCalendar && it.day in from..to }
                         .groupBy { it.day }
                         .forEach { (day, items) -> addRow(arrayOf(day, items.cover()!!.id)) }
                 }
@@ -193,7 +200,7 @@ class LinkProvider : ContentProvider() {
     private fun photos(context: Context, uri: Uri): List<MediaItem> {
         val from = uri.getQueryParameter("from")?.toLongOrNull() ?: return emptyList()
         val to = uri.getQueryParameter("to")?.toLongOrNull() ?: return emptyList()
-        val media = CloudPhotos.withCloud(context, MediaRepository(context).loadAll())
+        val media = CloudPhotos.forCalendar(context)
         return media.filterBy(Source.Span("", from, to), emptyList()).sortedBy { it.date }
     }
 

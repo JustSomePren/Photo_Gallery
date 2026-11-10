@@ -96,6 +96,9 @@ class Prefs(context: Context) {
     /** Photos grouped by day (like most galleries) or only by month. */
     val groupByDay = MutableStateFlow(sp.getBoolean("groupByDay", true))
     val showCloud = MutableStateFlow(sp.getBoolean("showCloud", true))
+    /** Previews in the Kalendář app, on their own: hiding them in the gallery keeps them there. */
+    val calendarCloud = MutableStateFlow(sp.getBoolean("calendarCloud", true))
+    val cloudWanted: Boolean get() = showCloud.value || calendarCloud.value
 
     /** Signed in to Google Photos in the app's browser window, until the whole library was read once. */
     val webPhotos = MutableStateFlow(sp.getBoolean("webPhotos", false))
@@ -131,6 +134,7 @@ class Prefs(context: Context) {
     fun setGroupByDay(value: Boolean) = setBoolean(groupByDay, "groupByDay", value)
 
     fun setShowCloud(value: Boolean) = setBoolean(showCloud, "showCloud", value)
+    fun setCalendarCloud(value: Boolean) = setBoolean(calendarCloud, "calendarCloud", value)
     fun setWebPhotos(value: Boolean) = setBoolean(webPhotos, "webPhotos", value)
 
     // ---- Albums ----

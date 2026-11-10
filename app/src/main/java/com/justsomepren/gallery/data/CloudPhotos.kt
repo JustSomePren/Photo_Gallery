@@ -63,11 +63,20 @@ object CloudPhotos {
      * The phone's photos plus previews of both kinds, each photo once; the order of [local] stays.
      * Used by the screens and by the Kalendář app, so both show the same.
      */
-    fun withCloud(context: Context, local: List<MediaItem>, library: CloudLibrary = CloudLibrary(context)): List<MediaItem> {
-        if (!Prefs.get(context).showCloud.value) return local
+    fun withCloud(
+        context: Context,
+        local: List<MediaItem>,
+        library: CloudLibrary = CloudLibrary(context),
+        show: Boolean = Prefs.get(context).showCloud.value,
+    ): List<MediaItem> {
+        if (!show) return local
         val extra = (library.asMediaItems(local) + missing(context, local)).distinctBy { it.name to it.date / 60_000 }
         return if (extra.isEmpty()) local else (local + extra).sortedByDescending { it.date }
     }
+
+    /** What the Kalendář app sees: its own switch decides about the previews. */
+    fun forCalendar(context: Context) =
+        withCloud(context, MediaRepository(context).loadAll(), show = Prefs.get(context).calendarCloud.value)
 
     /** The preview of either kind, for the Kalendář app. */
     fun previewFile(context: Context, id: Long): File? =
@@ -155,7 +164,7 @@ class CloudWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
     override suspend fun doWork(): Result {
         val prefs = Prefs.get(applicationContext)
-        if (!prefs.showCloud.value || prefs.accounts.value.isEmpty()) return Result.success()
+        if (!prefs.cloudWanted || prefs.accounts.value.isEmpty()) return Result.success()
         val metered = applicationContext.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
         if (metered || applicationContext.belowBatteryThreshold(prefs.threshold.value)) return Result.success()
         return try {
@@ -168,7 +177,7 @@ class CloudWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
     companion object {
         /** Twice a day, plus once when the app is opened; the worker itself checks the battery threshold. */
-        fun schedule(context: Context) = scheduleOnWifi<CloudWorker>(context, "cloud", 12, Prefs.get(context).showCloud.value)
+        fun schedule(context: Context) = scheduleOnWifi<CloudWorker>(context, "cloud", 12, Prefs.get(context).cloudWanted)
     }
 }
 

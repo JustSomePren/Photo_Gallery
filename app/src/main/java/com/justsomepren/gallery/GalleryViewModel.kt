@@ -180,8 +180,11 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
             val to = today() + 400
             val (local, items, calendar) = withContext(Dispatchers.IO) {
                 val media = loadMedia()
-                from = minOf(media.minOfOrNull { it.day } ?: today(), today() - 400)
-                Triple(media, CloudPhotos.withCloud(getApplication(), media, cloud), CalendarLink.events(getApplication(), from, to))
+                // Events as far back as the oldest preview, so old photos meet their events too
+                val everything = CloudPhotos.withCloud(getApplication(), media, cloud, show = true)
+                from = minOf(everything.minOfOrNull { it.day } ?: today(), today() - 400)
+                val shown = if (prefs.showCloud.value) everything else media
+                Triple(media, shown, CalendarLink.events(getApplication(), from, to))
             }
             val before = _media.value?.associateBy { it.id }.orEmpty()
             ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
@@ -306,15 +309,23 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val app = getApplication<Application>()
-                val camera = loadMedia().filter { it.isCameraShot }
+                val local = loadMedia().filter { it.isCameraShot }
                 val cache = SpotCache(app)
-                cache.readMissing(camera) { done, total -> prefs.tripSearch.value = done to total }
-                val trips = nameByAi(proposeTrips(camera, cache), camera)
+                cache.readMissing(local) { done, total -> prefs.tripSearch.value = done to total }
+                // Previews from Google Photos count too, so old years get their trips
+                val camera = CloudPhotos.withCloud(app, local, cloud, show = true).filter { it.inCalendar }
+                val calendar = camera.minOfOrNull { it.day }?.let { CalendarLink.events(app, it, today()) }.orEmpty()
+                val found = proposeTrips(camera, cache)
+                // A trip that is already in the Kalendář app: its photos show at that event
+                val inCalendar = found.filter { trip -> calendar.any { it.coversTrip(trip) } }
+                val trips = nameByAi(found - inCalendar.toSet(), camera)
                 prefs.setTrips(trips)
+                val paired = if (inCalendar.isEmpty()) "" else
+                    " ${inCalendar.size}× už je výlet v Kalendáři jako událost, fotky se u ní ukážou."
                 tripResult.value = when {
                     camera.isEmpty() -> "Žádné fotky z fotoaparátu."
-                    trips.isEmpty() -> "Žádné nové výlety: nikde výrazně víc fotek než obvykle (dny v událostech se přeskakují)."
-                    else -> null
+                    trips.isEmpty() -> "Žádné nové výlety: nikde výrazně víc fotek než obvykle (dny v událostech se přeskakují).$paired"
+                    else -> paired.trim().ifEmpty { null }
                 }
             } catch (e: Exception) {
                 tripResult.value = "Hledání se nepovedlo (${e.javaClass.simpleName})."
@@ -562,6 +573,11 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     fun stopCloudSync() {
         cloudJob?.cancel()
         cloudSync.value = null
+    }
+
+    fun setCalendarCloud(show: Boolean) {
+        prefs.setCalendarCloud(show)
+        CloudWorker.schedule(getApplication())
     }
 
     fun setShowCloud(show: Boolean) {

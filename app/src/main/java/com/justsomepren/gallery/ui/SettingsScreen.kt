@@ -326,6 +326,7 @@ private fun CloudSection(vm: GalleryViewModel) {
     val context = LocalContext.current
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
     val show by vm.prefs.showCloud.collectAsStateWithLifecycle()
+    val inCalendar by vm.prefs.calendarCloud.collectAsStateWithLifecycle()
     val sync by vm.cloudSync.collectAsStateWithLifecycle()
     val start = rememberGoogleConsent(vm, onGranted = vm::startCloudSync, onError = { toast(context, it) })
 
@@ -342,6 +343,10 @@ private fun CloudSection(vm: GalleryViewModel) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Ukazovat v galerii", Modifier.weight(1f))
         Switch(show, onCheckedChange = vm::setShowCloud)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Ukazovat v aplikaci Kalendář", Modifier.weight(1f))
+        Switch(inCalendar, onCheckedChange = vm::setCalendarCloud)
     }
     var clearing by remember { mutableStateOf(false) }
     SettingsButton("Smazat všechny náhledy") { clearing = true }
