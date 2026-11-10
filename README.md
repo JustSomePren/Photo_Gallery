@@ -104,8 +104,8 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
 - U velké knihovny to trvá déle (desítky tisíc fotek i přes hodinu). Po přerušení naváže samo
   (při otevření aplikace nebo do dne na Wi-Fi); do té doby přihlášení v telefonu zůstává,
   v soukromé části aplikace a mimo zálohu. *Zrušit a smazat přihlášení* ho smaže hned.
-- V otevřeném náhledu tlačítko **otevřít v Google Fotkách** otevře přímo tu fotku v plné kvalitě
-  (u náhledů z ručního výběru a Takeoutu jen aplikaci, tam Galerie adresu fotky nezná).
+- V otevřeném náhledu tlačítko **otevřít v Google Fotkách** otevře aplikaci Google Fotky
+  na fotkách z toho dne (přímo na jednu fotku aplikace odkaz z webu nepřijímá).
 - **Mráček nahoře v galerii** jedním klepnutím schová a zase ukáže fotky, které jsou jen
   v Google Fotkách (stejné jako *Ukazovat v galerii* v Nastavení).
 - *Smazat všechny náhledy* v Nastavení smaže náhledy z telefonu a zastaví jejich načítání.
