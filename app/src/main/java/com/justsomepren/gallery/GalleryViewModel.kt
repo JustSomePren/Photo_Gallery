@@ -156,6 +156,10 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         UploadWorker.schedule(app)
         CloudWorker.schedule(app)
         WebPhotosWorker.schedule(app)
+        // While the library is being read, its worker repairs the previews itself
+        if (!prefs.webPhotos.value) viewModelScope.launch(Dispatchers.IO) {
+            if (cloud.repair()) CloudPhotos.version.value++
+        }
         viewModelScope.launch { CloudPhotos.version.drop(1).collect { refresh() } }
     }
 
@@ -528,7 +532,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         photos.chunked(8).forEach { chunk ->
             if (!onWifi(getApplication())) throw NotOnWifi()
             chunk.map { picked ->
-                async { picked to CloudLibrary.shrink(api.preview(picked)) }
+                async { picked to api.preview(picked).let { CloudLibrary.shrink(it) ?: it } }
             }.awaitAll().forEach { (picked, preview) ->
                 library.add(CloudPhoto(picked.id, picked.created, picked.name, picked.mime), preview)
             }
@@ -544,6 +548,15 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         prefs.setWebPhotos(on)
         if (!on) WebPhotos.logout()
         WebPhotosWorker.schedule(getApplication())
+    }
+
+    /** Deletes all downloaded previews and stops every way of loading them. */
+    fun clearCloud() {
+        stopCloudSync()
+        stopTakeout()
+        setWebPhotos(false)
+        cloud.clear()
+        refresh()
     }
 
     fun stopCloudSync() {

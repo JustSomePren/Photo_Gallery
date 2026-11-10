@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
@@ -168,6 +170,12 @@ private fun Main(vm: GalleryViewModel) {
         }
         IconButton(onClick = { vm.prefs.setCalendarView(!calendar) }) {
             if (calendar) Icon(Icons.Default.GridView, "Mřížka") else Icon(Icons.Default.CalendarMonth, "Kalendář")
+        }
+        // Quick way to see only what is in the phone
+        val showCloud by vm.prefs.showCloud.collectAsStateWithLifecycle()
+        IconButton(onClick = { vm.setShowCloud(!showCloud) }) {
+            if (showCloud) Icon(Icons.Default.Cloud, "Skrýt fotky, které jsou jen v Google Fotkách")
+            else Icon(Icons.Default.CloudOff, "Ukázat i fotky, které jsou jen v Google Fotkách")
         }
         IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "Hledat v Google Fotkách") }
     }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -341,6 +343,22 @@ private fun CloudSection(vm: GalleryViewModel) {
         Text("Ukazovat v galerii", Modifier.weight(1f))
         Switch(show, onCheckedChange = vm::setShowCloud)
     }
+    var clearing by remember { mutableStateOf(false) }
+    SettingsButton("Smazat všechny náhledy") { clearing = true }
+    if (clearing) {
+        AlertDialog(
+            onDismissRequest = { clearing = false },
+            title = { Text("Smazat všechny náhledy?") },
+            text = { Text("Smažou se jen náhledy v telefonu a zastaví se jejich načítání. V Google Fotkách se nic nezmění, náhledy jde načíst znovu.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    clearing = false
+                    vm.clearCloud()
+                }) { Text("Smazat") }
+            },
+            dismissButton = { TextButton(onClick = { clearing = false }) { Text("Zrušit") } },
+        )
+    }
     WebPhotosSync(vm)
     Text("Ruční výběr v Google Fotkách", style = MaterialTheme.typography.titleSmall)
     val state = sync
@@ -381,10 +399,10 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
     val progress by WebPhotos.progress.collectAsStateWithLifecycle()
     var login by remember { mutableStateOf(false) }
 
-    Text("Celá knihovna automaticky", style = MaterialTheme.typography.titleSmall)
+    Text("Celá knihovna najednou", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Jednou se přihlásíš do Google Fotek v okně Galerie. Ta si pak sama, jednou denně na Wi-Fi " +
-            "a při otevření, stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
+        "Přihlásíš se do Google Fotek v okně Galerie a ta stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
+            "Jakmile je hotovo, přihlášení se z telefonu smaže; heslo se neukládá nikdy. Nové fotky pak posílá a ukazuje Galerie sama. " +
             "Neoficiální cesta (čte se stejně jako web photos.google.com): po změně na straně Googlu může přestat fungovat."
     )
     val state = progress
@@ -392,7 +410,7 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
         state?.error != null -> Text("Zastaveno: ${state.error}", color = MaterialTheme.colorScheme.error)
         state?.done == true -> Text(
             "Hotovo: v knihovně ${state.listed} položek, přibylo ${state.added} náhledů" +
-                if (state.failed > 0) ", ${state.failed} se nepodařilo stáhnout." else "."
+                if (state.failed > 0) ", ${state.failed} se nepodařilo stáhnout (${state.reason})." else "."
         )
         state != null -> Text("Načítám: prošel jsem ${state.listed} položek, přibylo ${state.added} náhledů…")
     }
@@ -401,9 +419,9 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
             if (onWifi(context)) vm.setWebPhotos(true) else toast(context, "Připoj se k Wi-Fi")
         }
         SettingsButton("Přihlásit se znovu") { login = true }
-        SettingsButton("Odhlásit z Google Fotek") { vm.setWebPhotos(false) }
+        SettingsButton("Zrušit a smazat přihlášení") { vm.setWebPhotos(false) }
     } else {
-        SettingsButton("Přihlásit se do Google Fotek") { login = true }
+        SettingsButton("Přihlásit se a načíst knihovnu") { login = true }
     }
     if (login) {
         GooglePhotosLogin { signedIn ->

@@ -33,6 +33,8 @@ data class MediaItem(
     val modified: Long = 0,
     /** Only in Google Photos; shown from a small preview, never sent, moved or deleted. */
     val cloud: Boolean = false,
+    /** The address of a cloud photo in Google Photos, when it is known. */
+    val link: String? = null,
 ) {
 
     /** Survives a reindex or a new phone, unlike [id]. The date added changes there, so it is not used. */

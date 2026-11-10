@@ -43,6 +43,13 @@ class CloudLibrary(context: Context) {
         photos[photo.id] = photo
     }
 
+    /** Deletes every preview; the photos in Google Photos stay as they are. */
+    @Synchronized
+    fun clear() {
+        dir.listFiles()?.forEach { it.delete() }
+        photos.clear()
+    }
+
     fun ids(): Set<String> = photos.keys.toSet()
 
     /** Photos deleted in Google Photos lose their preview too. */
@@ -54,6 +61,21 @@ class CloudLibrary(context: Context) {
             previewFile(it).delete()
         }
         index.writeText(photos.values.joinToString("", transform = ::line))
+    }
+
+    /**
+     * Previews an older version saved far too big: made small, or dropped when they are not pictures
+     * (the next reading of the library loads them again). True when something changed.
+     */
+    @Synchronized
+    fun repair(): Boolean {
+        val big = photos.keys.filter { previewFile(it).length() > TOO_BIG }
+        remove(big.filter { id ->
+            val file = previewFile(id)
+            val small = runCatching { shrink(file.readBytes()) }.getOrNull()
+            small?.let(file::writeBytes) == null
+        })
+        return big.isNotEmpty()
     }
 
     private fun line(photo: CloudPhoto) = "${photo.id}\t${photo.created}\t${photo.name}\t${photo.mime}\n"
@@ -78,6 +100,8 @@ class CloudLibrary(context: Context) {
                 size = 0,
                 relativePath = "",
                 cloud = true,
+                // Known only for photos read from the photos.google.com page
+                link = photo.id.takeIf { it.startsWith("web:") }?.let { "https://photos.google.com/photo/" + it.removePrefix("web:") },
             )
         }
     }
@@ -98,10 +122,20 @@ class CloudLibrary(context: Context) {
         /** A stable negative id, so cloud previews never clash with the phone's photos. */
         fun idFor(cloudId: String): Long = -(UUID.nameUUIDFromBytes(cloudId.toByteArray()).mostSignificantBits and Long.MAX_VALUE) - 1
 
-        /** Downscaled again to keep the previews small on the phone. */
-        fun shrink(bytes: ByteArray): ByteArray {
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
-            return ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 70, it) }.toByteArray()
+        private const val PREVIEW = 400
+        private const val TOO_BIG = 150_000
+
+        /** A small JPEG ([PREVIEW] px on the shorter side at most); null when the bytes are not a picture. */
+        fun shrink(bytes: ByteArray): ByteArray? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PREVIEW) sample *= 2
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+                ?: return null
+            val scale = PREVIEW.toFloat() / minOf(bitmap.width, bitmap.height)
+            val small = if (scale < 1) Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true) else bitmap
+            return ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 70, it) }.toByteArray()
         }
     }
 }

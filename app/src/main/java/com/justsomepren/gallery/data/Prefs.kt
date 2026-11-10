@@ -97,7 +97,7 @@ class Prefs(context: Context) {
     val groupByDay = MutableStateFlow(sp.getBoolean("groupByDay", true))
     val showCloud = MutableStateFlow(sp.getBoolean("showCloud", true))
 
-    /** Signed in to Google Photos in the app's browser window: the whole library is read by itself. */
+    /** Signed in to Google Photos in the app's browser window, until the whole library was read once. */
     val webPhotos = MutableStateFlow(sp.getBoolean("webPhotos", false))
 
     /** "Odeslat hned" was tapped and its run has not finished yet. */

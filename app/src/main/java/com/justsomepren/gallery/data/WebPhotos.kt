@@ -3,6 +3,7 @@ package com.justsomepren.gallery.data
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -32,6 +33,8 @@ object WebPhotos {
         val listed: Int = 0,
         val added: Int = 0,
         val failed: Int = 0,
+        /** Why the last preview could not be saved. */
+        val reason: String? = null,
         val done: Boolean = false,
         val error: String? = null,
     )
@@ -45,12 +48,22 @@ object WebPhotos {
     const val PAGE_SIZE = 500
     private const val PREVIEW = "=w300-h300"
     private const val PARALLEL = 8
+    private const val GIVE_UP = 24
 
     /** Google refuses to sign in when the browser says it is a window inside an app. */
     fun agent(context: Context): String = WebSettings.getDefaultUserAgent(context).replace("; wv", "")
 
+    /** Removes the login and everything else the browser window kept. */
+    fun forgetLogin() {
+        CookieManager.getInstance().apply {
+            removeAllCookies(null)
+            flush()
+        }
+        WebStorage.getInstance().deleteAllData()
+    }
+
     fun logout() {
-        CookieManager.getInstance().removeAllCookies(null)
+        forgetLogin()
         progress.value = null
     }
 
@@ -80,15 +93,17 @@ object WebPhotos {
             }
             for (group in missing.chunked(PARALLEL)) {
                 if (stopped()) return@coroutineScope progress
-                val previews = group.map { async(Dispatchers.IO) { runCatching { session.preview(it.thumb + PREVIEW) }.getOrNull() } }.awaitAll()
+                val previews = group.map { async(Dispatchers.IO) { runCatching { session.preview(sized(it.thumb)) } } }.awaitAll()
                 group.zip(previews).forEach { (item, preview) ->
-                    if (preview == null) return@forEach
                     val name = names[item.key]!!
                     val mime = Takeout.types[name.substringAfterLast('.', "").lowercase()] ?: if (item.video) "video/mp4" else "image/jpeg"
-                    library.add(CloudPhoto(id(item), item.taken, name, mime), CloudLibrary.shrink(preview))
+                    preview.onSuccess { library.add(CloudPhoto(id(item), item.taken, name, mime), it) }
                 }
-                val added = previews.count { it != null }
-                progress = progress.copy(added = progress.added + added, failed = progress.failed + group.size - added)
+                val added = previews.count { it.isSuccess }
+                val reason = previews.firstNotNullOfOrNull { it.exceptionOrNull() }?.message ?: progress.reason
+                progress = progress.copy(added = progress.added + added, failed = progress.failed + group.size - added, reason = reason)
+                // Nothing gets through: asking Google thousands of times more would not help
+                if (progress.added == 0 && progress.failed >= GIVE_UP) throw IOException("Náhledy nejdou stáhnout: $reason")
             }
             progress = progress.copy(listed = progress.listed + page.items.size)
             onProgress(progress)
@@ -99,6 +114,9 @@ object WebPhotos {
     }
 
     private fun id(item: Item) = "web:${item.key}"
+
+    /** The address ends with the size after "="; the page's own size is replaced by a small one. */
+    private fun sized(thumb: String) = thumb.substringBefore('=') + PREVIEW
 
     /** One page of the library, as the page's "lcxiM" call returns it. */
     fun parsePage(data: JSONArray): Page {
@@ -153,11 +171,15 @@ class WebNames(private val file: File) {
 }
 
 /**
- * A signed-in visit of photos.google.com. [cookies] gives the login cookies for an address;
- * opening fails with [NeedsLogin] when Google does not see a signed-in user.
+ * A signed-in visit of photos.google.com. [cookies] gives the login cookies for an address and [keep]
+ * saves those an address sets; opening fails with [NeedsLogin] when Google does not see a signed-in user.
  */
-class WebSession(private val cookies: (String) -> String?, private val agent: String) {
-    private val home = String(read(open(WebPhotos.site + "/")))
+class WebSession(
+    private val cookies: (String) -> String?,
+    private val agent: String,
+    private val keep: (String, String) -> Unit = { _, _ -> },
+) {
+    private val home = String(read(get(WebPhotos.site + "/")))
     private val token = field("SNlM0e") ?: throw NeedsLogin()
     private val path = field("eptZe") ?: "/_/PhotosUi/"
     private val query = listOf("source-path" to "/", "f.sid" to field("FdrFJe"), "bl" to field("cfb2h"), "pageId" to "none", "rt" to "c")
@@ -173,7 +195,31 @@ class WebSession(private val cookies: (String) -> String?, private val agent: St
         return WebPhotos.parseNames(call("EWgK9e", "[[[$wanted],[[$NAME_FIELDS]]]]"))
     }
 
-    fun preview(url: String): ByteArray = read(open(url))
+    /** A small JPEG of the photo; fails when Google sends something else than a picture. */
+    fun preview(url: String): ByteArray {
+        val connection = get(url)
+        val bytes = read(connection)
+        return CloudLibrary.shrink(bytes)
+            ?: throw IOException("Google místo obrázku poslal ${connection.contentType} (${connection.url.host}, ${bytes.size / 1024} kB)")
+    }
+
+    /**
+     * Follows redirects by hand, as a browser does: each address gets its own cookies and those it sets
+     * are kept. The pictures are on another address than the page and Google signs it in on the way.
+     */
+    private fun get(url: String): HttpURLConnection {
+        var address = url
+        repeat(10) {
+            val connection = open(address).apply { instanceFollowRedirects = false }
+            connection.headerFields.forEach { (name, values) ->
+                if (name.equals("Set-Cookie", ignoreCase = true)) values.forEach { keep(address, it) }
+            }
+            val next = connection.getHeaderField("Location")
+            if (connection.responseCode !in 300..399 || next == null) return connection
+            address = URL(URL(address), next).toString()
+        }
+        throw IOException("Příliš mnoho přesměrování (${URL(address).host})")
+    }
 
     /** One call of the page's own interface; the answer is wrapped in a line starting with "wrb.fr". */
     private fun call(id: String, data: String): JSONArray {
@@ -197,6 +243,7 @@ class WebSession(private val cookies: (String) -> String?, private val agent: St
         connectTimeout = 30_000
         readTimeout = 60_000
         setRequestProperty("User-Agent", agent)
+        setRequestProperty("Referer", WebPhotos.site + "/")
         cookies(url)?.let { setRequestProperty("Cookie", it) }
     }
 
@@ -213,7 +260,7 @@ class WebSession(private val cookies: (String) -> String?, private val agent: St
     }
 }
 
-/** Reads the library once a day on Wi-Fi and when the app is opened. */
+/** Reads the library once after the login; tried again daily on Wi-Fi and when the app is opened until it gets through. */
 class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -228,10 +275,12 @@ class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWor
             )
         }
         val library = CloudLibrary(context)
+        if (library.repair()) CloudPhotos.version.value++
         val onPhone = MediaRepository(context).loadAll().map { it.name to it.date / 60_000 }.toSet()
         WebPhotos.progress.value = WebPhotos.Progress()
         val result = try {
-            val session = WebSession(CookieManager.getInstance()::getCookie, WebPhotos.agent(context))
+            val jar = CookieManager.getInstance()
+            val session = WebSession(jar::getCookie, WebPhotos.agent(context)) { url, cookie -> jar.setCookie(url, cookie) }
             WebPhotos.sync(session, library, WebNames(File(context.filesDir, "cloud/web-names.tsv")), onPhone, { isStopped }) {
                 WebPhotos.progress.value = it
                 // New previews show up while the rest is still loading
@@ -239,6 +288,11 @@ class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
         } catch (e: Exception) {
             WebPhotos.Progress(done = true, error = e.message?.take(120) ?: "Nepodařilo se načíst")
+        }
+        // The login is needed only until the whole library was read once
+        if (result.done && result.error == null) {
+            WebPhotos.forgetLogin()
+            Prefs.get(context).setWebPhotos(false)
         }
         // Stopped halfway: the next run goes on, there is nothing to report
         WebPhotos.progress.value = result.takeIf { it.done }
