@@ -62,7 +62,7 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
   další fotky dne jsou schované pod „+N“ – klepnutím otevřeš celý den; vpravo rychlé posouvání).
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
-- **Zavření fotky** – stáhni ji prstem dolů (nebo šipka zpět).
+- **Zavření fotky** – táhni ji prstem dolů nebo nahoru (nebo šipka zpět).
 - **Koš** – ikonou koše u vybraných fotek nebo v otevřené fotce. Je to koš Androidu: fotky v něm
   zůstanou 30 dní a v *Alba → Koš* je obnovíš. Pak je Android smaže sám.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.

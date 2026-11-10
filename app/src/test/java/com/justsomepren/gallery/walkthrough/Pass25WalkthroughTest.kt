@@ -105,13 +105,24 @@ class Pass25WalkthroughTest {
     }
 
     @Test
-    fun pullingPhotoDownClosesIt() {
+    fun pullingPhotoDownOrUpClosesIt() {
         start()
         compose.runOnUiThread { vm.stack.add(Screen.Viewer(Source.All, photos[0].id)) }
         compose.waitForIdle()
         compose.onRoot().performTouchInput {
             down(center)
             repeat(10) { moveBy(Offset(0f, 60f)); advanceEventTime(30) }
+            up()
+        }
+        compose.waitForIdle()
+        assertTrue(vm.stack.none { it is Screen.Viewer })
+
+        // Up closes it as well.
+        compose.runOnUiThread { vm.stack.add(Screen.Viewer(Source.All, photos[0].id)) }
+        compose.waitForIdle()
+        compose.onRoot().performTouchInput {
+            down(center)
+            repeat(10) { moveBy(Offset(0f, -60f)); advanceEventTime(30) }
             up()
         }
         compose.waitForIdle()
