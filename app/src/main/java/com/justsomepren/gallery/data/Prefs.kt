@@ -103,6 +103,12 @@ class Prefs(context: Context) {
     /** Signed in to Google Photos in the app's browser window, until the whole library was read once. */
     val webPhotos = MutableStateFlow(sp.getBoolean("webPhotos", false))
 
+    /** The login stays after the library was read: new photos come daily, full quality loads in the viewer. */
+    val webStay = MutableStateFlow(sp.getBoolean("webStay", false))
+
+    /** Favorites among photos that are only in Google Photos, by [MediaItem.key]; the phone's own are marked in Android. */
+    val cloudFavorites = MutableStateFlow(sp.getStringSet("cloudFavorites", null).orEmpty().toSet())
+
     /** "Odeslat hned" was tapped and its run has not finished yet. */
     val sendNowPending get() = sp.getBoolean("sendNowPending", false)
 
@@ -136,6 +142,25 @@ class Prefs(context: Context) {
     fun setShowCloud(value: Boolean) = setBoolean(showCloud, "showCloud", value)
     fun setCalendarCloud(value: Boolean) = setBoolean(calendarCloud, "calendarCloud", value)
     fun setWebPhotos(value: Boolean) = setBoolean(webPhotos, "webPhotos", value)
+    fun setWebStay(value: Boolean) = setBoolean(webStay, "webStay", value)
+
+    fun setCloudFavorites(keys: Collection<String>, value: Boolean) =
+        saveCloudFavorites(if (value) cloudFavorites.value + keys else cloudFavorites.value - keys.toSet())
+
+    /**
+     * Favorites as Google Photos has them [now]. Only what changed there since the last reading
+     * changes here, so a heart given or taken in the gallery stays.
+     */
+    fun googleFavorites(now: Set<String>) {
+        val before = sp.getStringSet("googleFavorites", null).orEmpty()
+        saveCloudFavorites(cloudFavorites.value + (now - before) - (before - now))
+        sp.edit { putStringSet("googleFavorites", now) }
+    }
+
+    private fun saveCloudFavorites(keys: Set<String>) {
+        cloudFavorites.value = keys
+        sp.edit { putStringSet("cloudFavorites", keys) }
+    }
 
     // ---- Albums ----
 

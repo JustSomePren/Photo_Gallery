@@ -160,6 +160,11 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         if (!prefs.webPhotos.value) viewModelScope.launch(Dispatchers.IO) {
             if (cloud.repair()) CloudPhotos.version.value++
         }
+        // Full-size copies loaded for the viewer are kept for a week
+        viewModelScope.launch(Dispatchers.IO) {
+            val old = System.currentTimeMillis() - 7 * 24 * 3600_000L
+            java.io.File(app.cacheDir, "cloud-full").listFiles()?.filter { it.lastModified() < old }?.forEach { it.delete() }
+        }
         viewModelScope.launch { CloudPhotos.version.drop(1).collect { refresh() } }
     }
 
@@ -559,6 +564,28 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
         prefs.setWebPhotos(on)
         if (!on) WebPhotos.logout()
         WebPhotosWorker.schedule(getApplication())
+    }
+
+    /** Keeps the login after the library was read, which is then read daily; turning it off signs out. */
+    fun setWebStay(on: Boolean) {
+        prefs.setWebStay(on)
+        setWebPhotos(on)
+    }
+
+    /**
+     * Photos that are only in Google Photos are downloaded as they were uploaded, so they can be shared
+     * like the phone's own. [done] gets the photos ready to share, or why it failed.
+     */
+    fun withOriginals(items: List<MediaItem>, done: (Result<List<MediaItem>>) -> Unit) {
+        viewModelScope.launch {
+            done(runCatching {
+                withContext(Dispatchers.IO) {
+                    // Files of the last sharing are no longer needed
+                    java.io.File(getApplication<Application>().cacheDir, "cloud-share").deleteRecursively()
+                    items.map { if (it.cloud) WebPhotos.original(getApplication(), it) else it }
+                }
+            })
+        }
     }
 
     /** Deletes all downloaded previews and stops every way of loading them. */

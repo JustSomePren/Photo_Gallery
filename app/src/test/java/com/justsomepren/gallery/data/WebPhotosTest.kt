@@ -39,6 +39,7 @@ class WebPhotosTest {
     private var photos = listOf(Triple("A1", "PXL_1.jpg", day), Triple("B2", "PXL_2.mp4", day - 60_000), Triple("C3", "PXL_3.jpg", day - 120_000))
     private var signedIn = true
     private var broken = false
+    private var hearts = setOf<String>()
     private var jar = "SID=abc"
     private val requests = mutableListOf<String>()
 
@@ -48,7 +49,7 @@ class WebPhotosTest {
     }
 
     private fun item(photo: Triple<String, String, Long>): JSONArray {
-        val extras = JSONObject().put("163238866", JSONArray(listOf(false)))
+        val extras = JSONObject().put("163238866", JSONArray(listOf(photo.first in hearts)))
         if (photo.second.endsWith(".mp4")) extras.put("76647426", JSONArray(listOf(22932)))
         val thumb = JSONArray(listOf(server.url("/pw/${photo.first}").toString() + "=w1080-h1920", 1080, 1920))
         return JSONArray(listOf(photo.first, thumb, photo.third, "dedup", 3600000, photo.third, null, extras))
@@ -91,6 +92,10 @@ class WebPhotosTest {
                         val call = JSONArray(form["f.req"]).getJSONArray(0).getJSONArray(0)
                         val data = JSONArray(call.getString(1))
                         when (call.getString(0)) {
+                            "VrseUb" -> {
+                                val photo = photos.first { it.first == data.getString(0) }
+                                MockResponse().setBody(wrapped("VrseUb", JSONArray(listOf(item(photo), server.url("/download/${photo.first}").toString()))))
+                            }
                             "lcxiM" -> MockResponse().setBody(wrapped("lcxiM", page(if (data.isNull(0)) null else data.getString(0))))
                             else -> MockResponse().setBody(wrapped("EWgK9e", names(data.getJSONArray(0).getJSONArray(0).getJSONArray(0))))
                         }
@@ -101,6 +106,8 @@ class WebPhotosTest {
                     // Like Google: the address of the pictures first sends the visitor to sign in
                     path.startsWith("/pw/") && "PICTURES=1" !in cookie && !broken ->
                         MockResponse().setResponseCode(302).addHeader("Location", "/signin?continue=$path")
+                    path.startsWith("/download/") -> MockResponse().setBody("the video as uploaded")
+                    path.startsWith("/pw/") && (path.endsWith("=d") || path.endsWith("=w2560-h2560")) -> MockResponse().setBody("photo ${path.substringAfter('=')}")
                     path.startsWith("/pw/") && path.endsWith("=w300-h300") ->
                         if (broken) MockResponse().addHeader("Content-Type", "text/html").setBody("<html>Sign in</html>") else MockResponse().setBody(jpeg())
                     else -> MockResponse().setResponseCode(404)
@@ -117,7 +124,7 @@ class WebPhotosTest {
     private fun sync(onPhone: Set<Pair<String, Long>> = emptySet()) = runBlocking {
         val names = WebNames(File(context.filesDir, "cloud/web-names.tsv"))
         val session = WebSession({ jar }, "test") { _, cookie -> jar += "; " + cookie.substringBefore(';') }
-        WebPhotos.sync(session, CloudLibrary(context), names, onPhone)
+        WebPhotos.sync(session, CloudLibrary(context), names, onPhone, onFavorites = Prefs.get(context)::googleFavorites)
     }
 
     @Test
@@ -182,6 +189,38 @@ class WebPhotosTest {
         val fixed = android.graphics.BitmapFactory.decodeFile(CloudLibrary(context).asMediaItems(emptyList()).first { it.name == "BIG.jpg" }.uri.path)
         assertEquals(600 to 400, fixed.width to fixed.height)
         assertFalse(CloudLibrary(context).repair())
+    }
+
+    @Test
+    fun loadsThePhotoInScreenSizeAndAsUploaded() {
+        val session = WebSession({ jar }, "test") { _, cookie -> jar += "; " + cookie.substringBefore(';') }
+        val file = File(context.cacheDir, "full/photo")
+
+        session.fetch("A1", video = false, original = false, file)
+        assertEquals("photo w2560-h2560", file.readText())
+        session.fetch("A1", video = false, original = true, file)
+        assertEquals("photo d", file.readText())
+        session.fetch("B2", video = true, original = true, file)
+        assertEquals("the video as uploaded", file.readText())
+    }
+
+    @Test
+    fun takesFavoritesFromGooglePhotosButKeepsHeartsChangedInTheGallery() {
+        val prefs = Prefs.get(context)
+        prefs.setCloudFavorites(prefs.cloudFavorites.value, false)
+        prefs.googleFavorites(emptySet())
+        hearts = setOf("A1", "B2")
+        sync()
+        assertEquals(setOf("PXL_1.jpg|$day", "PXL_2.mp4|${day - 60_000}"), prefs.cloudFavorites.value)
+        assertEquals(listOf(true, true, false), CloudPhotos.withCloud(context, emptyList()).map { it.isFavorite })
+
+        // A heart taken away and one given in the gallery stay; one taken away in Google Photos goes
+        prefs.setCloudFavorites(listOf("PXL_1.jpg|$day"), false)
+        prefs.setCloudFavorites(listOf("PXL_3.jpg|${day - 120_000}"), true)
+        hearts = setOf("A1")
+        sync()
+
+        assertEquals(setOf("PXL_3.jpg|${day - 120_000}"), prefs.cloudFavorites.value)
     }
 
     @Test

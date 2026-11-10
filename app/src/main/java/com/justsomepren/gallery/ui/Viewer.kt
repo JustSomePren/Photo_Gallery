@@ -86,6 +86,9 @@ import androidx.compose.ui.unit.dp
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.WebPhotos
+import android.net.Uri
+import androidx.compose.runtime.produceState
 import java.text.DateFormat
 import java.util.Date
 
@@ -160,9 +163,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                 },
                 actions = {
                     if (current.cloud) {
-                        TextButton(onClick = { GooglePhotos.openCloud(context, current) }) {
-                            Text("Jen náhled · otevřít v Google Fotkách", color = Color.White)
-                        }
+                        CloudActions(current, vm, actions)
                         return@TopAppBar
                     }
                     IconButton(onClick = { actions.trash(listOf(current)) }) { Icon(Icons.Default.Delete, "Do koše") }
@@ -202,6 +203,47 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
     }
 }
 
+/** A photo that is only in Google Photos: a heart, albums, sharing and a login for full quality. */
+@Composable
+private fun CloudActions(item: MediaItem, vm: GalleryViewModel, actions: MediaActions) {
+    val context = LocalContext.current
+    var menu by remember { mutableStateOf(false) }
+    var login by remember { mutableStateOf(false) }
+    var signedIn by remember { mutableStateOf(WebPhotos.signedIn()) }
+    val loadable = WebPhotos.key(item) != null
+
+    FavoriteButton(listOf(item)) { actions.toggleFavorite(listOf(item)) }
+    if (loadable && !signedIn) {
+        TextButton(onClick = { login = true }) { Text("Plná kvalita", color = Color.White) }
+    }
+    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
+    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+        DropdownMenuItem({ Text("Otevřít v Google Fotkách") }, onClick = {
+            menu = false
+            GooglePhotos.openCloud(context, item)
+        })
+        DropdownMenuItem({ Text("Přidat do alba") }, onClick = {
+            menu = false
+            actions.addToAlbum(listOf(item))
+        })
+        if (loadable) {
+            DropdownMenuItem({ Text("Sdílet v plné kvalitě") }, onClick = {
+                menu = false
+                if (signedIn) actions.share(listOf(item)) else login = true
+            })
+        }
+    }
+    if (login) {
+        GooglePhotosLogin { done ->
+            login = false
+            if (done) {
+                vm.setWebStay(true)
+                signedIn = true
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
@@ -227,11 +269,17 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
         }
     }
 
+    // A photo only in Google Photos: its preview first, the real photo once it is loaded (Wi-Fi, signed in)
+    val cloudFull by produceState<Uri?>(null, item.id, isCurrent) {
+        if (item.cloud && isCurrent && value == null) value = WebPhotos.screenSized(context, item)?.let(Uri::fromFile)
+    }
+    val uri = cloudFull ?: item.uri
+
     // Screen size is enough until the user really zooms in; then a sharper copy (not on low battery).
-    val normal = rememberLoaded(item.uri, screen, ImageCache.version) { ImageCache.fullImage(context.contentResolver, item.uri, screen) }
+    val normal = rememberLoaded(uri, screen, ImageCache.version) { ImageCache.fullImage(context.contentResolver, uri, screen) }
     val sharpSize = minOf(screen * 2, 4096)
     val sharp = if (wantSharp && !saver) {
-        rememberLoaded(item.uri, sharpSize, ImageCache.version) { ImageCache.fullImage(context.contentResolver, item.uri, sharpSize) }
+        rememberLoaded(uri, sharpSize, ImageCache.version) { ImageCache.fullImage(context.contentResolver, uri, sharpSize) }
     } else {
         null
     }
@@ -277,6 +325,13 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
             Image(image, null, layer, contentScale = ContentScale.Fit)
         } else {
             Thumbnail(item.uri, 512, layer.background(Color.Black), contentScale = ContentScale.Fit)
+        }
+        if (item.cloud && cloudFull == null) {
+            Text(
+                "Jen náhled",
+                color = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
+            )
         }
     }
 }

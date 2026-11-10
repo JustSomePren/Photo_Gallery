@@ -101,7 +101,7 @@ class CloudLibrary(context: Context) {
                 relativePath = "",
                 cloud = true,
                 // Known only for photos read from the photos.google.com page
-                link = photo.id.takeIf { it.startsWith("web:") }?.let { "https://photos.google.com/photo/" + it.removePrefix("web:") },
+                link = photo.id.takeIf { it.startsWith("web:") }?.let { WebPhotos.PHOTO + it.removePrefix("web:") },
             )
         }
     }

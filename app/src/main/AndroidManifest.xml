@@ -57,6 +57,17 @@
             android:authorities="com.justsomepren.gallery.link"
             android:exported="true" />
 
+        <!-- Hands a photo downloaded from Google Photos to the app it is shared with -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

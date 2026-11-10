@@ -61,7 +61,7 @@ object CloudPhotos {
 
     /**
      * The phone's photos plus previews of both kinds, each photo once; the order of [local] stays.
-     * Used by the screens and by the Kalendář app, so both show the same.
+     * Used by the screens and, with its own switch ([forCalendar]), by the Kalendář app.
      */
     fun withCloud(
         context: Context,
@@ -70,7 +70,12 @@ object CloudPhotos {
         show: Boolean = Prefs.get(context).showCloud.value,
     ): List<MediaItem> {
         if (!show) return local
-        val extra = (library.asMediaItems(local) + missing(context, local)).distinctBy { it.name to it.date / 60_000 }
+        val favorites = Prefs.get(context).cloudFavorites.value
+        // Of the same photo from two sources the one that can load in full quality stays
+        val extra = (library.asMediaItems(local) + missing(context, local))
+            .sortedBy { WebPhotos.key(it) == null }
+            .distinctBy { it.name to it.date / 60_000 }
+            .map { if (it.key in favorites) it.copy(isFavorite = true) else it }
         return if (extra.isEmpty()) local else (local + extra).sortedByDescending { it.date }
     }
 

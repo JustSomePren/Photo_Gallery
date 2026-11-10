@@ -403,12 +403,30 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
     val on by vm.prefs.webPhotos.collectAsStateWithLifecycle()
     val progress by WebPhotos.progress.collectAsStateWithLifecycle()
     var login by remember { mutableStateOf(false) }
+    // The login was opened by the "stay signed in" switch
+    var stayAfterLogin by remember { mutableStateOf(false) }
 
     Text("Celá knihovna najednou", style = MaterialTheme.typography.titleSmall)
     Hint(
         "Přihlásíš se do Google Fotek v okně Galerie a ta stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
             "Jakmile je hotovo, přihlášení se z telefonu smaže; heslo se neukládá nikdy. Nové fotky pak posílá a ukazuje Galerie sama. " +
             "Neoficiální cesta (čte se stejně jako web photos.google.com): po změně na straně Googlu může přestat fungovat."
+    )
+    val stay by vm.prefs.webStay.collectAsStateWithLifecycle()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Zůstat přihlášen", Modifier.weight(1f))
+        Switch(stay, onCheckedChange = {
+            if (it && !WebPhotos.signedIn()) {
+                stayAfterLogin = true
+                login = true
+            } else {
+                vm.setWebStay(it)
+            }
+        })
+    }
+    Hint(
+        if (stay) "Přihlášení zůstává v telefonu: knihovna se načítá denně na Wi-Fi, fotka z cloudu se po otevření načte v plné kvalitě a jde sdílet. Vypnutím se odhlásíš."
+        else "Zapni, když chceš fotky z cloudu otevírat v plné kvalitě a sdílet je (třeba do příběhu na Instagramu)."
     )
     val state = progress
     when {
@@ -431,7 +449,8 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
     if (login) {
         GooglePhotosLogin { signedIn ->
             login = false
-            if (signedIn) vm.setWebPhotos(true)
+            if (signedIn && stayAfterLogin) vm.setWebStay(true) else if (signedIn) vm.setWebPhotos(true)
+            stayAfterLogin = false
         }
     }
 }

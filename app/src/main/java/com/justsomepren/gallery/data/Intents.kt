@@ -10,6 +10,8 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.provider.Settings
 import android.widget.Toast
+import java.text.DateFormat
+import java.util.Date
 
 /** Everything the app does not do itself is handed over to Google Photos. */
 object GooglePhotos {
@@ -47,11 +49,16 @@ object GooglePhotos {
     fun openLink(context: Context, url: String) =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
-    /** A cloud preview: the photo itself in Google Photos, or just the app when its address is not known. */
+    /**
+     * A cloud preview, opened in the Google Photos app: the photo itself when the app takes its address,
+     * otherwise the photos of that day (the app does not take the address of one photo of the web page).
+     */
     fun openCloud(context: Context, item: MediaItem) {
-        val view = item.link?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) } ?: return openApp(context)
-        // The browser shows the same photo when the app does not take the link
-        start(context, Intent(view).setPackage(PACKAGE), fallback = view)
+        val day = DateFormat.getDateInstance(DateFormat.LONG).format(Date(item.date))
+        val inApp = listOfNotNull(item.link, "https://photos.google.com/search/" + Uri.encode(day))
+            .map { Intent(Intent.ACTION_VIEW, Uri.parse(it)).setPackage(PACKAGE) }
+            .firstOrNull { it.resolveActivity(context.packageManager) != null }
+        start(context, inApp, fallback = context.packageManager.getLaunchIntentForPackage(PACKAGE))
     }
 
     fun openApp(context: Context) =
