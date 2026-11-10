@@ -113,6 +113,19 @@ class NoGpsTripsTest {
         assertEquals(96, trip.photos)
     }
 
+    /** Someone who photographs every day, some days more: only the real trip, not weeks of ordinary life. */
+    @Test
+    fun everydayPhotographerGetsOnlyTheTrip() {
+        val day = { d: LocalDate -> d.toEpochDay() }
+        val random = java.util.Random(4)
+        val perDay = mutableMapOf<Long, Int>()
+        (0L until 180).forEach { perDay[day(LocalDate.of(2025, 3, 1).plusDays(it))] = 2 + random.nextInt(9) }
+        (0L until 4).forEach { perDay[day(LocalDate.of(2025, 6, 10).plusDays(it))] = 60 }
+
+        val trips = TripFinder.byBursts(perDay, skip = emptySet())
+        assertEquals(listOf(day(LocalDate.of(2025, 6, 10)) to day(LocalDate.of(2025, 6, 13))), trips.map { it.startDay to it.endDay })
+    }
+
     @Test
     fun calmerDayInsideHolidayKeepsItTogether() {
         val day = { d: LocalDate -> d.toEpochDay() }

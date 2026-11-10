@@ -119,6 +119,7 @@ private fun Main(vm: GalleryViewModel) {
     val context = LocalContext.current
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
+    val trashed by vm.trashed.collectAsStateWithLifecycle()
     var searching by rememberSaveable { mutableStateOf(false) }
 
     val all = media ?: run {
@@ -146,7 +147,7 @@ private fun Main(vm: GalleryViewModel) {
         MediaBrowser(
             source = source,
             stateKey = stateKey.toString(),
-            items = remember(all, albums, source) { all.filterBy(source, albums) },
+            items = if (source == Source.Trash) trashed else remember(all, albums, source) { all.filterBy(source, albums) },
             vm = vm,
             gridState = vm.gridState(stateKey),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
@@ -266,6 +267,7 @@ private fun CalendarScreen(
             events = events,
             zoom = zoom,
             columns = columns,
+            currentColumns = { vm.prefs.gridColumns.value },
             state = vm.calendarState,
             contentPadding = padding,
             header = { StatusStrip(vm, openSending) },

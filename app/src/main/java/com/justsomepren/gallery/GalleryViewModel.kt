@@ -94,6 +94,11 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
     @VisibleForTesting
     var loadMedia: () -> List<MediaItem> = repo::loadAll
 
+    @VisibleForTesting
+    var loadTrashed: () -> List<MediaItem> = repo::loadTrashed
+
+    val trashed = MutableStateFlow<List<MediaItem>>(emptyList())
+
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             if (!saver) refresh(delayMs = 1000)
@@ -154,6 +159,7 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
             val before = _media.value?.associateBy { it.id }.orEmpty()
             ImageCache.forget(items.filter { before[it.id]?.let { old -> old.modified != it.modified } == true }.map { it.uri })
             _media.value = items
+            trashed.value = withContext(Dispatchers.IO) { runCatching { loadTrashed() }.getOrDefault(emptyList()) }
             prefs.migrateKeys(local)
             if (prefs.collectAuto(local) > 0) UploadWorker.schedule(getApplication())
             refreshing.value = false

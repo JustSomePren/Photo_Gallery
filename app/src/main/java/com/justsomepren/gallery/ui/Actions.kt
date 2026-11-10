@@ -87,6 +87,16 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
 
     fun showInfo(item: MediaItem) { dialogs.info = item }
 
+    /** Into Android's trash, or back out of it; Android empties it after 30 days. */
+    fun trash(items: List<MediaItem>, restore: Boolean = false): Boolean {
+        val local = items.filterNot { it.cloud }
+        if (local.isEmpty() || tooMany(context, local)) return false
+        ask(MediaStore.createTrashRequest(context.contentResolver, local.map { it.uri }, !restore)) {
+            Toast.makeText(context, if (restore) "Obnoveno" else "V koši – lze obnovit 30 dní (Alba → Koš)", Toast.LENGTH_SHORT).show()
+        }
+        return true
+    }
+
     fun share(items: List<MediaItem>): Boolean {
         if (tooMany(context, items)) return false
         GooglePhotos.share(context, items)

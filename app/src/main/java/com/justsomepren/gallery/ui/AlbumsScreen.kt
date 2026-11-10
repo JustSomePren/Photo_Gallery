@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.CustomAlbum
 import com.justsomepren.gallery.data.MediaItem
@@ -51,6 +52,7 @@ fun AlbumsScreen(
     onOpen: (Source) -> Unit,
 ) {
     var creating by rememberSaveable { mutableStateOf(false) }
+    val trashed by vm.trashed.collectAsStateWithLifecycle()
     val own = remember(media, albums) {
         albums.map { album ->
             val source = Source.Album(album.id, album.name)
@@ -86,6 +88,7 @@ fun AlbumsScreen(
         ) {
             if (own.isNotEmpty()) section("Moje alba", own, onOpen)
             section("Složky v telefonu", folders, onOpen)
+            if (trashed.isNotEmpty()) section("Koš (30 dní)", listOf(AlbumEntry(Source.Trash, trashed.first(), trashed.size)), onOpen)
         }
     }
 

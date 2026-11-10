@@ -5,6 +5,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Bundle
 import android.provider.MediaStore
 import android.text.format.Formatter
 import androidx.exifinterface.media.ExifInterface
@@ -53,7 +54,13 @@ class MediaRepository(private val context: Context) {
             query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true))
             .sortedByDescending { it.date }
 
-    private fun query(collection: Uri, isVideo: Boolean): List<MediaItem> {
+    /** Photos in Android's trash; Android deletes them for good after 30 days. */
+    fun loadTrashed(): List<MediaItem> =
+        (query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, false, trashed = true) +
+            query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, trashed = true))
+            .sortedByDescending { it.date }
+
+    private fun query(collection: Uri, isVideo: Boolean, trashed: Boolean = false): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.MIME_TYPE,
@@ -70,7 +77,10 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.DATE_MODIFIED,
         )
         val result = mutableListOf<MediaItem>()
-        context.contentResolver.query(collection, projection, null, null, null)?.use { c ->
+        val args = Bundle().apply {
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, if (trashed) MediaStore.MATCH_ONLY else MediaStore.MATCH_EXCLUDE)
+        }
+        context.contentResolver.query(collection, projection, args, null)?.use { c ->
             while (c.moveToNext()) {
                 val id = c.getLong(0)
                 val taken = if (c.isNull(2)) 0L else c.getLong(2)
@@ -144,6 +154,9 @@ sealed interface Source {
 
     /** A day or a range of days, e.g. a day tapped in the calendar or an event. */
     data class Period(val name: String, val start: Long, val end: Long) : Source
+
+    /** Android's trash: only restoring is offered there. */
+    data object Trash : Source
 }
 
 val Source.title: String
@@ -153,6 +166,7 @@ val Source.title: String
         is Source.Folder -> name
         is Source.Album -> name
         is Source.Period -> name
+        Source.Trash -> "Koš"
     }
 
 fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<MediaItem> =
@@ -165,6 +179,7 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
             filter { it.key in keys }
         }
         is Source.Period -> filter { it.day in source.start..source.end }
+        Source.Trash -> emptyList()
     }
 
 /**

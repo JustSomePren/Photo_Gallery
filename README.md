@@ -45,20 +45,26 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
 - **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
 - **Výběr více fotek** – podrž fotku a táhni prstem přes další (u okraje se seznam sám posouvá),
-  nebo pak klepáním přidávej. Klepnutím na den či měsíc vybereš celý, ikonou v albu celé album.
+  nebo pak klepáním přidávej. Když už je něco vybrané, stačí táhnout prstem do strany (bez držení).
+  Kroužkem u dne či měsíce vybereš celý, ikonou v albu celé album.
 - **Poslat do cloudu** – vybrané fotky dá do fronty pro zvolený Google účet (osobní, společný…)
   a album; odešlou se samy do Google Fotek.
 - **Upravit / Hledat** – otevře Google Fotky.
-- **Videa** – přehrávají se přímo v aplikaci (klepnutí = pauza, posuvník dole).
+- **Videa** – spustí se sama po přejetí na ně. Klepnutí ukáže ovládání, dvojí klepnutí vlevo/vpravo
+  skočí o 10 s zpět/vpřed, posuvník ukazuje obraz už při tažení, tlačítko ztlumí zvuk.
 - **Informace o fotce** – datum, rozlišení, fotoaparát, expozice, poloha (tlačítko „Na mapě“).
 - **Přesunout do složky** – mezi složkami v DCIM/ a Pictures/ nebo do nové složky.
-- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (1–7 sloupců).
+- **Velikost dlaždic** – roztažením dvou prstů v mřížce fotky zvětšíš, stažením zmenšíš (1–14 sloupců). Delší roztažení či stažení
+  přeskočí víc velikostí najednou.
 - **Kalendář fotek** – tři úrovně (tlačítka nahoře nebo roztažení prstů):
   **Rok** (12 malých měsíců, klepnutím na měsíc se přiblíží), **Měsíc** (kalendář, rušné dny
   ukazují 4 fotky) a **Dny** (každý den jeden řádek fotek; velikost jako v galerii, roztažením prstů,
   další fotky dne jsou schované pod „+N“ – klepnutím otevřeš celý den; vpravo rychlé posouvání).
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
+- **Zavření fotky** – stáhni ji prstem dolů (nebo šipka zpět).
+- **Koš** – ikonou koše u vybraných fotek nebo v otevřené fotce. Je to koš Androidu: fotky v něm
+  zůstanou 30 dní a v *Alba → Koš* je obnovíš. Pak je Android smaže sám.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
 
 ### Staré fotky z Google Fotek

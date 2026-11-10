@@ -112,17 +112,21 @@ object TripFinder {
 
     /**
      * Without places or zones: days close together with far more photos than usual, e.g. a week of
-     * holiday, or one day out. Up to two calmer days inside keep it together.
+     * holiday, or one day out. A calmer day inside that is still above usual, or up to two days
+     * without photos, keep it together; an ordinary day with photos ends it.
      */
     fun byBursts(perDay: Map<Long, Int>, skip: Set<Long>): List<TripProposal> {
         if (perDay.size < 7) return emptyList()
         val ratio = busyness(perDay)
         val busy = { day: Long -> ratio.getValue(day) >= BUSY && perDay.getValue(day) >= MIN_BUSY_PHOTOS }
         val candidates = perDay.keys.filter { it !in skip && ratio.getValue(it) >= LIVELY }.sorted()
-        return runs(candidates, emptySet()).mapNotNull { run ->
+        // An ordinary day with photos ends the run; days without photos (up to two) do not.
+        return runs(candidates, perDay.keys).mapNotNull { run ->
             val days = run.dropWhile { !busy(it) }.dropLastWhile { !busy(it) }
+            if (days.isEmpty()) return@mapNotNull null
             val dayTrip = days.size == 1 && perDay.getValue(days.single()) >= MIN_DAY_TRIP_PHOTOS
             if (days.count(busy) < 2 && !dayTrip) return@mapNotNull null
+            if (timesMore(days, ratio) < 2) return@mapNotNull null
             val photos = (days.first()..days.last()).sumOf { perDay[it] ?: 0 }
             // Nothing tells where it was: a name with the dates, to rename when creating.
             TripProposal(

@@ -49,9 +49,11 @@ class ZoomWalkthroughTest {
     private fun shot(name: String) = captureScreenRoboImage("build/outputs/walkthrough/$name.png")
 
     /** Two fingers moving apart and back together, around the middle of the screen. */
-    private fun pinch(apart: Boolean) = compose.onRoot().performTouchInput {
-        val near = listOf(center - Offset(60f, 0f), center + Offset(60f, 0f))
-        val far = listOf(center - Offset(400f, 0f), center + Offset(400f, 0f))
+    /** A long pinch passes several sizes; a [gentle] one exactly one. */
+    private fun pinch(apart: Boolean, gentle: Boolean = false) = compose.onRoot().performTouchInput {
+        val near = listOf(center - Offset(100f, 0f), center + Offset(100f, 0f))
+        val reach = if (gentle) 135f else 400f
+        val far = listOf(center - Offset(reach, 0f), center + Offset(reach, 0f))
         val (from, to) = if (apart) near to far else far to near
         down(0, from[0])
         down(1, from[1])
@@ -75,9 +77,12 @@ class ZoomWalkthroughTest {
         compose.waitForIdle()
         assertEquals(1, vm.prefs.gridColumns.value)
         shot("zoom_grid_1")
-        repeat(7) { pinch(apart = false) }
+        pinch(apart = false)
         compose.waitForIdle()
-        assertEquals(7, vm.prefs.gridColumns.value)
+        assertTrue("one long pinch passes several sizes", vm.prefs.gridColumns.value >= 3)
+        repeat(6) { pinch(apart = false) }
+        compose.waitForIdle()
+        assertEquals(14, vm.prefs.gridColumns.value)
         shot("zoom_grid_small")
         // Pinching never opened a photo.
         assertTrue(vm.stack.none { it is Screen.Viewer })
@@ -174,10 +179,10 @@ class ZoomWalkthroughTest {
         compose.waitUntil(30_000) { idleMain(); vm.media.value == many }
         compose.waitForIdle()
 
-        pinch(apart = true)
+        pinch(apart = true, gentle = true)
         compose.waitForIdle()
         assertEquals(3, vm.prefs.gridColumns.value)
-        pinch(apart = true)
+        pinch(apart = true, gentle = true)
         compose.waitForIdle()
         assertEquals(2, vm.prefs.gridColumns.value)
         compose.onAllNodesWithText("+1").onFirst().assertExists()
@@ -194,11 +199,11 @@ class ZoomWalkthroughTest {
         compose.onNodeWithContentDescription("Rychlé posouvání").assertExists()
         shot("zoom_days_scroller")
 
-        repeat(5) { pinch(apart = false) }
+        repeat(7) { pinch(apart = false, gentle = true) }
         compose.waitForIdle()
-        assertEquals(7, vm.prefs.gridColumns.value)
+        assertEquals(14, vm.prefs.gridColumns.value)
         assertEquals(CalendarZoom.DAYS, vm.prefs.calendarZoom.value)
-        pinch(apart = false)
+        pinch(apart = false, gentle = true)
         compose.waitForIdle()
         assertEquals(CalendarZoom.MONTH, vm.prefs.calendarZoom.value)
     }
