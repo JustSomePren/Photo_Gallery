@@ -110,8 +110,8 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                 },
                 actions = {
                     if (current.cloud) {
-                        TextButton(onClick = { GooglePhotos.openApp(context) }) {
-                            Text("Jen náhled · otevřít Google Fotky", color = Color.White)
+                        TextButton(onClick = { GooglePhotos.openCloud(context, current) }) {
+                            Text("Jen náhled · otevřít v Google Fotkách", color = Color.White)
                         }
                         return@TopAppBar
                     }

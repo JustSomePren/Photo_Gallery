@@ -118,6 +118,7 @@ class WebPhotosTest {
         assertEquals(listOf("PXL_1.jpg", "PXL_2.mp4"), items.map { it.name })
         assertEquals(listOf(day, day - 60_000), items.map { it.date })
         assertEquals(listOf(false, true), items.map { it.isVideo })
+        assertEquals("https://photos.google.com/photo/A1", items[0].link)
         assertTrue(items.all { File(it.uri.path!!).length() > 0 })
     }
 

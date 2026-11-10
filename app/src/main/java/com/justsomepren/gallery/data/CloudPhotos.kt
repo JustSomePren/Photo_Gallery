@@ -145,6 +145,7 @@ object CloudPhotos {
             // Only camera photos are ever sent, so they count like them
             relativePath = "DCIM/Camera/",
             cloud = true,
+            link = json.optString("productUrl").ifEmpty { null },
         )
     }
 }

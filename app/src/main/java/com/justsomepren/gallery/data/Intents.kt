@@ -47,6 +47,13 @@ object GooglePhotos {
     fun openLink(context: Context, url: String) =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
+    /** A cloud preview: the photo itself in Google Photos, or just the app when its address is not known. */
+    fun openCloud(context: Context, item: MediaItem) {
+        val view = item.link?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) } ?: return openApp(context)
+        // The browser shows the same photo when the app does not take the link
+        start(context, Intent(view).setPackage(PACKAGE), fallback = view)
+    }
+
     fun openApp(context: Context) =
         start(context, context.packageManager.getLaunchIntentForPackage(PACKAGE))
 
