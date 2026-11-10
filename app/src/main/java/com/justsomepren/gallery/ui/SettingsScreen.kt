@@ -373,10 +373,10 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
     val progress by WebPhotos.progress.collectAsStateWithLifecycle()
     var login by remember { mutableStateOf(false) }
 
-    Text("Celá knihovna automaticky", style = MaterialTheme.typography.titleSmall)
+    Text("Celá knihovna najednou", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Jednou se přihlásíš do Google Fotek v okně Galerie. Ta si pak sama, jednou denně na Wi-Fi " +
-            "a při otevření, stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
+        "Přihlásíš se do Google Fotek v okně Galerie a ta stáhne náhledy všech fotek a videí, které nejsou v telefonu. " +
+            "Jakmile je hotovo, přihlášení se z telefonu smaže; heslo se neukládá nikdy. Nové fotky pak posílá a ukazuje Galerie sama. " +
             "Neoficiální cesta (čte se stejně jako web photos.google.com): po změně na straně Googlu může přestat fungovat."
     )
     val state = progress
@@ -393,9 +393,9 @@ private fun WebPhotosSync(vm: GalleryViewModel) {
             if (onWifi(context)) vm.setWebPhotos(true) else toast(context, "Připoj se k Wi-Fi")
         }
         SettingsButton("Přihlásit se znovu") { login = true }
-        SettingsButton("Odhlásit z Google Fotek") { vm.setWebPhotos(false) }
+        SettingsButton("Zrušit a smazat přihlášení") { vm.setWebPhotos(false) }
     } else {
-        SettingsButton("Přihlásit se do Google Fotek") { login = true }
+        SettingsButton("Přihlásit se a načíst knihovnu") { login = true }
     }
     if (login) {
         GooglePhotosLogin { signedIn ->

@@ -3,6 +3,7 @@ package com.justsomepren.gallery.data
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -49,8 +50,17 @@ object WebPhotos {
     /** Google refuses to sign in when the browser says it is a window inside an app. */
     fun agent(context: Context): String = WebSettings.getDefaultUserAgent(context).replace("; wv", "")
 
+    /** Removes the login and everything else the browser window kept. */
+    fun forgetLogin() {
+        CookieManager.getInstance().apply {
+            removeAllCookies(null)
+            flush()
+        }
+        WebStorage.getInstance().deleteAllData()
+    }
+
     fun logout() {
-        CookieManager.getInstance().removeAllCookies(null)
+        forgetLogin()
         progress.value = null
     }
 
@@ -213,7 +223,7 @@ class WebSession(private val cookies: (String) -> String?, private val agent: St
     }
 }
 
-/** Reads the library once a day on Wi-Fi and when the app is opened. */
+/** Reads the library once after the login; tried again daily on Wi-Fi and when the app is opened until it gets through. */
 class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -239,6 +249,11 @@ class WebPhotosWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
         } catch (e: Exception) {
             WebPhotos.Progress(done = true, error = e.message?.take(120) ?: "Nepodařilo se načíst")
+        }
+        // The login is needed only until the whole library was read once
+        if (result.done && result.error == null) {
+            WebPhotos.forgetLogin()
+            Prefs.get(context).setWebPhotos(false)
         }
         // Stopped halfway: the next run goes on, there is nothing to report
         WebPhotos.progress.value = result.takeIf { it.done }
