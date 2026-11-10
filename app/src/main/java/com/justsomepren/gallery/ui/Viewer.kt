@@ -106,11 +106,11 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
     val current = items[pager.currentPage.coerceAtMost(items.lastIndex)]
     LaunchedEffect(current.id) { vm.returnTo = current.id }
 
-    // Pulling the photo down closes it, like in Google Photos; a short pull springs back.
+    // Pulling the photo down or up closes it; a short pull springs back.
     val scope = rememberCoroutineScope()
     val pull = remember { Animatable(0f) }
     val height = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val pulled = (pull.value / height).coerceIn(0f, 1f)
+    val pulled = (abs(pull.value) / height).coerceIn(0f, 1f)
 
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 1f - pulled * 1.5f))) {
         HorizontalPager(
@@ -119,10 +119,10 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
             beyondViewportPageCount = if (saver) 0 else 1,
             modifier = Modifier
                 .draggable(
-                    rememberDraggableState { delta -> scope.launch { pull.snapTo((pull.value + delta).coerceAtLeast(0f)) } },
+                    rememberDraggableState { delta -> scope.launch { pull.snapTo(pull.value + delta) } },
                     Orientation.Vertical,
                     onDragStopped = { velocity ->
-                        if (pull.value > height * 0.15f || velocity > 1500f) onBack() else pull.animateTo(0f)
+                        if (abs(pull.value) > height * 0.15f || abs(velocity) > 1500f) onBack() else pull.animateTo(0f)
                     },
                 )
                 .graphicsLayer {
