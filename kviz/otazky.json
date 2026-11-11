@@ -1,0 +1,1626 @@
+[
+ {
+  "id": 0,
+  "q": "Mezi základních 8 charakteristik týmové excelence podle Larsona LaFasta (1989) nepatří:",
+  "opts": [
+   "Jednotný závazek",
+   "Na výsledek orientovaná struktura",
+   "Externí podpora",
+   "Organizační kultura"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: základních 8 charakteristik týmové excelence podle Larsona LaFasta (1989)?"
+  ]
+ },
+ {
+  "id": 1,
+  "q": "Autorem metody kulturních standardů pro identifikaci kulturních odlišnosti je:",
+  "opts": [
+   "F. Trompenaas",
+   "A Thomas",
+   "G. Hofstede",
+   "autor je neznámy"
+  ],
+  "correct": 1,
+  "variants": [
+   "Autorem metody kulturních standardů pro identifikaci kulturních odlišnosti je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 2,
+  "q": "Moc je svojí podstatou:",
+  "opts": [
+   "schopnost jedince",
+   "sociální vztah",
+   "dovednost",
+   "vlastnost"
+  ],
+  "correct": 1,
+  "variants": [
+   "Moc je svojí podstatou — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 3,
+  "q": "Ženy manažerky jsou vnímány jako efektivnější v organizacích:",
+  "opts": [
+   "centralizovaných",
+   "decentralizovaných",
+   "hybridních",
+   "hierarchických"
+  ],
+  "correct": 1,
+  "variants": [
+   "Ženy manažerky jsou vnímány jako efektivnější v organizacích — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 4,
+  "q": "Objektivistické pojetí organizační kultury znamená, že:",
+  "opts": [
+   "Kultura organizace je objektivní, má materiální podobu",
+   "Kultura reprezentuje „objekt“, který je symbolem příslušné organizace",
+   "Organizace je chápána jako celek se svébytnou kulturou, která se obtížně mění",
+   "Management chápe organizační kulturu jako jeden z instrumentů, kterými ovlivňuje jednání zaměstnanců"
+  ],
+  "correct": 3,
+  "variants": [
+   "Objektivistické pojetí organizační kultury znamená, že — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 5,
+  "q": "Genderové stereotypy jsou udržovány prostřednictvím:",
+  "opts": [
+   "Funkční fixace",
+   "Tradiční afektivity",
+   "Sebenaplňujícího proroctví",
+   "Haló efektu"
+  ],
+  "correct": 2,
+  "variants": [
+   "Genderové stereotypy jsou udržovány prostřednictvím — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 6,
+  "q": "Denisonova koncepce organizační kultury definuje následující rysy:",
+  "opts": [
+   "Interpersonální, týmový, organizační, kulturní rys",
+   "Stabilita, flexibilita, odhodlanost, vize",
+   "Exekutivní, strategický, podporující, direktivní rys",
+   "Přizpůsobivost, poslání, zapojení, důslednost"
+  ],
+  "correct": 3,
+  "variants": [
+   "Denisonova koncepce organizační kultury definuje následující rysy — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 7,
+  "q": "Mezi stádia skupinového řešení problému nepatří:",
+  "opts": [
+   "Interpersonální analýza",
+   "Analýza situace",
+   "Analýza řešení",
+   "Analýza problému"
+  ],
+  "correct": 0,
+  "variants": [
+   "Která z možností NEpatří: stádia skupinového řešení problému?"
+  ]
+ },
+ {
+  "id": 8,
+  "q": "Vyvážené naslouchání je založeno na kombinaci:",
+  "opts": [
+   "Neverbální a verbální komunikace",
+   "Parafrázování a formulování doporučení",
+   "Recepce a exprese",
+   "Flexibility a stability ve vnímání"
+  ],
+  "correct": 2,
+  "variants": [
+   "Vyvážené naslouchání je založeno na kombinaci — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 9,
+  "q": "Servant leadership je charakterizovaný těmito tvrzeními, s výjimkou tohoto:",
+  "opts": [
+   "Kvalitními pracovními vztahy založenými na důvěře",
+   "Služebním poměrem podřízených",
+   "Podporou etického prostředí",
+   "Důrazem na rozvoj pracovníků"
+  ],
+  "correct": 1,
+  "variants": [
+   "Servant leadership je charakterizovaný těmito tvrzeními, s výjimkou tohoto — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 10,
+  "q": "Mezi charakteristiky kreativní osobnosti nepatří:",
+  "opts": [
+   "Nezávislost",
+   "Bezprostřednost",
+   "Konformita",
+   "Asertivita"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z možností NEpatří: charakteristiky kreativní osobnosti?"
+  ]
+ },
+ {
+  "id": 11,
+  "q": "Koučování jako jedna z metod pro rozvoj lídrů používá model: S-C-C",
+  "opts": [
+   "HIGH",
+   "OCEAN",
+   "GROW",
+   "FLOW",
+   "DISC",
+   ""
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Koučování jako jedna z metod pro rozvoj lídrů používá model: S-C-C"
+  ]
+ },
+ {
+  "id": 12,
+  "q": "Adam / Lukáš se snaží o stejný přístup ke všem podřízeným, zakládá si na tom, že jeho styl leadershipu je stále stejný. S jakými koncepty leadershipu by se měl seznámit, aby pochopil, v čem je jeho úvaha mylná?",
+  "opts": [
+   "Behaviorální přístupy",
+   "Kontingenční přístupy",
+   "Rysové přístupy",
+   "Divergentní přístupy",
+   "Vyvážené přístupy"
+  ],
+  "correct": 4,
+  "variants": [
+   "Odpověz správně: Adam / Lukáš se snaží o stejný přístup ke všem podřízeným, zakládá si na tom, že jeho styl leadershipu je stále stejný. S jakými koncepty leadershipu by se měl seznámit, aby pochopil, v čem je jeho úvaha mylná?"
+  ]
+ },
+ {
+  "id": 13,
+  "q": "Optimální model organizační kultury mezinárodní firmy je:",
+  "opts": [
+   "Globální",
+   "Polycentrický",
+   "Geocentrický a polycentrický",
+   "Nelze říci, každý má své výhody a nevýhody"
+  ],
+  "correct": 3,
+  "variants": [
+   "Optimální model organizační kultury mezinárodní firmy je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 14,
+  "q": "Motivující úroveň stresu označujeme jako:",
+  "opts": [
+   "Eustres",
+   "Distres",
+   "Akutní stres",
+   "Chronický stres"
+  ],
+  "correct": 0,
+  "variants": [
+   "Motivující úroveň stresu označujeme jako — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 15,
+  "q": "Aspirace jsou:",
+  "opts": [
+   "funkcí motivace a schopností",
+   "specifickou teorií motivace",
+   "výší nároků, kterou jedinec klade na svůj výkon",
+   "behaviorálním modelem leadershipu"
+  ],
+  "correct": 2,
+  "variants": [
+   "Aspirace jsou — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 16,
+  "q": "Vytváření hodnoty pro širší komunitu je typický pro:",
+  "opts": [
+   "ani pro jeden ze zmíněných",
+   "charismatický leadership",
+   "transformační leadership",
+   "servant leadership"
+  ],
+  "correct": 3,
+  "variants": [
+   "Vytváření hodnoty pro širší komunitu je typický pro — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 17,
+  "q": "Mezi hlavní cíle rozvoje lídrů nepatří",
+  "opts": [
+   "Rozvoj kompetencí pro vedení lidí",
+   "Nárůst výkonové motivace",
+   "Rozvoj identity jedince jakožto lídra",
+   "Nárůst vnímané osobní účinnosti"
+  ],
+  "correct": 1,
+  "variants": [
+   "Která z možností NEpatří: hlavní cíle rozvoje lídrů?"
+  ]
+ },
+ {
+  "id": 18,
+  "q": "Management diverzity nahlíží na různorodost jako na:",
+  "opts": [
+   "Zdroj problémů",
+   "Konkurenční výhodu",
+   "Nevyhnutelný jev",
+   "Ani jedno z uvedeného"
+  ],
+  "correct": 1,
+  "variants": [
+   "Management diverzity nahlíží na různorodost jako na — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 19,
+  "q": "Mezi 3 základní funkce, které musí být v pracovním týmu zabezpečeny nepatří:",
+  "opts": [
+   "Funkce analytická a kontrolní",
+   "Funkce udržující tým",
+   "Funkce orientovaná na dosažení věcného cíle",
+   "Funkce administrativní a utváření pravidel"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: 3 základní funkce, které musí být v pracovním týmu zabezpečeny?"
+  ]
+ },
+ {
+  "id": 20,
+  "q": "Styl vedení leadershipu, který je nejvíce spojován se schopností podporovat inovativní klima a myšlení v týmech a organizacích je:",
+  "opts": [
+   "Situační leadership",
+   "Transakční leadership",
+   "Transformační leadership",
+   "Koučovací styl vedení"
+  ],
+  "correct": 2,
+  "variants": [
+   "Styl vedení leadershipu, který je nejvíce spojován se schopností podporovat inovativní klima a myšlení v týmech a organizacích je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 21,
+  "q": "Dle Scheina, co patří mezi „základní předpoklady“ organizační kultury?",
+  "opts": [
+   "Kodexy a normy chování",
+   "Rituály a ceremoniály",
+   "Individuální postoje a představy o realitě",
+   "Logo"
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Dle Scheina, co patří mezi „základní předpoklady“ organizační kultury?"
+  ]
+ },
+ {
+  "id": 22,
+  "q": "Metoda „kulturních dimenzí“ je metoda pro výklad kulturních odlišností národních kultur. Jedná se o metodu:",
+  "opts": [
+   "Kvantitativní",
+   "Kvalitativní",
+   "Nelze přesně stanovit",
+   "Kvalitativní i kvantitativní"
+  ],
+  "correct": 0,
+  "variants": [
+   "Metoda „kulturních dimenzí“ je metoda pro výklad kulturních odlišností národních kultur. Jedná se o metodu — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 23,
+  "q": "Výkonová motivace je dána poměrem:",
+  "opts": [
+   "Extrinsické a intrinsické motivace",
+   "Potřeby dosáhnout úspěchu a vyhnout se neúspěchu",
+   "Dimenzí motivačního profilu",
+   "Toho, co práci dávám a co z ní dostávám"
+  ],
+  "correct": 1,
+  "variants": [
+   "Výkonová motivace je dána poměrem — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 24,
+  "q": "Ve výrobním podniku je v top managementu jediná žena - personální ředitelka. S ohledem na své výjimečné postavení se dostává do role tzv. tokenu -ojedinělého zástupce určité skupiny. Konečným důsledkem tohoto jevu bude pravděpodobně:",
+  "opts": [
+   "Změní chování ostatních členů top managementu",
+   "Její chování tato skutečnost neovlivní",
+   "Přizpůsobí své chování ostatním členům top managementu",
+   "Přizpůsobí své chování stereotypu, podle kterého je vnímána"
+  ],
+  "correct": 3,
+  "variants": [
+   "Ve výrobním podniku je v top managementu jediná žena - personální ředitelka. S ohledem na své výjimečné postavení se dostává do role tzv. tokenu -ojedinělého zástupce určité skupiny. Konečným důsledkem tohoto jevu bude pravděpodobně — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 25,
+  "q": "Který z následujících stylů leadershipu byl identifikován dle studie GLOBE?",
+  "opts": [
+   "Charismatický",
+   "Transformační",
+   "Autentický",
+   "Servant"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Který z následujících stylů leadershipu byl identifikován dle studie GLOBE?"
+  ]
+ },
+ {
+  "id": 26,
+  "q": "Při řešení problému na poradách skupiny či týmu se doporučuje začít:",
+  "opts": [
+   "Analýzou implementace",
+   "Analýzou možných řešení",
+   "Analýzou problému",
+   "Analýzou situace"
+  ],
+  "correct": 3,
+  "variants": [
+   "Při řešení problému na poradách skupiny či týmu se doporučuje začít — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 27,
+  "q": "Moc je:",
+  "opts": [
+   "Vlastnost jedince",
+   "Schopnost jedince",
+   "Vztah mezi několika subjekty",
+   "Dovednost jedince"
+  ],
+  "correct": 2,
+  "variants": [
+   "Moc je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 28,
+  "q": "Teorie sebedeterminace nezahrnuje důraz na potřebu:",
+  "opts": [
+   "Autonomie",
+   "Kompetence",
+   "Spravedlnosti",
+   "Vztahů"
+  ],
+  "correct": 2,
+  "variants": [
+   "Teorie sebedeterminace nezahrnuje důraz na potřebu — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 29,
+  "q": "Mezi teoretické modely organizační kultury mezinárodních firem nepatří:",
+  "opts": [
+   "Polycentrická kultura",
+   "Globální kultura",
+   "Geocentrická kultura",
+   "Egocentrická kultura"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: teoretické modely organizační kultury mezinárodních firem?"
+  ]
+ },
+ {
+  "id": 30,
+  "q": "Podstatou teorie sebedeterminace NENÍ potřeba:",
+  "opts": [
+   "Kompetence",
+   "Autonomie",
+   "Vztahů",
+   "Učení se"
+  ],
+  "correct": 3,
+  "variants": [
+   "Podstatou teorie sebedeterminace NENÍ potřeba — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 31,
+  "q": "Mezi znaky pracovního týmu patří:",
+  "opts": [
+   "Vnitřní struktura pozic a rolí",
+   "Individuální odpovědnost za výsledky",
+   "Časová omezenost fungování",
+   "Trvalé pracovní vztahy"
+  ],
+  "correct": 2,
+  "variants": [
+   "Mezi znaky pracovního týmu patří — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 32,
+  "q": "Mezi základní strategie přesvědčování Nepatří:",
+  "opts": [
+   "Motivační sekvence",
+   "Vyhovění kritériím",
+   "Odměna-trest",
+   "Komparativní výhody"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z možností NEpatří: základní strategie přesvědčování?"
+  ]
+ },
+ {
+  "id": 33,
+  "q": "Skupinové sociální normy jsou:",
+  "opts": [
+   "Dány rámcovou legislativou",
+   "Upraveny v etickém kodexu firmy či formální organizační kultuře",
+   "Nepsaná pravidla chování a jednání",
+   "Psaná pravidla fungování připravena vedoucím pracovní skupiny"
+  ],
+  "correct": 2,
+  "variants": [
+   "Skupinové sociální normy jsou — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 34,
+  "q": "Pravidlo tří čtvrtin se týká:",
+  "opts": [
+   "Zaslání podkladů k nadcházející poradě a zápisu z porady minulé",
+   "Struktury porady",
+   "Fází skupinového řešení problémů",
+   "Fází skupinového přesvědčování"
+  ],
+  "correct": 0,
+  "variants": [
+   "Pravidlo tří čtvrtin se týká — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 35,
+  "q": "Podle situačního leadershipu II (Hersey, Blanchard) má lídr volit styl leadershipu podle",
+  "opts": [
+   "Situace v pracovní skupině",
+   "Pracovníkovy připravenosti/zralosti",
+   "Pracovníkovy orientace v situaci",
+   "Pracovníkovy situační zaměřenosti"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Podle situačního leadershipu II (Hersey, Blanchard) má lídr volit styl leadershipu podle"
+  ]
+ },
+ {
+  "id": 36,
+  "q": "Teoretický směr, který se zaměřuje na osobní předpoklady pro leadership, se označuje:",
+  "opts": [
+   "Teorie vlastností",
+   "Teorie charismatu",
+   "Teorie osobnosti lídrů",
+   "Teorie rysů"
+  ],
+  "correct": 3,
+  "variants": [
+   "Teoretický směr, který se zaměřuje na osobní předpoklady pro leadership, se označuje — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 37,
+  "q": "V rámci tzv. Leadership mřížky je styl leadershipu, označovaný jako 1,9 , slovně nazýván:",
+  "opts": [
+   "Leadership „uprostřed cesty“",
+   "Autoritativní leadership",
+   "Leadership „venkovského klubu“",
+   "Ochuzený leadership"
+  ],
+  "correct": 2,
+  "variants": [
+   "V rámci tzv. Leadership mřížky je styl leadershipu, označovaný jako 1,9 , slovně nazýván — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 38,
+  "q": "Jaké následující tvrzení je dle vás NESPRÁVNÉ? Kouč pomáhá rozvoji lídrů tím, že:",
+  "opts": [
+   "Klade otázky",
+   "Monitoruje dosahování stanovených cílů",
+   "Radí a informuje",
+   "Naslouchá a parafrázuje"
+  ],
+  "correct": 2,
+  "variants": [
+   "Jaké následující tvrzení je dle vás NESPRÁVNÉ? Kouč pomáhá rozvoji lídrů tím, že — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 39,
+  "q": "Inspirativní motivování je komponentou:",
+  "opts": [
+   "Transformačního leadershipu",
+   "Vyváženého leadershipu",
+   "Transakčního leadershipu",
+   "Situačního leadershipu"
+  ],
+  "correct": 0,
+  "variants": [
+   "Inspirativní motivování je komponentou — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 40,
+  "q": "Mezi typy organizační kultury mezinárodni firmy NEPATŘÍ:",
+  "opts": [
+   "geocentrická kultura",
+   "globální kultura",
+   "polycentrická kultura",
+   "ambivalentní kultura"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: typy organizační kultury mezinárodni firmy?"
+  ]
+ },
+ {
+  "id": 41,
+  "q": "Fenomén sebenaplňujícího proroctví si můžeme definovat jako:",
+  "opts": [
+   "Zkreslené vnímání, které následně ovlivní chování lidí",
+   "dosud detailně nepoznaný sociální jev",
+   "reálné naplnění našich ideálů",
+   "vizi seslanou vyšší mocí, která se sama uskutečňuje"
+  ],
+  "correct": 0,
+  "variants": [
+   "Fenomén sebenaplňujícího proroctví si můžeme definovat jako — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 42,
+  "q": "Podstatou moci je:",
+  "opts": [
+   "dovednost manažera",
+   "schopnost manažera",
+   "znalost manažera",
+   "sociální vztah"
+  ],
+  "correct": 3,
+  "variants": [
+   "Podstatou moci je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 43,
+  "q": "Která téze je pravdivá?",
+  "opts": [
+   "moc se vždy rovná pravomocem",
+   "pravomoc je jen potenciální moc",
+   "moc a pravomoc spolu nesouvisejí",
+   "moc se nikdy nerovná pravomocem"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Která téze je pravdivá?"
+  ]
+ },
+ {
+  "id": 44,
+  "q": "Mezi základní principy rozvoje a dosahovaní vyváženosti v oblasti leadership Nepatří:",
+  "opts": [
+   "Uplatňovat protichůdné postupy ve vzájemné rovnováze",
+   "vyhodnocovat situaci a adekvátně na ni reagovat",
+   "vyvažovat své vlastnosti a dovednosti (zejména slabé) s dalšími členy tymu/pracovní skupiny",
+   "nepoužívat žádný postup v přehnané míře"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z možností NEpatří: základní principy rozvoje a dosahovaní vyváženosti v oblasti leadership?"
+  ]
+ },
+ {
+  "id": 45,
+  "q": "Typickým projevem syndromu vyhoření, kterým se odlišuje od prostého vyčerpaní organismu, je:",
+  "opts": [
+   "nedostatek energie",
+   "odcizeni",
+   "pokles výkonnosti",
+   "únava"
+  ],
+  "correct": 1,
+  "variants": [
+   "Typickým projevem syndromu vyhoření, kterým se odlišuje od prostého vyčerpaní organismu, je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 46,
+  "q": "Tomáš byl po třech letech práce v oddělení financi jmenován jeho vedoucím. Po půlroce od jeho nástupu se přiblížil čas systematického hodnoceni pracovníků. Jaké riziko v této situaci může nastat (co by si měl Tomáš uvědomit)?",
+  "opts": [
+   "může dojit k rozporu pracovních pozic",
+   "může dojit ke konfliktu roli",
+   "může dojit ke skupinovému myšlení",
+   "může dojit k synergickému efektu spolupráce"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Tomáš byl po třech letech práce v oddělení financi jmenován jeho vedoucím. Po půlroce od jeho nástupu se přiblížil čas systematického hodnoceni pracovníků. Jaké riziko v této situaci může nastat (co by si měl Tomáš uvědomit)?"
+  ]
+ },
+ {
+  "id": 47,
+  "q": "Mezi styly naslouchaní Nepatří:",
+  "opts": [
+   "orientace na lidi",
+   "orientace na úkol a fakta",
+   "orientace na radu a podporu",
+   "orientace na čas"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z možností NEpatří: styly naslouchaní?"
+  ]
+ },
+ {
+  "id": 48,
+  "q": "Motiv působí v dimenzích:",
+  "opts": [
+   "perzistence, rychlosti a saturace",
+   "směru, intenzity a stálosti",
+   "frustrace, deprivace a konfliktu motivů",
+   "výkonu, stimulace a spokojenosti"
+  ],
+  "correct": 1,
+  "variants": [
+   "Motiv působí v dimenzích — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 49,
+  "q": "Hillův model se zabývá",
+  "opts": [
+   "variantami zvládáni stresu, tzv. copingem",
+   "optimalizací diverzity y organizaci",
+   "organizační kulturou a jejími prvky",
+   "efektivním vedením pracovních tymů"
+  ],
+  "correct": 3,
+  "variants": [
+   "Odpověz správně: Hillův model se zabývá"
+  ]
+ },
+ {
+  "id": 50,
+  "q": "Aktivní přístup k pozitivnímu ovlivňováni širší komunity, ve které firma působí, je typicky pro:",
+  "opts": [
+   "servant leadership",
+   "transformační leadership",
+   "vyváženy leadership",
+   "situační leadership"
+  ],
+  "correct": 0,
+  "variants": [
+   "Aktivní přístup k pozitivnímu ovlivňováni širší komunity, ve které firma působí, je typicky pro — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 51,
+  "q": "Představte si, že jste ředitel podniku a máte za úkol posílit schopnost firmy přicházet s inovacemi. Které z následujících navrhovaných opatření bude na základě aktuálních poznatků nejméně efektivní?",
+  "opts": [
+   "finančně motivovat pracovníky k lepšímu výkonu",
+   "soustředit se na nábor kreativních talentů",
+   "podpořit klima důvěry a otevřené komunikace",
+   "podpořit lídry a zaměstnance v tom, aby při testování nových myšlenek více riskovali a i za cenu kontrolovaných finančních ztrát"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Představte si, že jste ředitel podniku a máte za úkol posílit schopnost firmy přicházet s inovacemi. Které z následujících navrhovaných opatření bude na základě aktuálních poznatků nejméně efektivní?"
+  ]
+ },
+ {
+  "id": 52,
+  "q": "Autentický leadership je dle Walumbwovy koncepce založen na: zpracováním informací, internalizované morální perspektivě, vztahové",
+  "opts": [
+   "Osobní zralosti, otevřeném přístupu k lidem, participaci a zpětné vazbě",
+   "Sebevědomí, sebereflexi, ověřeném přístupu k ostatním a vztahové přirozenosti",
+   "Otevřenosti, přiměřené kritice, charakteru a efektivním ovlivňování",
+   "Vyváženým transparentnosti a sebeuvědomování"
+  ],
+  "correct": 3,
+  "variants": [
+   "Odpověz správně: Autentický leadership je dle Walumbwovy koncepce založen na: zpracováním informací, internalizované morální perspektivě, vztahové"
+  ]
+ },
+ {
+  "id": 53,
+  "q": "Mezi nástroje podporující diverzitu v podniku nepatří:",
+  "opts": [
+   "Genderový audit",
+   "Genderová separace",
+   "Flexibilní formy pracovního režimu",
+   "Mentoring"
+  ],
+  "correct": 1,
+  "variants": [
+   "Která z možností NEpatří: nástroje podporující diverzitu v podniku?"
+  ]
+ },
+ {
+  "id": 54,
+  "q": "Denisonův přístup k organizační kultuře kombinuje dimenze:",
+  "opts": [
+   "Externí a interní změření a orientace na flexibilitu a stabilitu",
+   "Participace",
+   "Sebeprosazení",
+   "Krátkodobá a dlouhodobá orientace a intrinsické a extrinsické zaměření vlivu"
+  ],
+  "correct": 0,
+  "variants": [
+   "Denisonův přístup k organizační kultuře kombinuje dimenze — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 55,
+  "q": "Autentický lídr se vyznačuje: ničím z uvedeného",
+  "opts": [
+   "sebekritičností",
+   "silným, direktivním vedením",
+   "uvědomováním si svých silných i slabých stránek",
+   "laissez-faire stylem vedení",
+   "sebeprosazováním",
+   ""
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Autentický lídr se vyznačuje: ničím z uvedeného"
+  ]
+ },
+ {
+  "id": 56,
+  "q": "Cynismus a depersonalizace patří mezi typické projevy:",
+  "opts": [
+   "burn-outu",
+   "eustresu",
+   "perfekcionismu",
+   "pasivity"
+  ],
+  "correct": 0,
+  "variants": [
+   "Cynismus a depersonalizace patří mezi typické projevy — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 57,
+  "q": "Delegování NENÍ:",
+  "opts": [
+   "projevem důvěry manažera k podřízenému",
+   "pouhé předání úkolu podřízenému",
+   "příležitostí k rozvoji a k učení novým věcem",
+   "nástrojem řízení času a zvládání stresu"
+  ],
+  "correct": 1,
+  "variants": [
+   "Delegování NENÍ — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 58,
+  "q": "Dle French-Ravenovy teorie se referenční moc dá popsat jako:",
+  "opts": [
+   "vlastnictví výlučných informací, ke kterým ostatní nemají přístup",
+   "použití osobní atraktivity nebo přátelských vazeb s ostatními pro získání jejich souhlasu či podpory",
+   "neformální pozice lídra v organizaci",
+   "použití získaných odborných znalostí pro získání souhlasu ostatních"
+  ],
+  "correct": 1,
+  "variants": [
+   "Dle French-Ravenovy teorie se referenční moc dá popsat jako — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 59,
+  "q": "Firemní kultura je:",
+  "opts": [
+   "vytvářena pouze vlastníky firmy",
+   "vytvořena všemi zaměstnanci firmy",
+   "vytvořena výlučně vrcholovým managementem",
+   "neměnná"
+  ],
+  "correct": 1,
+  "variants": [
+   "Firemní kultura je — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 60,
+  "q": "Komponenty transakčního leadershipu jsou:",
+  "opts": [
+   "podmíněná odměna a management na základě výjimek",
+   "charisma a vliv na okolí",
+   "intelektuální manipulace",
+   "operační a strategický management"
+  ],
+  "correct": 0,
+  "variants": [
+   "Komponenty transakčního leadershipu jsou — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 61,
+  "q": "Kotter popisuje management a dosahování výsledků pomocí:",
+  "opts": [
+   "příkazů a podpory",
+   "příkazů a kontroly",
+   "dělání správných věcí",
+   "příkazů a postupů"
+  ],
+  "correct": 1,
+  "variants": [
+   "Kotter popisuje management a dosahování výsledků pomocí — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 62,
+  "q": "Která teze je pravdivá?",
+  "opts": [
+   "moc se vždy rovná pravomocem",
+   "moc se nikdy nerovná pravomocem",
+   "pravomoc je jen potenciální moc",
+   "moc a pravomoc spolu nesouvisejí"
+  ],
+  "correct": 2,
+  "variants": [
+   "Které z následujících tvrzení platí?"
+  ]
+ },
+ {
+  "id": 63,
+  "q": "Mezi formy participace dle Yukla NEPATŘÍ:",
+  "opts": [
+   "delegování",
+   "koučování",
+   "autokratické rozhodování",
+   "konzultování"
+  ],
+  "correct": 1,
+  "variants": [
+   "Která z možností NEpatří: formy participace dle Yukla?"
+  ]
+ },
+ {
+  "id": 64,
+  "q": "Mezi tři druhy parafrázování se NEŘADÍ:",
+  "opts": [
+   "záměrů",
+   "názorů",
+   "pocitů",
+   "obsahu"
+  ],
+  "correct": 1,
+  "variants": [
+   "Mezi tři druhy parafrázování se NEŘADÍ — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 65,
+  "q": "Mezi základní zásady efektivního delegování se NEŘADÍ:",
+  "opts": [
+   "vytvoření rovnováhy mezi odpovědností a pravomocí",
+   "vymezení míry pravomoci",
+   "oceňování pokroku a zvládnutí úkolu",
+   "objasnění úkolu a jeho výsledku"
+  ],
+  "correct": 2,
+  "variants": [
+   "Mezi základní zásady efektivního delegování se NEŘADÍ — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 66,
+  "q": "„Měli bychom zvolit produkt A, nebo B?“ je otázka:",
+  "opts": [
+   "otevřená",
+   "uzavřená",
+   "srovnávací",
+   "reflektivní"
+  ],
+  "correct": 2,
+  "variants": [
+   "„Měli bychom zvolit produkt A, nebo B?“ je otázka — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 67,
+  "q": "Nadřízení i podřízení hodnotí ženy manažerky jako úspěšnější:",
+  "opts": [
+   "pokud je více žen manažerek",
+   "pokud je více mužů manažerů",
+   "v centralizovaných organizacích",
+   "v hierarchických organizacích"
+  ],
+  "correct": 0,
+  "variants": [
+   "Nadřízení i podřízení hodnotí ženy manažerky jako úspěšnější — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 68,
+  "q": "Jako individuální rozvojové intervence u lídrů označujeme:",
+  "opts": [
+   "sebevzdělávání",
+   "skupinový trénink",
+   "učení se ze zkušeností",
+   "koučování a mentoring"
+  ],
+  "correct": 3,
+  "variants": [
+   "Jako individuální rozvojové intervence u lídrů označujeme — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 69,
+  "q": "Označte chování lídrů, které je pro kreativitu destruktivní:",
+  "opts": [
+   "častá změna úkolů nebo cílů",
+   "aktivní dotazování na názor",
+   "projevování podpory",
+   "konstruktivní zpětná vazba"
+  ],
+  "correct": 0,
+  "variants": [
+   "Označte chování lídrů, které je pro kreativitu destruktivní — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 70,
+  "q": "Teorie cesty k cíli zdůrazňuje vztah mezi:",
+  "opts": [
+   "stanovením cíle, výkonovou orientací a orientací na lidi",
+   "lídrem, procesy a rozhodováním",
+   "stylem leadershipu, motivačními potřebami pracovníků a organizačními podmínkami",
+   "očekáváními pracovníků, rozhodováním lídra a typem organizační kultury"
+  ],
+  "correct": 2,
+  "variants": [
+   "Teorie cesty k cíli zdůrazňuje vztah mezi — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 71,
+  "q": "Základní myšlenka Quinnovy teorie paradoxů spočívá v názoru, že:",
+  "opts": [
+   "organizace by se měly soustředit na jednostranný přístup",
+   "organizace by se měly zaměřit na organizační procesy",
+   "organizace by se měly zaměřit na vnitřní stabilitu a řád",
+   "organizace by se měly vyvarovat jednostranným přístupům"
+  ],
+  "correct": 3,
+  "variants": [
+   "Základní myšlenka Quinnovy teorie paradoxů spočívá v názoru, že — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 72,
+  "q": "Manažer má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na věcnou argumentaci. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučili:",
+  "opts": [
+   "posilování sebedůvěry a sebeovládání",
+   "nácvik aktivního naslouchání",
+   "práci s emotivní stránkou významu jazykových výrazů",
+   "pochopení poznávacích a informačních potřeb a očekávání posluchačů"
+  ],
+  "correct": 3,
+  "variants": [
+   "Manažer má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na věcnou argumentaci. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučili — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 73,
+  "q": "Teorie čtyř drivů NENÍ založena na drivu:",
+  "opts": [
+   "získat",
+   "navázat",
+   "ovládnout",
+   "učit se"
+  ],
+  "correct": 2,
+  "variants": [
+   "Teorie čtyř drivů NENÍ založena na drivu — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 74,
+  "q": "Teorie spravedlnosti rozlišuje typy spravedlnosti:",
+  "opts": [
+   "interakční, rolovou a odměňovací",
+   "distribuční, procesní a interakční",
+   "mocenskou, kompetenční a odměňovací",
+   "úkolovou, vzdělávací a distribuční"
+  ],
+  "correct": 1,
+  "variants": [
+   "Teorie spravedlnosti rozlišuje typy spravedlnosti — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 75,
+  "q": "Model protikladných přístupů management vs. leadership zahrnuje dimenzi:",
+  "opts": [
+   "lidé a výkon (úkol)",
+   "interpersonální a organizační",
+   "autokracii a laissez-faire",
+   "kompetence a odhodlání"
+  ],
+  "correct": 0,
+  "variants": [
+   "Model protikladných přístupů management vs. leadership zahrnuje dimenzi — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 76,
+  "q": "Kontingenční teorie leadershipu zdůrazňují:",
+  "opts": [
+   "nutnost vytvoření si svého osobitého stylu leadershipu",
+   "nutnost volby různých přístupů k vedení podle podmínek a situace",
+   "význam rysů lídra (charisma apod.)",
+   "význam postojů pracovníků a jejich reflexe ve vedení"
+  ],
+  "correct": 1,
+  "variants": [
+   "Kontingenční teorie leadershipu zdůrazňují — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 77,
+  "q": "Která z následujících charakteristik NENÍ uváděna jako součást transformačního leadershipu (Bass, Avolio, 1994)?",
+  "opts": [
+   "inspirující motivování",
+   "intelektuální stimulace",
+   "ideální sociální vztahy",
+   "individualizované uznání"
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Která z následujících charakteristik NENÍ uváděna jako součást transformačního leadershipu (Bass, Avolio, 1994)?"
+  ]
+ },
+ {
+  "id": 78,
+  "q": "Koncept manažerské mřížky Blakea a Moutonové se týká popisu:",
+  "opts": [
+   "osobnostních vlastností manažerů",
+   "chování manažerů",
+   "rozdílů v přístupu k vedení lidí mužů a žen",
+   "motivace pracovníků"
+  ],
+  "correct": 1,
+  "variants": [
+   "Koncept manažerské mřížky Blakea a Moutonové se týká popisu — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 79,
+  "q": "Aplikujte situační leadership II v praxi a určete, jaký styl byste zvolil/a pro vedení své přímé podřízené Markéty, která je již velmi zkušenou pracovnicí, ale její současná pracovní motivace je velmi proměnlivá:",
+  "opts": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "correct": 2,
+  "variants": [
+   "Aplikujte situační leadership II v praxi a určete, jaký styl byste zvolil/a pro vedení své přímé podřízené Markéty, která je již velmi zkušenou pracovnicí, ale její současná pracovní motivace je velmi proměnlivá — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 80,
+  "q": "Jaká pětice osobnostních vlastností lídra napomáhá dle Northouse efektivnímu leadershipu?",
+  "opts": [
+   "Sociabilita, integrita, sebedůvěra, odhodlanost (vytrvalost), inteligence",
+   "Sociabilita, integrita, sebedůvěra, temperament, inteligence",
+   "Odhodlanost (vytrvalost), charisma, sebedůvěra, temperament, inteligence",
+   "Odhodlanost (vytrvalost), integrita, sebedůvěra, temperament, inteligence"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Jaká pětice osobnostních vlastností lídra napomáhá dle Northouse efektivnímu leadershipu?"
+  ]
+ },
+ {
+  "id": 81,
+  "q": "Mezi styly ovlivňování NEpatří:",
+  "opts": [
+   "odměna a trest",
+   "společná vize",
+   "komparativní výhoda",
+   "participace a důvěra"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z možností NEpatří: styly ovlivňování?"
+  ]
+ },
+ {
+  "id": 82,
+  "q": "Pravidlo třetin se týká:",
+  "opts": [
+   "rozesílání podkladových materiálů, zápisu z porady a programu následující porady",
+   "motivační sekvence efektivního přesvědčování",
+   "podávání zpětné vazby",
+   "rozdělení položek programu porady"
+  ],
+  "correct": 3,
+  "variants": [
+   "Pravidlo třetin se týká — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 83,
+  "q": "Vroomova teorie očekávání NEobsahuje následující faktor:",
+  "opts": [
+   "očekávání",
+   "metadeterminaci",
+   "valenci",
+   "instrumentalitu"
+  ],
+  "correct": 1,
+  "variants": [
+   "Vroomova teorie očekávání NEobsahuje následující faktor — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 84,
+  "q": "Podle posledních výzkumů (Arvey et al.) jsou osobnostní předpoklady pro leadership:",
+  "opts": [
+   "naučené i vrozené v poměru 60 % ku 40 %",
+   "mají převážně vrozený základ",
+   "naučené i vrozené v poměru 50 % a 50 %",
+   "neplatí ani jedna uvedená varianta"
+  ],
+  "correct": 3,
+  "variants": [
+   "Podle posledních výzkumů (Arvey et al.) jsou osobnostní předpoklady pro leadership — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 85,
+  "q": "Která z uvedených metod není typická pro skupinové programy rozvoje lídrů:",
+  "opts": [
+   "hraní rolí",
+   "krátké případové studie",
+   "mentoring",
+   "zpětná vazba"
+  ],
+  "correct": 2,
+  "variants": [
+   "Která z uvedených metod není typická pro skupinové programy rozvoje lídrů — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 86,
+  "q": "Mezi základní dimenze vyváženého leadershipu (Kaplan, Kaiser) NEPATŘÍ:",
+  "opts": [
+   "direktivita",
+   "operativa",
+   "podpora",
+   "delegace"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: základní dimenze vyváženého leadershipu (Kaplan, Kaiser)?"
+  ]
+ },
+ {
+  "id": 87,
+  "q": "Mezi znaky pracovní skupiny patří:",
+  "opts": [
+   "společná odpovědnost za plnění úkolů",
+   "časová omezenost úkolu",
+   "vnitřní struktura pozic a rolí",
+   "vhodnost pro zpracování komplexních úkolů vyžadujících spolupráci"
+  ],
+  "correct": 2,
+  "variants": [
+   "Mezi znaky pracovní skupiny patří — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 88,
+  "q": "Jaký vliv má emoční inteligence na rozhodování lídra?",
+  "opts": [
+   "Způsobuje, že rozhodnutí jsou více emocionální než racionální",
+   "Umožňuje lídrovi lépe rozpoznávat emocionální reakce ostatních a adekvátně reagovat",
+   "Omezí schopnost lídra analyzovat situace",
+   "Nemá žádný vliv na rozhodování"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Jaký vliv má emoční inteligence na rozhodování lídra?"
+  ]
+ },
+ {
+  "id": 89,
+  "q": "Mezi znaky pracovní skupiny nepatří:",
+  "opts": [
+   "Společná činnost",
+   "Vnitřní struktura pracovních pozic a rolí",
+   "Společné pracoviště",
+   "Společná odpovědnost"
+  ],
+  "correct": 3,
+  "variants": [
+   "Která z možností NEpatří: znaky pracovní skupiny?"
+  ]
+ },
+ {
+  "id": 90,
+  "q": "Co je hlavním zaměřením behaviorální koncepce leadershipu?",
+  "opts": [
+   "Význam osobnostních rysů lídra",
+   "Schopnost lídra podávat zpětné vazby",
+   "Chování a reakce lídra",
+   "Nastavování vzdělávacího procesu lídrů"
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz na otázku: co je hlavním zaměřením behaviorální koncepce leadershipu?"
+  ]
+ },
+ {
+  "id": 91,
+  "q": "Mezi formy participace nepatří",
+  "opts": [
+   "Vzájemná spolupráce",
+   "Společné rozhodování",
+   "Delegování",
+   "Konzultování"
+  ],
+  "correct": 0,
+  "variants": [
+   "Která z možností NEpatří: formy participace?"
+  ]
+ },
+ {
+  "id": 92,
+  "q": "Standovi jako vedoucímu oddělení vždy záleželo na tom, aby se lidé cítili na pracovišti příjemně a byli spokojeni. Pracovní tempo a výsledky práce nebyly pro něho prioritou. Jak byste charakterizovali jeho styl vedení podle manažérské mřížky Blaka a Mountonové?",
+  "opts": [
+   "1,9",
+   "1,1",
+   "5,5",
+   "9,1"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Standovi jako vedoucímu oddělení vždy záleželo na tom, aby se lidé cítili na pracovišti příjemně a byli spokojeni. Pracovní tempo a výsledky práce nebyly pro něho prioritou. Jak byste charakterizovali jeho styl vedení podle manažérské mřížky Blaka a Mountonové?"
+  ]
+ },
+ {
+  "id": 93,
+  "q": "Jaký aspekt komunikačních dovedností je nejdůležitější pro budování důvěry mezi lídrem a týmem?",
+  "opts": [
+   "Otevřenost a transparentnost",
+   "Schopnost mluvit a prezentovat",
+   "Pouze formální komunikace",
+   "Schopnost argumentovat"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Jaký aspekt komunikačních dovedností je nejdůležitější pro budování důvěry mezi lídrem a týmem?"
+  ]
+ },
+ {
+  "id": 94,
+  "q": "Manažer má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na „participaci a důvěru“. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučili.",
+  "opts": [
+   "Inventář oprávněných možností",
+   "Kritická analýza vystoupení",
+   "Nácvik aktivního naslouchání",
+   "Rozvoj imaginace a fantazie"
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Manažer má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na „participaci a důvěru“. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučili."
+  ]
+ },
+ {
+  "id": 95,
+  "q": "Vnímaná osobní účinnost (self-efficacy) je vymezena jako",
+  "opts": [
+   "Vyvážené využívání přístupů efektivního ovlivňování (vč. moci) v kontextu vymezených cílů",
+   "Poměr efektů dosažených cílů a lídrem vložené energie",
+   "Přesvědčení jedince, že dokáže úspěšně realizovat chování potřebné k dosažení specifických cílů",
+   "Subjektivní ukazatel vlivu (autority a pravomoci), který poměřuje subjektivní vliv a vnímaný vliv následovníky"
+  ],
+  "correct": 2,
+  "variants": [
+   "Odpověz správně: Vnímaná osobní účinnost (self-efficacy) je vymezena jako"
+  ]
+ },
+ {
+  "id": 96,
+  "q": "Okénko JOHARI popisuje:",
+  "opts": [
+   "Vlastnosti lídra",
+   "Míru sebeakceptace člověka",
+   "Sebepoznání jako výsledek interakce",
+   "Charisma člověka"
+  ],
+  "correct": 2,
+  "variants": [
+   "Okénko JOHARI popisuje — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 97,
+  "q": "Na co je kladen hlavní důraz tzv. rysového přístupu k leadershipu?",
+  "opts": [
+   "Osobní charakteristiky lídrů",
+   "Dovednosti týmu",
+   "Organizace a struktura",
+   "Strategie a plány"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Na co je kladen hlavní důraz tzv. rysového přístupu k leadershipu?"
+  ]
+ },
+ {
+  "id": 98,
+  "q": "Motivační profil představuje",
+  "opts": [
+   "Strukturu hodnot a hodnotových orientací",
+   "Substrukturu osobnosti odpovídají na otázku „jak reaguje“",
+   "Profil nástrojů, které má lídr využít",
+   "Dominantní motivační orientace"
+  ],
+  "correct": 3,
+  "variants": [
+   "Odpověz správně: Motivační profil představuje"
+  ]
+ },
+ {
+  "id": 99,
+  "q": "Mezi hlavní komponenty autentického leadershipu patří:",
+  "opts": [
+   "Projevování všech emocí lídra",
+   "Sebeprosazení lídra",
+   "Spontánní komunikace lídra",
+   "Sebeuvědomování lídra"
+  ],
+  "correct": 3,
+  "variants": [
+   "Mezi hlavní komponenty autentického leadershipu patří — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 100,
+  "q": "Co by mělo být prioritou při plánování rozvoje lídrů?",
+  "opts": [
+   "Zaměření na analytické dovednosti",
+   "Poskytování příležitostí pro sebeřízení a sebereflexi",
+   "Chybějící nastavení plánu osobního rozvoje",
+   "Především teoretická školení"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Co by mělo být prioritou při plánování rozvoje lídrů?"
+  ]
+ },
+ {
+  "id": 101,
+  "q": "Jste ředitel/ředitelka firmy. Na vyjezdím zasedání nejužšího vedení byste rád/a probral/a strategii dalšího rozvoje firmy. Při diskuzi se svými spolupracovníky na toto téma použijete především styl naslouchání orientovaný:",
+  "opts": [
+   "Na lidi",
+   "Na úkoly a fakta",
+   "Na obsah a souvislosti",
+   "Na čas"
+  ],
+  "correct": 2,
+  "variants": [
+   "Jste ředitel/ředitelka firmy. Na vyjezdím zasedání nejužšího vedení byste rád/a probral/a strategii dalšího rozvoje firmy. Při diskuzi se svými spolupracovníky na toto téma použijete především styl naslouchání orientovaný — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 102,
+  "q": "Jaká vlastnost je zásadní pro důvěryhodnost lídra?",
+  "opts": [
+   "Ambice",
+   "Integrita",
+   "Iniciativa",
+   "Asertivita"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Jaká vlastnost je zásadní pro důvěryhodnost lídra?"
+  ]
+ },
+ {
+  "id": 103,
+  "q": "Matěj má v týmu nového mladého asistenta Daniela, který je sice pracovně spolehlivý, ale při jednání s klienty je na něm patrná značná nejistota. Například na minulé schůzce se zástupci firmy, pro kterou tým plní určitou zakázku, Daniel celou dobu nepromluvil ani slovo. Matějovi následně na jeho otázku, proč mlčel, odpověděl, že nevěděl, co říct. S využitím situačního leadershipu rozhodněte, jaký styl vedení má Matej vůči tomuto pracovníkovi uplatnit?",
+  "opts": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "correct": 0,
+  "variants": [
+   "Odpověz správně: Matěj má v týmu nového mladého asistenta Daniela, který je sice pracovně spolehlivý, ale při jednání s klienty je na něm patrná značná nejistota. Například na minulé schůzce se zástupci firmy, pro kterou tým plní určitou zakázku, Daniel celou dobu nepromluvil ani slovo. Matějovi následně na jeho otázku, proč mlčel, odpověděl, že nevěděl, co říct. S využitím situačního leadershipu rozhodněte, jaký styl vedení má Matej vůči tomuto pracovníkovi uplatnit?"
+  ]
+ },
+ {
+  "id": 104,
+  "q": "Podle Petera Northouse lze leadership charakterizovat jako:",
+  "opts": [
+   "Proces uplatňování formální a neformální moci",
+   "Osobní dispozice a styl chování toho, kdo vede",
+   "Proces ovlivňování skupiny nebo jednotlivců směrem k dosažení společného cíle",
+   "Proces přesvědčování skupiny nebo jednotlivců k vyšší výkonnosti"
+  ],
+  "correct": 2,
+  "variants": [
+   "Podle Petera Northouse lze leadership charakterizovat jako — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 105,
+  "q": "Vůči pracovníkovi s vysokou kompetencí a proměnlivou úrovní motivace byste v kontextu situačního leadershipu II volil/a styl vedení označovaný jako:",
+  "opts": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "correct": 2,
+  "variants": [
+   "Vůči pracovníkovi s vysokou kompetencí a proměnlivou úrovní motivace byste v kontextu situačního leadershipu II volil/a styl vedení označovaný jako — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 106,
+  "q": "Petr (vedoucí oddělení prodeje) má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na „odměny a tresty“. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučil.",
+  "opts": [
+   "nácvik aktivního naslouchání",
+   "inventář oprávněných nároků",
+   "nácvik výměny názorů a přijetí společného stanoviska",
+   "rozvoj fantazie a imaginace"
+  ],
+  "correct": 1,
+  "variants": [
+   "Odpověz správně: Petr (vedoucí oddělení prodeje) má deficit v oblasti uplatňování stylu ovlivňování zaměřeného na „odměny a tresty“. Z následujících aktivit byste mu k rozvoji tohoto stylu ovlivňování doporučil."
+  ]
+ },
+ {
+  "id": 107,
+  "q": "Jaké jsou hlavní charakteristiky organizační kultury?",
+  "opts": [
+   "Velikost firmy, národní kultura a předmět podnikání",
+   "Zvolené formy interní komunikace v organizaci",
+   "Způsoby platby v dané zemi",
+   "Způsoby vedoucích organizace, jejich předchozí zkušenosti a očekávání"
+  ],
+  "correct": 3,
+  "variants": [
+   "Čím je dána konkrétní podoba organizační kultury?",
+   "Které faktory nejvíce ovlivňují podobu organizační kultury?",
+   "Odpověz správně: Jaké jsou hlavní charakteristiky organizační kultury?"
+  ]
+ },
+ {
+  "id": 108,
+  "q": "Podle Larsona a LaFasta (1989) mezi charakteristiky týmové excellence patří:",
+  "opts": [
+   "Sdílený a inspirující společný cíl",
+   "Kompetentní členové týmu",
+   "Vzájemná provázanost úkolů",
+   "Všechny výše uvedené"
+  ],
+  "correct": 3,
+  "variants": [
+   "Které vlastnosti má excelentní tým podle Larsona a LaFasta (1989)?",
+   "Podle Larsona a LaFasta (1989) mezi charakteristiky týmové excellence patří — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 109,
+  "q": "Který z následujících kulturních shluků není součástí Střední Evropy?",
+  "opts": [
+   "Střední východ",
+   "Nordický",
+   "Konfuciánský",
+   "Atlantický"
+  ],
+  "correct": 3,
+  "variants": [
+   "Který kulturní shluk nepatří ke Střední Evropě?",
+   "Odpověz správně: Který z následujících kulturních shluků není součástí Střední Evropy?"
+  ]
+ },
+ {
+  "id": 110,
+  "q": "Na poradě dostane tým nové zadání. Zatímco většina členů řeší jednotlivé dílčí kroky, Martin si začne dělat náčrt širších vazeb: jak nový úkol souvisí s předchozími projekty, jaké procesy bude potřeba upravit, jaké dopady může mít na další oddělení. Místo debat o osobních preferencích nebo přesných termínech se opakovaně vrací k tomu, aby tým pochopil celkový rámec situace a vztahy mezi jednotlivými částmi úkolu. Jaký styl naslouchání Martin v této situaci nejvíce uplatňuje?",
+  "opts": [
+   "Styl orientovaný na úkoly a fakta",
+   "Styl orientovaný na obsah a souvislosti",
+   "Styl orientovaný na lidi",
+   "Styl orientovaný na čas"
+  ],
+  "correct": 1,
+  "variants": [
+   "Martin se místo dílčích kroků soustředí na celkový obraz a souvislosti úkolu. O jaký styl naslouchání jde?",
+   "Odpověz správně: Na poradě dostane tým nové zadání. Zatímco většina členů řeší jednotlivé dílčí kroky, Martin si začne dělat náčrt širších vazeb: jak nový úkol souvisí s předchozími projekty, jaké procesy bude potřeba upravit, jaké dopady může mít na další oddělení. Místo debat o osobních preferencích nebo přesných termínech se opakovaně vrací k tomu, aby tým pochopil celkový rámec situace a vztahy mezi jednotlivými částmi úkolu. Jaký styl naslouchání Martin v této situaci nejvíce uplatňuje?"
+  ]
+ },
+ {
+  "id": 111,
+  "q": "Jak se projevuje referenční moc?",
+  "opts": [
+   "Schopností udílet sankce",
+   "Uplatněním formální pozice",
+   "Kontrolou zdrojů",
+   "Silnou schopností inspirovat díky osobním kvalitám"
+  ],
+  "correct": 3,
+  "variants": [
+   "Referenční moc se zakládá především na čem?",
+   "Odpověz správně: Jak se projevuje referenční moc?"
+  ]
+ },
+ {
+  "id": 112,
+  "q": "Kde může být koncept followershipu efektivně využit v organizační praxi?",
+  "opts": [
+   "Především při tvorbě finanční strategie firmy",
+   "V Leadership development a talent programech a v nastavení hodnocení zaměstnanců (včetně lídrů)",
+   "Pouze při hodnocení výkonu neefektivních zaměstnanců",
+   "V čistě administrativních procesech bez interakce lidí"
+  ],
+  "correct": 1,
+  "variants": [
+   "V jakých oblastech se uplatňuje followership?",
+   "Odpověz správně: Kde může být koncept followershipu efektivně využit v organizační praxi?"
+  ]
+ },
+ {
+  "id": 113,
+  "q": "Aktivní přístup k pozitivnímu ovlivňování širší komunity, ve které firma působí, je typický pro:",
+  "opts": [
+   "Transformační leadership",
+   "Situační leadership",
+   "Servant leadership",
+   "Vyvažený leadership"
+  ],
+  "correct": 2,
+  "variants": [
+   "Který styl leadershipu klade důraz na službu širší komunitě?",
+   "Aktivní přístup k pozitivnímu ovlivňování širší komunity, ve které firma působí, je typický pro — vyber správnou možnost:"
+  ]
+ },
+ {
+  "id": 114,
+  "q": "Který z následujících stylů leadershipu podle studie GLOBE je charakterizován tím, že zdůrazňuje soucit, velkorysost, trpělivost, podporu druhých a důraz na well-being pracovníků?",
+  "opts": [
+   "Empatický",
+   "Participativní",
+   "Humánní",
+   "Protektivní"
+  ],
+  "correct": 2,
+  "variants": [
+   "GLOBE: který styl leadershipu je spojen se soucitem a péčí o well-being?",
+   "Odpověz správně: Který z následujících stylů leadershipu podle studie GLOBE je charakterizován tím, že zdůrazňuje soucit, velkorysost, trpělivost, podporu druhých a důraz na well-being pracovníků?"
+  ]
+ }
+]
