@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RestoreFromTrash
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
@@ -103,6 +105,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.Screen
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.formatDayHeader
 import androidx.compose.ui.geometry.Offset
@@ -132,6 +135,9 @@ fun MediaBrowser(
     onBack: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {},
+    /** Picking photos for an album: taps only select, the bar offers [pickConfirm]. */
+    onPicked: ((List<MediaItem>) -> Unit)? = null,
+    pickConfirm: String = "Přidat",
 ) {
     val context = LocalContext.current
     var selected by vm.selection(stateKey)
@@ -159,7 +165,17 @@ fun MediaBrowser(
 
     Scaffold(
         topBar = {
-            if (picked.isNotEmpty()) {
+            if (onPicked != null) {
+                TopAppBar(
+                    title = { Text(if (picked.isEmpty()) "Vyber fotky" else "Vybráno ${picked.size}") },
+                    navigationIcon = {
+                        IconButton(onClick = { done(); onBack?.invoke() }) { Icon(Icons.Default.Close, "Zrušit") }
+                    },
+                    actions = {
+                        TextButton(onClick = { done(); onPicked(picked) }) { Text(pickConfirm) }
+                    },
+                )
+            } else if (picked.isNotEmpty()) {
                 TopAppBar(
                     title = { Text("${picked.size}") },
                     navigationIcon = {
@@ -177,11 +193,7 @@ fun MediaBrowser(
                         }
                         IconButton(onClick = { if (actions.trash(picked)) done() }) { Icon(Icons.Default.Delete, "Do koše") }
                         FavoriteButton(picked) { if (actions.toggleFavorite(picked)) done() }
-                        if (local.isNotEmpty()) {
-                            IconButton(onClick = { actions.send(local); done() }) {
-                                Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
-                            }
-                        }
+                        if (local.isNotEmpty()) SendButton(local, actions, ::done)
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem({ Text("Přidat do alba") }, onClick = { actions.addToAlbum(picked); done() })
@@ -195,6 +207,16 @@ fun MediaBrowser(
                                 })
                             }
                             DropdownMenuItem({ Text("Sdílet") }, onClick = { if (actions.share(picked)) done() else menu = false })
+                            if (picked.any { it.cloud }) {
+                                DropdownMenuItem({ Text("Stáhnout v plné kvalitě") }, onClick = { actions.saveToPhone(picked); done() })
+                            }
+                            if (source is Source.Uploads && !source.failed) {
+                                DropdownMenuItem({ Text("Odebrat z fronty") }, onClick = {
+                                    val keys = picked.map { it.key }.toSet()
+                                    vm.prefs.dismiss(vm.prefs.queue.value.filter { it.key in keys && (source.account == null || it.account == source.account) })
+                                    done()
+                                })
+                            }
                         }
                     },
                 )
@@ -214,6 +236,9 @@ fun MediaBrowser(
                             }
                         }
                         if (album != null) {
+                            IconButton(onClick = { vm.stack.add(Screen.PickForAlbum(album.id)) }) {
+                                Icon(Icons.Default.AddPhotoAlternate, "Přidat fotky")
+                            }
                             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                                 DropdownMenuItem({ Text("Smazat album") }, onClick = { menu = false; confirmDelete = true })
@@ -239,7 +264,10 @@ fun MediaBrowser(
         ) {
             if (items.isEmpty()) {
                 Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
-                    Text("Žádné fotky", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (album != null) "Album je prázdné – fotky přidáš ikonou nahoře" else "Žádné fotky",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             } else {
                 MediaGrid(
@@ -250,7 +278,9 @@ fun MediaBrowser(
                     vm = vm,
                     header = header,
                     // Photos in the trash are only picked for restoring
-                    onClick = { if (selected.isEmpty() && source != Source.Trash) onOpen(it) else toggle(listOf(it.id)) },
+                    onClick = {
+                        if (selected.isEmpty() && source != Source.Trash && onPicked == null) onOpen(it) else toggle(listOf(it.id))
+                    },
                     onSelect = { selected = it },
                     onHeaderClick = { group -> toggle(group.map { it.id }) },
                 )
@@ -336,6 +366,11 @@ private fun MediaGrid(
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val byDay by vm.prefs.groupByDay.collectAsStateWithLifecycle()
     val entries = remember(items, events, byDay) { buildEntries(items, events, byDay) }
+    // Waiting to be sent, or refused by Google: marked in the corner
+    val queue by vm.prefs.queue.collectAsStateWithLifecycle()
+    val failed by vm.prefs.failed.collectAsStateWithLifecycle()
+    val waiting = remember(queue) { queue.map { it.key }.toSet() }
+    val refused = remember(failed) { failed.map { it.key }.toSet() }
     val photoOrder = remember(entries) {
         entries.filterIsInstance<GridEntry.Photo>().map { it.item.id }.withIndex().associate { it.value to it.index }
     }
@@ -419,7 +454,11 @@ private fun MediaGrid(
                             }
                             if (item.isVideo) CornerIcon(Icons.Default.PlayCircle, Alignment.BottomStart)
                             if (item.isFavorite) CornerIcon(Icons.Default.Favorite, Alignment.BottomEnd)
-                            if (item.cloud) CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                            when {
+                                item.cloud -> CornerIcon(Icons.Default.Cloud, Alignment.TopEnd)
+                                item.key in refused -> CornerIcon(Icons.Default.CloudOff, Alignment.TopEnd, MaterialTheme.colorScheme.error)
+                                item.key in waiting -> CornerIcon(Icons.Default.CloudUpload, Alignment.TopEnd)
+                            }
                             if (item.id in selected) {
                                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
                                 CornerIcon(Icons.Default.CheckCircle, Alignment.TopStart, MaterialTheme.colorScheme.primary)

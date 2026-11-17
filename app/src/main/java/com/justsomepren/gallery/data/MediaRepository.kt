@@ -179,6 +179,9 @@ sealed interface Source {
 
     /** Android's trash: only restoring is offered there. */
     data object Trash : Source
+
+    /** Photos waiting to be sent to [account] (all accounts when null), or those that could not be sent. */
+    data class Uploads(val account: String? = null, val failed: Boolean = false) : Source
 }
 
 val Source.title: String
@@ -190,6 +193,7 @@ val Source.title: String
         is Source.Period -> name
         is Source.Span -> name
         Source.Trash -> "Koš"
+        is Source.Uploads -> if (failed) "Neodeslané" else account ?: "Ve frontě"
     }
 
 fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<MediaItem> =
@@ -203,8 +207,15 @@ fun List<MediaItem>.filterBy(source: Source, albums: List<CustomAlbum>): List<Me
         }
         is Source.Period -> filter { it.day in source.start..source.end && (!source.cameraOnly || it.inCalendar) }
         is Source.Span -> filter { it.date >= source.from && it.date < source.to && it.inCalendar }
-        Source.Trash -> emptyList()
+        // Both come from lists of their own, see [uploads]
+        Source.Trash, is Source.Uploads -> emptyList()
     }
+
+/** The photos of the queue or of the failed list, in the order of the grid. */
+fun List<MediaItem>.uploads(source: Source.Uploads, queue: List<QueueItem>, failed: List<QueueItem>): List<MediaItem> {
+    val keys = (if (source.failed) failed else queue).filter { source.account == null || it.account == source.account }.map { it.key }.toSet()
+    return filter { it.key in keys }
+}
 
 /**
  * The capture date for camera photos. Other files (WhatsApp, downloads) often have none, or one set when

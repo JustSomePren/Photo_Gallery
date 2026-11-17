@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,6 +64,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.Screen
+import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.CameraAuto
 import com.justsomepren.gallery.data.Event
 import com.justsomepren.gallery.data.CloudWorker
@@ -129,22 +132,32 @@ fun SendingScreen(vm: GalleryViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Section("Fronta")
+            val reason = rememberWaitReason(vm)
+            val open = { source: Source -> vm.stack.add(Screen.Grid(source)) }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        queueStatus(queue.size, failed.size, uploading, mobileData) ?: "Vše odesláno",
+                        queueStatus(queue.size, failed.size, uploading, reason) ?: "Vše odesláno",
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    queue.groupBy { it.account to it.album }.forEach { (where, items) ->
-                        Text("${where.first}${where.second?.let { " · $it" } ?: ""}: ${items.size}")
+                    uploading?.let { (done, total) ->
+                        LinearProgressIndicator(progress = { done / total.coerceAtLeast(1).toFloat() }, Modifier.fillMaxWidth())
                     }
-                    if (queue.isNotEmpty()) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            items(queue.take(30), key = { it.sentKey }) {
-                                Thumbnail(Uri.parse(it.uri), gridThumbPx(), Modifier.size(56.dp).clip(RoundedCornerShape(6.dp)))
+                    // Per account and album: how many wait, a few of them, a tap shows them all
+                    queue.groupBy { it.account to it.album }.forEach { (where, items) ->
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open(Source.Uploads(where.first)) },
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("${where.first}${where.second?.let { " · $it" } ?: ""}: ${items.size}", style = MaterialTheme.typography.bodyMedium)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(items.take(30), key = { it.sentKey }) {
+                                    Thumbnail(Uri.parse(it.uri), gridThumbPx(), Modifier.size(56.dp).clip(RoundedCornerShape(6.dp)))
+                                }
                             }
                         }
                     }
+                    if (queue.isNotEmpty()) Hint("Klepnutím na účet uvidíš všechny jeho fotky ve frontě a můžeš je z ní odebrat.")
                     Hint("Odešle se samo na Wi-Fi. Pod $threshold % baterie jen při nabíjení.")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = vm::sendNow, enabled = queue.isNotEmpty() && uploading == null) { Text("Odeslat hned") }
@@ -152,7 +165,9 @@ fun SendingScreen(vm: GalleryViewModel) {
                     }
                     if (failed.isNotEmpty()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${failed.size} se nepodařilo odeslat", Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
+                            TextButton(onClick = { open(Source.Uploads(failed = true)) }, Modifier.weight(1f)) {
+                                Text("${failed.size} se nepodařilo odeslat", Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.error)
+                            }
                             TextButton(onClick = vm::retryFailed) { Text("Zkusit znovu") }
                         }
                     }
@@ -191,8 +206,9 @@ fun SendingScreen(vm: GalleryViewModel) {
                     },
                     headlineContent = { Text(email) },
                     supportingContent = {
+                        val sent = remember(email, queue) { prefs.sentCount(email) }
                         if (email in problems) Text("Je potřeba znovu přihlásit", color = MaterialTheme.colorScheme.error)
-                        else if (isDefault && accounts.size > 1) Text("Výchozí pro posílání")
+                        else Text((if (isDefault && accounts.size > 1) "Výchozí pro posílání · " else "") + "odesláno $sent")
                     },
                     trailingContent = {
                         Row {

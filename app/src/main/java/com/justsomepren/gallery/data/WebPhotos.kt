@@ -1,6 +1,8 @@
 package com.justsomepren.gallery.data
 
+import android.content.ContentValues
 import android.content.Context
+import android.provider.MediaStore
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebStorage
@@ -72,22 +74,62 @@ object WebPhotos {
     /** The key Google Photos knows the photo by; only previews read from the page have one. */
     fun key(item: MediaItem): String? = item.link?.substringAfter(PHOTO, "")?.ifEmpty { null }
 
-    /** The photo in screen size, loaded from Google Photos into the app's cache; null when it cannot be. */
-    suspend fun screenSized(context: Context, item: MediaItem): File? = withContext(Dispatchers.IO) {
-        val key = key(item) ?: return@withContext null
-        val file = File(context.cacheDir, "cloud-full/$key.jpg")
-        if (!file.exists() && (!onWifi(context) || !signedIn())) return@withContext null
-        runCatching { file.also { if (!it.exists()) session(context).fetch(key, item.isVideo, original = false, it) } }.getOrNull()
-    }
+    /**
+     * The photo loaded from Google Photos into the app's cache: big enough for the screen, or as it was
+     * uploaded when [original] (for zooming in). Only on Wi-Fi, unless the user asked for it on [overData].
+     */
+    suspend fun cached(context: Context, item: MediaItem, original: Boolean = false, overData: Boolean = false): File? =
+        withContext(Dispatchers.IO) {
+            val key = key(item) ?: return@withContext null
+            // A video's original is a video, the viewer shows its picture only
+            if (original && item.isVideo) return@withContext null
+            val file = File(context.cacheDir, "cloud-full/$key-${if (original) "original" else "view"}.jpg")
+            if (!file.exists() && ((!overData && !onWifi(context)) || !signedIn())) return@withContext null
+            runCatching { file.also { if (!it.exists()) session(context).fetch(key, item.isVideo, original, it) } }.getOrNull()
+        }
 
     /** The photo or video as it was uploaded, as a file other apps can be given (e.g. for an Instagram story). */
-    suspend fun original(context: Context, item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
-        val key = key(item) ?: throw IOException("„${item.name}“ jde otevřít jen v Google Fotkách")
-        if (!onWifi(context)) throw NotOnWifi()
-        if (!signedIn()) throw NeedsLogin()
-        val file = File(context.cacheDir, "cloud-share/${item.name}")
-        session(context).fetch(key, item.isVideo, original = true, file)
+    suspend fun original(context: Context, item: MediaItem, overData: Boolean = false): MediaItem = withContext(Dispatchers.IO) {
+        val file = download(context, item, overData, File(context.cacheDir, "cloud-share/${item.name}"))
         item.copy(uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file), cloud = false)
+    }
+
+    /**
+     * Brings the photo or video back into the phone as it was uploaded, into the camera folder with its
+     * own name and date, so the preview gives way to it everywhere (albums too).
+     */
+    suspend fun saveToPhone(context: Context, item: MediaItem, overData: Boolean = false) = withContext(Dispatchers.IO) {
+        val file = download(context, item, overData, File(context.cacheDir, "cloud-download/${item.name}"))
+        val resolver = context.contentResolver
+        val collection = if (item.isVideo) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        else MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, item.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, item.mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/Camera/")
+            put(MediaStore.MediaColumns.DATE_TAKEN, item.date)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(collection, values) ?: throw IOException("Do telefonu nejde nic uložit")
+        try {
+            resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
+            // Android reads the date from the file when it is done; the one from Google Photos is set again
+            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.DATE_TAKEN, item.date) }, null, null)
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            throw e
+        } finally {
+            file.delete()
+        }
+    }
+
+    private fun download(context: Context, item: MediaItem, overData: Boolean, file: File): File {
+        val key = key(item) ?: throw IOException("„${item.name}“ jde otevřít jen v Google Fotkách")
+        if (!overData && !onWifi(context)) throw NotOnWifi()
+        if (!signedIn()) throw NeedsLogin()
+        session(context).fetch(key, item.isVideo, original = true, file)
+        return file
     }
 
     /** Removes the login and everything else the browser window kept. */
@@ -256,7 +298,8 @@ class WebSession(
         val base = info.optJSONArray(0)?.optJSONArray(1)?.text(0)?.substringBefore('=')
             ?: throw IOException("Google Fotky fotku nenašly")
         val url = when {
-            !original -> "$base=w2560-h2560"
+            // Twice a phone screen: sharp also when the photo is drawn smaller than it is
+            !original -> "$base=w4096-h4096"
             video -> info.text(1) ?: "$base=dv"
             else -> "$base=d"
         }

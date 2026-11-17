@@ -77,6 +77,7 @@ import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.formatDay
 import com.justsomepren.gallery.data.Source
 import com.justsomepren.gallery.data.batteryFlow
+import com.justsomepren.gallery.data.uploads
 import com.justsomepren.gallery.data.filterBy
 
 /** True when the battery is low and the app should do as little work as possible. */
@@ -125,6 +126,8 @@ private fun Main(vm: GalleryViewModel) {
     val media by vm.media.collectAsStateWithLifecycle()
     val albums by vm.prefs.albums.collectAsStateWithLifecycle()
     val trashed by vm.trashed.collectAsStateWithLifecycle()
+    val queue by vm.prefs.queue.collectAsStateWithLifecycle()
+    val failed by vm.prefs.failed.collectAsStateWithLifecycle()
     var searching by rememberSaveable { mutableStateOf(false) }
 
     val all = media ?: run {
@@ -141,6 +144,12 @@ private fun Main(vm: GalleryViewModel) {
     val calendar by vm.prefs.calendarView.collectAsStateWithLifecycle()
     val openSending = { vm.tab = SENDING_TAB }
 
+    fun itemsOf(source: Source) = when (source) {
+        Source.Trash -> trashed
+        is Source.Uploads -> all.uploads(source, queue, failed)
+        else -> all.filterBy(source, albums)
+    }
+
     @Composable
     fun browser(
         source: Source,
@@ -153,7 +162,7 @@ private fun Main(vm: GalleryViewModel) {
         MediaBrowser(
             source = source,
             stateKey = stateKey.toString(),
-            items = if (source == Source.Trash) trashed else remember(all, albums, source) { all.filterBy(source, albums) },
+            items = remember(all, albums, trashed, queue, failed, source) { itemsOf(source) },
             vm = vm,
             gridState = vm.gridState(stateKey),
             onOpen = { stack.add(Screen.Viewer(source, it.id)) },
@@ -183,7 +192,7 @@ private fun Main(vm: GalleryViewModel) {
     when (val top = stack.lastOrNull()) {
         is Screen.Viewer -> Viewer(
             // The photos it opened with, so unfavoriting in Favorites does not jump to another photo.
-            items = vm.viewerPhotos(top) { all.filterBy(top.source, albums).map { it.id } }.let { shown ->
+            items = vm.viewerPhotos(top) { itemsOf(top.source).map { it.id } }.let { shown ->
                 remember(shown, all) {
                     val byId = all.associateBy { it.id }
                     shown.mapNotNull(byId::get)
@@ -206,6 +215,36 @@ private fun Main(vm: GalleryViewModel) {
                     IconButton(onClick = { CalendarLink.openEvent(context, linked.id, linked.begin) }) {
                         Icon(Icons.Default.Event, "Otevřít v Kalendáři")
                     }
+                }
+            }
+        }
+        is Screen.PickForAlbum -> {
+            val album = albums.firstOrNull { it.id == top.albumId }
+            var naming by remember { mutableStateOf<List<MediaItem>?>(null) }
+            MediaBrowser(
+                source = Source.All,
+                stateKey = "pick:${top.albumId}",
+                items = all,
+                vm = vm,
+                gridState = vm.gridState(Source.Album("pick", "")),
+                onOpen = {},
+                onBack = back,
+                pickConfirm = if (album != null) "Přidat" else "Další",
+                onPicked = { picked ->
+                    if (album != null) {
+                        vm.prefs.addToAlbum(album.id, picked)
+                        back()
+                    } else {
+                        naming = picked
+                    }
+                },
+            )
+            naming?.let { picked ->
+                TextInputDialog(title = "Nové album", confirm = "Vytvořit", onDismiss = { naming = null }) { name ->
+                    val id = vm.prefs.createAlbum(name, picked)
+                    naming = null
+                    back()
+                    stack.add(Screen.Grid(Source.Album(id, name)))
                 }
             }
         }
@@ -243,7 +282,7 @@ private fun Main(vm: GalleryViewModel) {
                         browser(Source.All, onBack = null, header = { StatusStrip(vm, openSending) }) { photoActions() }
                     }
                     1 -> browser(Source.Favorites, onBack = null)
-                    2 -> AlbumsScreen(all, albums, events, vm, onOpen = { stack.add(Screen.Grid(it)) })
+                    2 -> AlbumsScreen(all, albums, events, vm, onNewAlbum = { stack.add(Screen.PickForAlbum(null)) }) { stack.add(Screen.Grid(it)) }
                     SENDING_TAB -> SendingScreen(vm)
                     else -> SettingsScreen(vm)
                 }

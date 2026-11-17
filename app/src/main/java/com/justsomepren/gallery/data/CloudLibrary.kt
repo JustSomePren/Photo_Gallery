@@ -4,8 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -145,6 +150,21 @@ fun onWifi(context: Context): Boolean {
     val cm = context.getSystemService(ConnectivityManager::class.java)
     return cm.activeNetwork != null && !cm.isActiveNetworkMetered
 }
+
+/** [onWifi] as it changes, while someone collects it (the app is on screen). */
+fun Context.wifiFlow(): Flow<Boolean> = callbackFlow {
+    val cm = getSystemService(ConnectivityManager::class.java)
+    val callback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { trySend(onWifi(this@wifiFlow)) }
+        override fun onLost(network: Network) { trySend(onWifi(this@wifiFlow)) }
+        override fun onCapabilitiesChanged(network: Network, caps: android.net.NetworkCapabilities) {
+            trySend(onWifi(this@wifiFlow))
+        }
+    }
+    trySend(onWifi(this@wifiFlow))
+    cm.registerDefaultNetworkCallback(callback)
+    awaitClose { cm.unregisterNetworkCallback(callback) }
+}.distinctUntilChanged()
 
 /**
  * The Google Photos Picker: the user picks photos in Google Photos, the app then reads what was picked.

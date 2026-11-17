@@ -107,7 +107,7 @@ class WebPhotosTest {
                     path.startsWith("/pw/") && "PICTURES=1" !in cookie && !broken ->
                         MockResponse().setResponseCode(302).addHeader("Location", "/signin?continue=$path")
                     path.startsWith("/download/") -> MockResponse().setBody("the video as uploaded")
-                    path.startsWith("/pw/") && (path.endsWith("=d") || path.endsWith("=w2560-h2560")) -> MockResponse().setBody("photo ${path.substringAfter('=')}")
+                    path.startsWith("/pw/") && (path.endsWith("=d") || path.endsWith("=w4096-h4096")) -> MockResponse().setBody("photo ${path.substringAfter('=')}")
                     path.startsWith("/pw/") && path.endsWith("=w300-h300") ->
                         if (broken) MockResponse().addHeader("Content-Type", "text/html").setBody("<html>Sign in</html>") else MockResponse().setBody(jpeg())
                     else -> MockResponse().setResponseCode(404)
@@ -197,7 +197,7 @@ class WebPhotosTest {
         val file = File(context.cacheDir, "full/photo")
 
         session.fetch("A1", video = false, original = false, file)
-        assertEquals("photo w2560-h2560", file.readText())
+        assertEquals("photo w4096-h4096", file.readText())
         session.fetch("A1", video = false, original = true, file)
         assertEquals("photo d", file.readText())
         session.fetch("B2", video = true, original = true, file)

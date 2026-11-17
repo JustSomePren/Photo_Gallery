@@ -9,7 +9,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
@@ -38,13 +43,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
+import com.justsomepren.gallery.data.QueueItem
+import com.justsomepren.gallery.data.WebPhotos
+import com.justsomepren.gallery.data.onWifi
 
 /** Which dialog is open and for which photos. */
 class OpenDialogs {
@@ -52,6 +63,8 @@ class OpenDialogs {
     var adding by mutableStateOf<List<MediaItem>?>(null)
     var moving by mutableStateOf<List<MediaItem>?>(null)
     var info by mutableStateOf<MediaItem?>(null)
+    /** Waits for a yes to download from Google Photos over mobile data. */
+    var overData by mutableStateOf<(() -> Unit)?>(null)
 }
 
 /** Actions shared by the grid and the photo viewer. */
@@ -110,12 +123,47 @@ class MediaActions(private val context: Context, private val vm: GalleryViewMode
             GooglePhotos.share(context, items)
             return true
         }
-        toast(context, "Stahuji z Google Fotek v plné kvalitě…")
-        vm.withOriginals(items) { result ->
-            result.onSuccess { GooglePhotos.share(context, it) }
-                .onFailure { toast(context, it.message ?: "Fotku se nepodařilo stáhnout") }
+        fromCloud(overData = false) { overData ->
+            toast(context, "Stahuji z Google Fotek v plné kvalitě…")
+            vm.withOriginals(items, overData) { result ->
+                result.onSuccess { GooglePhotos.share(context, it) }
+                    .onFailure { toast(context, it.message ?: "Fotku se nepodařilo stáhnout") }
+            }
         }
         return true
+    }
+
+    /** Photos only in Google Photos come back into the phone as they were uploaded. */
+    fun saveToPhone(items: List<MediaItem>, overData: Boolean = false) {
+        val cloud = items.filter { it.cloud && WebPhotos.key(it) != null }
+        if (cloud.isEmpty()) {
+            toast(context, "Tyhle fotky jde stáhnout jen v Google Fotkách")
+            return
+        }
+        fromCloud(overData) { data ->
+            toast(context, "Stahuji ${cloud.size} v plné kvalitě…")
+            vm.saveToPhone(cloud, data) { result ->
+                result.onSuccess { toast(context, "Uloženo do telefonu (Fotoaparát): $it") }
+                    .onFailure { toast(context, it.message ?: "Fotku se nepodařilo stáhnout") }
+            }
+        }
+    }
+
+    /** Downloads go over Wi-Fi by themselves; on mobile data only after a yes (or when it was given already). */
+    private fun fromCloud(overData: Boolean, start: (Boolean) -> Unit) {
+        if (overData || onWifi(context)) start(overData) else dialogs.overData = { start(true) }
+    }
+
+    /** Holding the cloud button: straight into the queue of the second account, without the dialog. */
+    fun sendToSecond(items: List<MediaItem>) {
+        val other = vm.prefs.accountsDefaultFirst.getOrNull(1)
+        if (other == null) {
+            toast(context, "Druhý Google účet přidáš v záložce Odesílání")
+            send(items)
+            return
+        }
+        val added = vm.enqueue(items, other, runningAlbum(vm))
+        toast(context, (if (added > 0) "Ve frontě pro $other: $added" else "Nic nového k odeslání") + skippedNote(items))
     }
 
     fun onResult(granted: Boolean) {
@@ -146,6 +194,17 @@ fun rememberMediaActions(vm: GalleryViewModel): MediaActions {
     dialogs.adding?.let { items -> AlbumPickerDialog(items, vm) { dialogs.adding = null } }
     dialogs.moving?.let { items -> MoveDialog(items, vm, actions) { dialogs.moving = null } }
     dialogs.info?.let { item -> InfoDialog(item, vm) { dialogs.info = null } }
+    dialogs.overData?.let { start ->
+        AlertDialog(
+            onDismissRequest = { dialogs.overData = null },
+            title = { Text("Stáhnout přes mobilní data?") },
+            text = { Text("Nejsi na Wi-Fi. Fotka v plné kvalitě má několik MB, video i stovky MB.") },
+            confirmButton = {
+                TextButton(onClick = { dialogs.overData = null; start() }) { Text("Stáhnout") }
+            },
+            dismissButton = { TextButton(onClick = { dialogs.overData = null }) { Text("Zrušit") } },
+        )
+    }
     return actions
 }
 
@@ -157,10 +216,7 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
     val default by vm.prefs.defaultAccount.collectAsStateWithLifecycle()
     // The default account on top, so the usual case is one tap
     val ordered = remember(accounts, default) { vm.prefs.accountsDefaultFirst }
-    // A running event with an album is the most likely place for these photos.
-    var album by rememberSaveable {
-        mutableStateOf(vm.prefs.events.value.firstOrNull { it.isActive && it.album != null }?.album.orEmpty())
-    }
+    var album by rememberSaveable { mutableStateOf(runningAlbum(vm).orEmpty()) }
     PickerDialog(title = "Poslat ${items.size} do cloudu", onDismiss = onDismiss) {
         item { DialogLabel("Do fronty – odešle se samo na Wi-Fi") }
         if (accounts.isEmpty()) {
@@ -177,6 +233,7 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
                     onDismiss()
                 }
             }
+            if (ordered.size > 1) item { Hint("Tip: podržením mráčku pošleš fotky rovnou do ${ordered[1]}.") }
         }
         item { DialogLabel("Hned přes aplikaci – jen fotky z fotoaparátu") }
         items(targets) { target ->
@@ -199,6 +256,42 @@ private fun SendDialog(items: List<MediaItem>, vm: GalleryViewModel, onDismiss: 
                 }
             }
         }
+    }
+}
+
+/** Which accounts have the photo, or wait for it; null for previews and photos that never go to the cloud. */
+private fun uploadState(vm: GalleryViewModel, item: MediaItem): String? {
+    if (item.cloud || !item.isCameraShot) return null
+    val sent = vm.prefs.accounts.value.filter { vm.prefs.isSent(QueueItem.of(item, it, null)) }
+    val queued = vm.prefs.queue.value.filter { it.key == item.key }.map { it.account }
+    val failed = vm.prefs.failed.value.filter { it.key == item.key }.map { it.account }
+    return listOfNotNull(
+        sent.takeIf { it.isNotEmpty() }?.joinToString(prefix = "Odesláno: "),
+        queued.takeIf { it.isNotEmpty() }?.joinToString(prefix = "Ve frontě: "),
+        failed.takeIf { it.isNotEmpty() }?.joinToString(prefix = "Nepodařilo se: "),
+    ).joinToString("\n").ifEmpty { "Neodesláno" }
+}
+
+/** A running event with an album is the most likely place for new photos. */
+private fun runningAlbum(vm: GalleryViewModel) = vm.prefs.events.value.firstOrNull { it.isActive && it.album != null }?.album
+
+/** Tap picks the account in a dialog; holding sends straight to the second account. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SendButton(items: List<MediaItem>, actions: MediaActions, onDone: () -> Unit = {}) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = "Poslat do druhého účtu",
+                onLongClick = { actions.sendToSecond(items); onDone() },
+                onClick = { actions.send(items); onDone() },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
     }
 }
 
@@ -277,7 +370,8 @@ private fun InfoDialog(item: MediaItem, vm: GalleryViewModel, onDismiss: () -> U
         title = { Text("Informace") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                details?.rows?.forEach { (label, value) ->
+                val cloud = remember(item) { listOfNotNull(uploadState(vm, item)?.let { "Google Fotky" to it }) }
+                (details?.rows.orEmpty() + cloud).forEach { (label, value) ->
                     Column {
                         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Text(value)

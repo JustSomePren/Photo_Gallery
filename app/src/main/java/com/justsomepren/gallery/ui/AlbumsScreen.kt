@@ -26,10 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -51,9 +48,9 @@ fun AlbumsScreen(
     albums: List<CustomAlbum>,
     events: List<Event>,
     vm: GalleryViewModel,
+    onNewAlbum: () -> Unit,
     onOpen: (Source) -> Unit,
 ) {
-    var creating by rememberSaveable { mutableStateOf(false) }
     val trashed by vm.trashed.collectAsStateWithLifecycle()
     val own = remember(media, albums) {
         albums.map { album ->
@@ -80,7 +77,7 @@ fun AlbumsScreen(
             TopAppBar(
                 title = { Text("Alba") },
                 actions = {
-                    IconButton(onClick = { creating = true }) { Icon(Icons.Default.Add, "Nové album") }
+                    IconButton(onClick = onNewAlbum) { Icon(Icons.Default.Add, "Nové album") }
                 },
             )
         },
@@ -101,20 +98,14 @@ fun AlbumsScreen(
             if (trashed.isNotEmpty()) section("Koš (30 dní)", listOf(AlbumEntry(Source.Trash, trashed.first(), trashed.size)), onOpen)
         }
     }
-
-    if (creating) {
-        TextInputDialog(title = "Nové album", confirm = "Vytvořit", onDismiss = { creating = false }) {
-            vm.prefs.createAlbum(it)
-            creating = false
-        }
-    }
 }
 
 private fun LazyGridScope.section(title: String, entries: List<AlbumEntry>, onOpen: (Source) -> Unit) {
     item(span = { GridItemSpan(maxLineSpan) }) {
         Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
     }
-    items(entries, key = { it.source.toString() }) { entry ->
+    // Two events with the same name and days would share a key, which the grid does not allow
+    items(entries.distinctBy { it.source }, key = { it.source.toString() }) { entry ->
         Column(Modifier.clickable { onOpen(entry.source) }) {
             val shape = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp))
             if (entry.cover != null) {

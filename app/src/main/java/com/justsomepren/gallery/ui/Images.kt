@@ -2,11 +2,16 @@ package com.justsomepren.gallery.ui
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
+import android.graphics.Matrix
+import android.graphics.Rect
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.util.LruCache
 import android.util.Size
 import androidx.annotation.VisibleForTesting
+import androidx.exifinterface.media.ExifInterface
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -94,6 +99,50 @@ object ImageCache {
 
     private suspend fun load(cache: LruCache<String, Bitmap>, key: String, block: () -> Bitmap): Bitmap? =
         cache.get(key) ?: withContext(io) { runCatching(block).getOrNull() }?.also { cache.put(key, it) }
+}
+
+/**
+ * The part of a big photo seen while zoomed in, decoded from the file at the detail the screen needs,
+ * so a zoomed photo stays sharp without loading all of it. Sizes are as the photo is shown (turned upright).
+ */
+class PhotoRegions private constructor(private val decoder: BitmapRegionDecoder, private val rotation: Int) {
+    val width get() = if (rotation % 180 == 0) decoder.width else decoder.height
+    val height get() = if (rotation % 180 == 0) decoder.height else decoder.width
+
+    /** [sample] 1 reads every pixel, 2 every second one, and so on. */
+    @Synchronized
+    fun decode(rect: Rect, sample: Int): Bitmap? {
+        if (decoder.isRecycled) return null
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = runCatching { decoder.decodeRegion(fileRect(rect), options) }.getOrNull() ?: return null
+        if (rotation == 0) return bitmap
+        val turn = Matrix().apply { postRotate(rotation.toFloat()) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, turn, true)
+    }
+
+    /** The camera often saves the picture sideways and only notes how to turn it. */
+    private fun fileRect(r: Rect): Rect {
+        val w = decoder.width
+        val h = decoder.height
+        return when (rotation) {
+            90 -> Rect(r.top, h - r.right, r.bottom, h - r.left)
+            180 -> Rect(w - r.right, h - r.bottom, w - r.left, h - r.top)
+            270 -> Rect(w - r.bottom, r.left, w - r.top, r.right)
+            else -> r
+        }
+    }
+
+    @Synchronized
+    fun close() = decoder.recycle()
+
+    companion object {
+        /** Null for files that cannot be read in parts. */
+        fun open(resolver: ContentResolver, uri: Uri): PhotoRegions? = runCatching {
+            val rotation = resolver.openInputStream(uri)!!.use { ExifInterface(it).rotationDegrees }
+            val decoder = resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it) }
+            decoder?.let { PhotoRegions(it, rotation) }
+        }.getOrNull()
+    }
 }
 
 @Composable

@@ -21,12 +21,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.justsomepren.gallery.GalleryViewModel
+import com.justsomepren.gallery.data.BatteryState
+import com.justsomepren.gallery.data.CAMERA_AUTO
 import com.justsomepren.gallery.data.Event
+import com.justsomepren.gallery.data.QueueItem
+import com.justsomepren.gallery.data.batteryFlow
+import com.justsomepren.gallery.data.wifiFlow
 
 /** Upload state and running events in one row above the photos. */
 @Composable
@@ -36,13 +43,13 @@ fun StatusStrip(vm: GalleryViewModel, onOpenSending: () -> Unit) {
     val uploading by vm.prefs.uploading.collectAsStateWithLifecycle()
     val events by vm.prefs.events.collectAsStateWithLifecycle()
     val accounts by vm.prefs.accounts.collectAsStateWithLifecycle()
-    val mobileData by vm.prefs.mobileData.collectAsStateWithLifecycle()
+    val reason = rememberWaitReason(vm)
 
     Row(
         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        val status = queueStatus(queue.size, failed.size, uploading, mobileData)
+        val status = queueStatus(queue.size, failed.size, uploading, reason)
         if (status != null || accounts.isNotEmpty()) {
             AssistChip(
                 onClick = onOpenSending,
@@ -66,11 +73,40 @@ fun StatusStrip(vm: GalleryViewModel, onOpenSending: () -> Unit) {
     }
 }
 
-fun queueStatus(queued: Int, failed: Int, uploading: Pair<Int, Int>?, mobileData: Boolean): String? = when {
+fun queueStatus(queued: Int, failed: Int, uploading: Pair<Int, Int>?, reason: String?): String? = when {
     uploading != null -> "Odesílám ${uploading.first} z ${uploading.second}"
-    queued > 0 -> "$queued čeká · odešle se na ${if (mobileData) "síti" else "Wi-Fi"}"
+    queued > 0 -> "$queued ve frontě · ${reason ?: "odešle se za chvíli"}"
     failed > 0 -> "$failed se nepodařilo odeslat"
     else -> null
+}
+
+/** Why the queue is not on its way right now, or null when nothing holds it back. */
+fun waitReason(
+    queue: List<QueueItem>,
+    onWifi: Boolean,
+    mobileData: Boolean,
+    battery: BatteryState?,
+    threshold: Int,
+    problems: Set<String>,
+): String? = when {
+    queue.isEmpty() -> null
+    queue.all { it.account in problems } -> "účet je potřeba znovu přihlásit"
+    // New camera photos go over Wi-Fi only, also when mobile data is allowed for the rest
+    !onWifi && (!mobileData || queue.all { it.eventId == CAMERA_AUTO }) -> "čeká na Wi-Fi"
+    battery != null && !battery.charging && battery.level < threshold -> "čeká na nabíječku (baterie ${battery.level} %)"
+    else -> null
+}
+
+@Composable
+fun rememberWaitReason(vm: GalleryViewModel): String? {
+    val context = LocalContext.current
+    val queue by vm.prefs.queue.collectAsStateWithLifecycle()
+    val mobileData by vm.prefs.mobileData.collectAsStateWithLifecycle()
+    val threshold by vm.prefs.threshold.collectAsStateWithLifecycle()
+    val problems by vm.prefs.accountProblems.collectAsStateWithLifecycle()
+    val wifi by remember { context.wifiFlow() }.collectAsStateWithLifecycle(true)
+    val battery by remember { context.batteryFlow() }.collectAsStateWithLifecycle(null)
+    return waitReason(queue, wifi, mobileData, battery, threshold, problems)
 }
 
 @Composable

@@ -26,12 +26,9 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -41,7 +38,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -87,6 +83,35 @@ import com.justsomepren.gallery.GalleryViewModel
 import com.justsomepren.gallery.data.GooglePhotos
 import com.justsomepren.gallery.data.MediaItem
 import com.justsomepren.gallery.data.WebPhotos
+import com.justsomepren.gallery.data.wifiFlow
+import android.graphics.Rect
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.util.lerp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
+import kotlin.math.ceil
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import android.net.Uri
 import androidx.compose.runtime.produceState
 import java.text.DateFormat
@@ -105,6 +130,10 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
     val pager = rememberPagerState(start) { items.size }
     var chrome by remember { mutableStateOf(true) }
     var menu by remember { mutableStateOf(false) }
+    // A zoomed photo pans instead of closing
+    var zoomed by remember { mutableStateOf(false) }
+    // Full quality from Google Photos over mobile data, once asked for in this viewer
+    var overData by remember { mutableStateOf(false) }
     val actions = rememberMediaActions(vm)
     val current = items[pager.currentPage.coerceAtMost(items.lastIndex)]
     LaunchedEffect(current.id) { vm.returnTo = current.id }
@@ -124,6 +153,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                 .draggable(
                     rememberDraggableState { delta -> scope.launch { pull.snapTo(pull.value + delta) } },
                     Orientation.Vertical,
+                    enabled = !zoomed,
                     onDragStopped = { velocity ->
                         if (abs(pull.value) > height * 0.15f || abs(velocity) > 1500f) onBack() else pull.animateTo(0f)
                     },
@@ -138,7 +168,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
             if (item.isVideo && !item.cloud) {
                 VideoPage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
             } else {
-                ZoomableImage(item, isCurrent = page == pager.settledPage) { chrome = !chrome }
+                ZoomableImage(item, isCurrent = page == pager.settledPage, overData, onZoomed = { zoomed = it }) { chrome = !chrome }
             }
         }
 
@@ -163,7 +193,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                 },
                 actions = {
                     if (current.cloud) {
-                        CloudActions(current, vm, actions)
+                        CloudActions(current, vm, actions, overData) { overData = true }
                         return@TopAppBar
                     }
                     IconButton(onClick = { actions.trash(listOf(current)) }) { Icon(Icons.Default.Delete, "Do koše") }
@@ -171,9 +201,7 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
                     IconButton(onClick = { GooglePhotos.edit(context, current) }) {
                         Icon(Icons.Default.Edit, "Upravit v Google Fotkách")
                     }
-                    IconButton(onClick = { actions.send(listOf(current)) }) {
-                        Icon(Icons.Default.CloudUpload, "Poslat do cloudu")
-                    }
+                    SendButton(listOf(current), actions)
                     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem({ Text("Otevřít v Google Fotkách") }, onClick = {
@@ -203,18 +231,20 @@ fun Viewer(items: List<MediaItem>, startId: Long, vm: GalleryViewModel, onBack: 
     }
 }
 
-/** A photo that is only in Google Photos: a heart, albums, sharing and a login for full quality. */
+/** A photo that is only in Google Photos: a heart, albums, sharing, downloading and a login for full quality. */
 @Composable
-private fun CloudActions(item: MediaItem, vm: GalleryViewModel, actions: MediaActions) {
+private fun CloudActions(item: MediaItem, vm: GalleryViewModel, actions: MediaActions, overData: Boolean, onOverData: () -> Unit) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var login by remember { mutableStateOf(false) }
     var signedIn by remember { mutableStateOf(WebPhotos.signedIn()) }
+    val wifi by remember { context.wifiFlow() }.collectAsStateWithLifecycle(true)
     val loadable = WebPhotos.key(item) != null
 
     FavoriteButton(listOf(item)) { actions.toggleFavorite(listOf(item)) }
-    if (loadable && !signedIn) {
-        TextButton(onClick = { login = true }) { Text("Plná kvalita", color = Color.White) }
+    if (loadable && (!signedIn || (!wifi && !overData))) {
+        // Off Wi-Fi the real photo comes only when asked for, over mobile data
+        TextButton(onClick = { if (signedIn) onOverData() else login = true }) { Text("Plná kvalita", color = Color.White) }
     }
     IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Další") }
     DropdownMenu(menu, onDismissRequest = { menu = false }) {
@@ -231,6 +261,10 @@ private fun CloudActions(item: MediaItem, vm: GalleryViewModel, actions: MediaAc
                 menu = false
                 if (signedIn) actions.share(listOf(item)) else login = true
             })
+            DropdownMenuItem({ Text("Stáhnout v plné kvalitě") }, onClick = {
+                menu = false
+                if (signedIn) actions.saveToPhone(listOf(item), overData) else login = true
+            })
         }
     }
     if (login) {
@@ -244,11 +278,11 @@ private fun CloudActions(item: MediaItem, vm: GalleryViewModel, actions: MediaAc
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit) {
+private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, overData: Boolean, onZoomed: (Boolean) -> Unit, onTap: () -> Unit) {
     val context = LocalContext.current
     val saver = LocalSaver.current
+    val scope = rememberCoroutineScope()
     val metrics = context.resources.displayMetrics
     val screen = maxOf(metrics.widthPixels, metrics.heightPixels)
 
@@ -256,6 +290,8 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
     var offset by remember { mutableStateOf(Offset.Zero) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     var wantSharp by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf<Job?>(null) }
+    val zoomed = scale > 1.01f
 
     fun zoomTo(value: Float) {
         scale = value
@@ -268,31 +304,113 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
             offset = Offset.Zero
         }
     }
+    LaunchedEffect(zoomed, isCurrent) { if (isCurrent) onZoomed(zoomed) }
 
-    // A photo only in Google Photos: its preview first, the real photo once it is loaded (Wi-Fi, signed in)
-    val cloudFull by produceState<Uri?>(null, item.id, isCurrent) {
-        if (item.cloud && isCurrent && value == null) value = WebPhotos.screenSized(context, item)?.let(Uri::fromFile)
+    // A photo only in Google Photos: its preview first, the real photo once it is loaded (Wi-Fi, signed in),
+    // and when zoomed in the photo as it was uploaded
+    val cloudView by produceState<Uri?>(null, item.id, isCurrent, overData) {
+        if (item.cloud && isCurrent && value == null) value = WebPhotos.cached(context, item, overData = overData)?.let(Uri::fromFile)
     }
-    val uri = cloudFull ?: item.uri
+    val cloudOriginal by produceState<Uri?>(null, item.id, wantSharp, overData) {
+        if (item.cloud && wantSharp && value == null) {
+            value = WebPhotos.cached(context, item, original = true, overData = overData)?.let(Uri::fromFile)
+        }
+    }
+    val uri = cloudView ?: item.uri
+    val detailUri = if (item.cloud) cloudOriginal ?: cloudView else item.uri
 
-    // Screen size is enough until the user really zooms in; then a sharper copy (not on low battery).
     val normal = rememberLoaded(uri, screen, ImageCache.version) { ImageCache.fullImage(context.contentResolver, uri, screen) }
-    val sharpSize = minOf(screen * 2, 4096)
-    val sharp = if (wantSharp && !saver) {
-        rememberLoaded(uri, sharpSize, ImageCache.version) { ImageCache.fullImage(context.contentResolver, uri, sharpSize) }
+
+    // Zoomed in, only the part on screen is read from the file, as sharp as the screen can show it
+    var regions by remember(detailUri) { mutableStateOf<PhotoRegions?>(null) }
+    var noRegions by remember(detailUri) { mutableStateOf(false) }
+    LaunchedEffect(detailUri, zoomed) {
+        if (zoomed && !saver && detailUri != null && regions == null && !noRegions) {
+            regions = withContext(Dispatchers.IO) { PhotoRegions.open(context.contentResolver, detailUri) }
+            noRegions = regions == null
+        }
+    }
+    DisposableEffect(detailUri) { onDispose { regions?.close() } }
+    // Files that cannot be read in parts are loaded whole, twice the screen size
+    val sharp = if (wantSharp && noRegions && !saver && detailUri != null) {
+        val sharpSize = minOf(screen * 2, 4096)
+        rememberLoaded(detailUri, sharpSize, ImageCache.version) { ImageCache.fullImage(context.contentResolver, detailUri, sharpSize) }
     } else {
         null
     }
+    val bitmap = sharp ?: normal
+    val aspect = rememberUpdatedState(bitmap?.let { it.width.toFloat() / it.height })
 
-    fun clamp(value: Offset): Offset {
-        val maxX = box.width * (scale - 1) / 2
-        val maxY = box.height * (scale - 1) / 2
+    /** The photo's size on screen before zooming: fitted into the box. */
+    fun fitted(): Size {
+        val ratio = aspect.value ?: return Size(box.width.toFloat(), box.height.toFloat())
+        return if (box.width / ratio <= box.height) Size(box.width.toFloat(), box.width / ratio)
+        else Size(box.height * ratio, box.height.toFloat())
+    }
+
+    fun clamp(value: Offset, zoom: Float = scale): Offset {
+        val size = fitted()
+        val maxX = maxOf(0f, (size.width * zoom - box.width) / 2)
+        val maxY = maxOf(0f, (size.height * zoom - box.height) / 2)
         return Offset(value.x.coerceIn(-maxX, maxX), value.y.coerceIn(-maxY, maxY))
     }
 
-    val transform = rememberTransformableState { zoom, pan, _ ->
-        zoomTo((scale * zoom).coerceIn(1f, 6f))
-        offset = clamp(offset + pan)
+    /** Zooms so that the point under the fingers stays under them. */
+    fun zoomAround(point: Offset, value: Float) {
+        val zoom = value.coerceIn(1f, MAX_ZOOM)
+        val center = Offset(box.width / 2f, box.height / 2f)
+        offset = clamp((point - center) - (point - center - offset) * (zoom / scale), zoom)
+        zoomTo(zoom)
+    }
+
+    fun animateTo(zoom: Float, target: Offset) {
+        moving?.cancel()
+        val fromScale = scale
+        val fromOffset = offset
+        moving = scope.launch {
+            animate(0f, 1f, animationSpec = tween(250)) { t, _ ->
+                zoomTo(lerp(fromScale, zoom, t))
+                offset = lerp(fromOffset, target, t)
+            }
+        }
+    }
+
+    fun fling(velocity: Velocity) {
+        val speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+        if (speed < 300f) return
+        val direction = Offset(velocity.x / speed, velocity.y / speed)
+        val from = offset
+        moving = scope.launch {
+            AnimationState(0f, speed).animateDecay(exponentialDecay()) { offset = clamp(from + direction * value) }
+        }
+    }
+
+    // The detail of the part on screen, read once the fingers rest for a moment
+    var tile by remember(detailUri) { mutableStateOf<Pair<ImageBitmap, Rect>?>(null) }
+    LaunchedEffect(regions, scale, offset, box) {
+        val source = regions
+        if (source == null || !zoomed || box == IntSize.Zero) {
+            tile = null
+            return@LaunchedEffect
+        }
+        delay(150)
+        val fit = minOf(box.width / source.width.toFloat(), box.height / source.height.toFloat())
+        val left = (box.width - source.width * fit) / 2
+        val top = (box.height - source.height * fit) / 2
+        val center = Offset(box.width / 2f, box.height / 2f)
+        // Screen corners → the photo's own pixels
+        fun photoX(x: Float) = ((center.x + (x - center.x - offset.x) / scale) - left) / fit
+        fun photoY(y: Float) = ((center.y + (y - center.y - offset.y) / scale) - top) / fit
+        val rect = Rect(
+            photoX(0f).toInt().coerceAtLeast(0),
+            photoY(0f).toInt().coerceAtLeast(0),
+            ceil(photoX(box.width.toFloat())).toInt().coerceAtMost(source.width),
+            ceil(photoY(box.height.toFloat())).toInt().coerceAtMost(source.height),
+        )
+        if (rect.isEmpty) return@LaunchedEffect
+        val sample = Integer.highestOneBit((1f / (fit * scale)).toInt().coerceAtLeast(1))
+        val part = withContext(Dispatchers.IO) { source.decode(rect, sample) } ?: return@LaunchedEffect
+        tile = part.asImageBitmap() to rect
     }
 
     Box(
@@ -302,16 +420,46 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onTap() },
-                    onDoubleTap = {
-                        zoomTo(if (scale > 1f) 1f else 2.5f)
-                        offset = Offset.Zero
+                    onDoubleTap = { at ->
+                        if (scale > 1.01f) {
+                            animateTo(1f, Offset.Zero)
+                        } else {
+                            val center = Offset(box.width / 2f, box.height / 2f)
+                            animateTo(DOUBLE_TAP_ZOOM, clamp((at - center) * (1 - DOUBLE_TAP_ZOOM), DOUBLE_TAP_ZOOM))
+                        }
                     },
                 )
             }
-            // At the edge of a zoomed photo a sideways swipe goes to the next photo.
-            .transformable(transform, canPan = { pan ->
-                scale > 1f && (abs(pan.y) > abs(pan.x) || clamp(offset + pan) != offset)
-            }),
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    moving?.cancel()
+                    val tracker = VelocityTracker()
+                    var pinched = false
+                    do {
+                        val event = awaitPointerEvent()
+                        val down = event.changes.filter { it.pressed }
+                        if (down.size >= 2) {
+                            // Two fingers always zoom: neither the pager nor closing the photo take them
+                            pinched = true
+                            zoomAround(event.calculateCentroid(), scale * event.calculateZoom())
+                            offset = clamp(offset + event.calculatePan())
+                            event.changes.forEach { it.consume() }
+                        } else if (down.size == 1 && scale > 1.01f) {
+                            val pan = event.calculatePan()
+                            val next = clamp(offset + pan)
+                            tracker.addPosition(down[0].uptimeMillis, down[0].position)
+                            // At the side of a zoomed photo a sideways swipe goes on to the next photo
+                            val sideways = abs(pan.x) > abs(pan.y)
+                            if (pan != Offset.Zero && (if (sideways) next.x != offset.x else next != offset)) {
+                                offset = next
+                                down[0].consume()
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (!pinched && scale > 1.01f) fling(tracker.calculateVelocity())
+                }
+            },
     ) {
         val layer = Modifier.fillMaxSize().graphicsLayer {
             scaleX = scale
@@ -319,14 +467,30 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
             translationX = offset.x
             translationY = offset.y
         }
-        val bitmap = sharp ?: normal
         if (bitmap != null) {
             val image = remember(bitmap) { bitmap.asImageBitmap() }
-            Image(image, null, layer, contentScale = ContentScale.Fit)
+            // High quality: a picture drawn smaller than it is would look rough otherwise
+            Image(image, null, layer, contentScale = ContentScale.Fit, filterQuality = FilterQuality.High)
         } else {
             Thumbnail(item.uri, 512, layer.background(Color.Black), contentScale = ContentScale.Fit)
         }
-        if (item.cloud && cloudFull == null) {
+        val source = regions
+        val detail = tile
+        if (source != null && detail != null && zoomed) {
+            val (part, rect) = detail
+            Canvas(layer) {
+                val fit = minOf(size.width / source.width, size.height / source.height)
+                val left = (size.width - source.width * fit) / 2
+                val top = (size.height - source.height * fit) / 2
+                drawImage(
+                    part,
+                    dstOffset = IntOffset((left + rect.left * fit).roundToInt(), (top + rect.top * fit).roundToInt()),
+                    dstSize = IntSize((rect.width() * fit).roundToInt(), (rect.height() * fit).roundToInt()),
+                    filterQuality = FilterQuality.High,
+                )
+            }
+        }
+        if (item.cloud && cloudView == null) {
             Text(
                 "Jen náhled",
                 color = Color.White.copy(alpha = 0.7f),
@@ -335,6 +499,9 @@ private fun ZoomableImage(item: MediaItem, isCurrent: Boolean, onTap: () -> Unit
         }
     }
 }
+
+private const val MAX_ZOOM = 10f
+private const val DOUBLE_TAP_ZOOM = 2.5f
 
 /**
  * Plays with Media3's ExoPlayer: starts by itself when swiped to, pauses when swiped away.

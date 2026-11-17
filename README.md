@@ -41,14 +41,19 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Automatické odesílání** – u události zapneš jeden přepínač, vybereš Google účet a album
   (nepovinné). Všechny fotky z těch dní se samy pošlou do Google Fotek do toho alba.
 - **Fronta** – vybrané fotky → Poslat → účet. Odešlou se samy na Wi-Fi (např. až budeš doma).
-- **Záložka Odesílání** – fronta, události, Google účty a ruční cíle na jednom místě.
+- **Záložka Odesílání** – fronta, události, Google účty a ruční cíle na jednom místě. U fronty je vidět,
+  proč zrovna čeká (Wi-Fi, nabíječka, přihlášení), průběh odesílání a fotky po účtech a albech –
+  klepnutím na účet je uvidíš všechny a můžeš je z fronty odebrat. U účtu je počet odeslaných fotek.
+  V mřížce mají fotky ve frontě v rohu šipku s mráčkem, neodeslatelné přeškrtnutý mráček;
+  *Informace* u fotky ukazují, do kterých účtů už odešla.
 - **Oblíbené** – používá systémové oblíbené, takže je vidí i Google Fotky.
-- **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba.
+- **Alba** – složky v telefonu (Fotoaparát, Snímky obrazovky…) + vlastní alba. *+* v Albech nejdřív
+  nabídne vybrat fotky (klepáním), pak album pojmenuješ. Do hotového alba přidáš fotky ikonou nahoře.
 - **Výběr více fotek** – podrž fotku a táhni prstem přes další (u okraje se seznam sám posouvá),
   nebo pak klepáním přidávej. Když už je něco vybrané, stačí táhnout prstem do strany (bez držení).
   Kroužkem u dne či měsíce vybereš celý, ikonou v albu celé album.
 - **Poslat do cloudu** – vybrané fotky dá do fronty pro zvolený Google účet (osobní, společný…)
-  a album; odešlou se samy do Google Fotek.
+  a album; odešlou se samy do Google Fotek. **Podržením mráčku** jdou rovnou do druhého účtu, bez dialogu.
 - **Upravit / Hledat** – otevře Google Fotky.
 - **Videa** – spustí se sama po přejetí na ně. Klepnutí ukáže ovládání, dvojí klepnutí vlevo/vpravo
   skočí o 10 s zpět/vpřed, posuvník ukazuje obraz už při tažení, tlačítko ztlumí zvuk.
@@ -63,6 +68,9 @@ Internet se použije jen k odeslání fronty do Google Fotek. Úpravy a hledán�
 - **Rychlé posouvání** – po posunutí se u pravého okraje objeví táhlo s měsícem.
 - **Obnovení** – stáhni seznam dolů.
 - **Zavření fotky** – táhni ji prstem dolů nebo nahoru (nebo šipka zpět).
+- **Zoom** – dvěma prsty (přiblíží místo mezi prsty) nebo dvojím klepnutím na místo. Přiblížená fotka
+  jde posouvat i švihnutím a nezavře se; na kraji ji švihnutí do strany přepne na další.
+  Při přiblížení se čte jen viditelná část fotky v plném rozlišení, takže zůstává ostrá až do 10×.
 - **Koš** – ikonou koše u vybraných fotek nebo v otevřené fotce. Je to koš Androidu: fotky v něm
   zůstanou 30 dní a v *Alba → Koš* je obnovíš. Pak je Android smaže sám.
 - Po zavření fotky zůstaneš na stejném místě v mřížce, otočení telefonu nic nezruší.
@@ -127,12 +135,16 @@ Stačí jednou na začátku; nové fotky pak posílá do Google Fotek a ukazuje 
 *Nastavení → Fotky z Google Fotek → Zůstat přihlášen* (nebo **Plná kvalita** u otevřeného náhledu).
 Přihlášení pak v telefonu zůstává; vypnutím přepínače se odhlásíš.
 
-- **Plná kvalita:** otevřený náhled se na Wi-Fi sám nahradí skutečnou fotkou (velikost obrazovky).
+- **Plná kvalita:** otevřený náhled se na Wi-Fi sám nahradí skutečnou fotkou (až 4096 px), při přiblížení
+  se dočte originál. Mimo Wi-Fi ji načte tlačítko *Plná kvalita* (přes mobilní data, jen na požádání).
   Dokud se nenačte, je dole nápis „Jen náhled“. Načtené fotky zůstávají týden v mezipaměti.
   Videa se ukazují jako obrázek, přehraješ je v Google Fotkách (*⋮ → Otevřít v Google Fotkách*,
   otevře aplikaci na fotkách z toho dne).
 - **Sdílení:** *⋮ → Sdílet v plné kvalitě* (nebo výběr více fotek → Sdílet) stáhne fotku či video
-  tak, jak byly nahrány, a otevře sdílení Androidu – třeba Instagram → Příběh. Jen na Wi-Fi.
+  tak, jak byly nahrány, a otevře sdílení Androidu – třeba Instagram → Příběh. Mimo Wi-Fi se nejdřív zeptá.
+- **Stažení do telefonu:** *⋮ → Stáhnout v plné kvalitě* (i u výběru více fotek) uloží originál zpět do
+  Fotoaparátu se stejným názvem a datem; náhled pak nahradí skutečná fotka (i v albech). Mimo Wi-Fi
+  se zeptá, jestli stahovat přes mobilní data. Události ji do cloudu znovu neposílají.
 - **Oblíbené:** srdíčko funguje i u náhledů. Pamatuje si ho Galerie, do Google Fotek se nezapisuje.
   Při načtení knihovny se převezmou oblíbené z Google Fotek; co tam později změníš, se promítne
   při dalším načtení, srdíčka změněná v Galerii zůstanou.

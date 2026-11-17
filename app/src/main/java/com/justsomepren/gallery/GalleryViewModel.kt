@@ -78,6 +78,9 @@ sealed interface Screen {
 
     /** Photos of an event; found by id, so editing the event updates the open screen. */
     data class EventPhotos(val eventId: String) : Screen
+
+    /** Picking photos for an album; a new one, named after picking, when [albumId] is null. */
+    data class PickForAlbum(val albumId: String?) : Screen
 }
 
 class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
@@ -576,15 +579,31 @@ class GalleryViewModel(app: Application, private val saved: SavedStateHandle) : 
      * Photos that are only in Google Photos are downloaded as they were uploaded, so they can be shared
      * like the phone's own. [done] gets the photos ready to share, or why it failed.
      */
-    fun withOriginals(items: List<MediaItem>, done: (Result<List<MediaItem>>) -> Unit) {
+    fun withOriginals(items: List<MediaItem>, overData: Boolean, done: (Result<List<MediaItem>>) -> Unit) {
         viewModelScope.launch {
             done(runCatching {
                 withContext(Dispatchers.IO) {
                     // Files of the last sharing are no longer needed
                     java.io.File(getApplication<Application>().cacheDir, "cloud-share").deleteRecursively()
-                    items.map { if (it.cloud) WebPhotos.original(getApplication(), it) else it }
+                    items.map { if (it.cloud) WebPhotos.original(getApplication(), it, overData) else it }
                 }
             })
+        }
+    }
+
+    /** Brings photos that are only in Google Photos back into the phone in full quality; [done] gets how many. */
+    fun saveToPhone(items: List<MediaItem>, overData: Boolean, done: (Result<Int>) -> Unit) {
+        viewModelScope.launch {
+            val saved = mutableListOf<MediaItem>()
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    items.forEach { WebPhotos.saveToPhone(getApplication(), it, overData); saved += it }
+                }
+                saved.size
+            }
+            prefs.inCloudAlready(saved.map { it.key })
+            refresh()
+            done(result)
         }
     }
 

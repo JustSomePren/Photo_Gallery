@@ -164,8 +164,11 @@ class Prefs(context: Context) {
 
     // ---- Albums ----
 
-    fun createAlbum(name: String, items: List<MediaItem> = emptyList()) = albumList.update {
-        it + CustomAlbum(UUID.randomUUID().toString(), name, items.map { item -> item.ref() })
+    /** Returns the new album's id. */
+    fun createAlbum(name: String, items: List<MediaItem> = emptyList()): String {
+        val id = UUID.randomUUID().toString()
+        albumList.update { it + CustomAlbum(id, name, items.map { item -> item.ref() }) }
+        return id
     }
 
     fun deleteAlbum(id: String) = albumList.update { list -> list.filterNot { it.id == id } }
@@ -444,6 +447,24 @@ class Prefs(context: Context) {
         sp.edit { putStringSet("dismissed", dismissed.toSet()) }
         queueList.update { emptyList() }
     }
+
+    /** Taken out of the queue by hand: events do not add them again, picking them by hand does. */
+    @Synchronized
+    fun dismiss(items: List<QueueItem>) {
+        dismissed += items.map { it.sentKey }
+        sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+        removeFromQueue(items)
+    }
+
+    /** Photos brought back from Google Photos are there already, so events do not send them again. */
+    @Synchronized
+    fun inCloudAlready(keys: List<String>) {
+        dismissed += accounts.value.flatMap { account -> keys.map { "$account|$it" } }
+        sp.edit { putStringSet("dismissed", dismissed.toSet()) }
+    }
+
+    /** How many photos this app sent to [account] so far. */
+    fun sentCount(account: String) = sent.count { it.startsWith("$account|") }
 
     @Synchronized
     fun removeFromQueue(items: List<QueueItem>) {
